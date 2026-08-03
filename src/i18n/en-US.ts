@@ -11,7 +11,7 @@ const enUS = {
     search: "Search",
     noFolder: "No folder opened",
     openFolderHint: 'Click "Folder"\nto browse Markdown files',
-    emptyTitle: "MD Reader",
+    emptyTitle: "Glim Reader",
     emptyHint:
       'Click "File" or "Folder" to get started\nYou can also drag a .md file into this window',
     shortcutHint:
@@ -88,7 +88,7 @@ const enUS = {
     clearTemplate: "Clear",
     fileAssociation: "File association",
     fileAssociationHint:
-      "Register MD Reader in the current Windows user's .md / .markdown / .mdx Open With list.",
+      "Register Glim Reader in the current Windows user's .md / .markdown / .mdx Open With list.",
     registerAssociation: "Register association",
     registering: "Registering…",
     associationSuccess:

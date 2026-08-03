@@ -1,15 +1,15 @@
 [package]
-name = "md-reader"
+name = "glim-reader"
 version = "0.3.4"
 description = "A lightweight, fast, WYSIWYG Markdown desktop reader"
 authors = ["Neilooo"]
 license = "MIT"
-homepage = "https://github.com/Neilooo/md-reader"
-repository = "https://github.com/Neilooo/md-reader"
+homepage = "https://github.com/redtramp/glim"
+repository = "https://github.com/redtramp/glim"
 edition = "2021"
 
 [lib]
-name = "md_reader_lib"
+name = "glim_reader_lib"
 crate-type = ["rlib"]
 
 [build-dependencies]

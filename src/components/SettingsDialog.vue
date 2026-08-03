@@ -13,9 +13,9 @@ import {
 import ShortcutsDialog from "./ShortcutsDialog.vue";
 
 const RELEASE_API =
-  "https://api.github.com/repos/Neilooo/md-reader/releases/latest";
+  "https://api.github.com/repos/redtramp/glim/releases/latest";
 const RELEASE_LATEST_URL =
-  "https://github.com/Neilooo/md-reader/releases/latest";
+  "https://github.com/redtramp/glim/releases/latest";
 
 type UpdateStatus = "idle" | "checking" | "latest" | "available" | "error";
 

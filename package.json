@@ -1,18 +1,18 @@
 {
-  "name": "md-reader",
+  "name": "glim-reader",
   "private": true,
   "version": "0.3.4",
   "type": "module",
   "description": "A lightweight, fast, WYSIWYG Markdown desktop reader built with Tauri 2 + Vue 3. Supports KaTeX, Mermaid, full-text search, and PDF/DOCX export.",
   "author": "Neilooo",
   "license": "MIT",
-  "homepage": "https://github.com/Neilooo/md-reader#readme",
+  "homepage": "https://github.com/redtramp/glim#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Neilooo/md-reader.git"
+    "url": "https://github.com/redtramp/glim.git"
   },
   "bugs": {
-    "url": "https://github.com/Neilooo/md-reader/issues"
+    "url": "https://github.com/redtramp/glim/issues"
   },
   "keywords": [
     "markdown",

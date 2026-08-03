@@ -9,7 +9,7 @@ const zhCN = {
     search: "搜索",
     noFolder: "未打开文件夹",
     openFolderHint: "点击「文件夹」\n打开目录浏览所有 md 文件",
-    emptyTitle: "MD Reader",
+    emptyTitle: "Glim Reader",
     emptyHint: "点击「文件」或「文件夹」开始\n也可将 .md 文件拖入此窗口",
     shortcutHint:
       "Ctrl+N 新建 · Ctrl+O 打开文件 · Ctrl+E 切换预览/编辑 · Ctrl+F 查找 · Ctrl+S 保存 · Ctrl+Shift+F 全文搜索",
@@ -85,7 +85,7 @@ const zhCN = {
     clearTemplate: "清除",
     fileAssociation: "文件关联",
     fileAssociationHint:
-      "将 MD Reader 注册到当前 Windows 用户的 .md / .markdown / .mdx 打开方式列表。",
+      "将 Glim Reader 注册到当前 Windows 用户的 .md / .markdown / .mdx 打开方式列表。",
     registerAssociation: "注册文件关联",
     registering: "注册中…",
     associationSuccess:

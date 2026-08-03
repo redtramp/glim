@@ -1,7 +1,7 @@
 import { ref, computed } from "vue";
 import type { Heading } from "./useMarkdown";
 
-const STORAGE_TABS = "md-reader-tabs";
+const STORAGE_TABS = "glim-reader-tabs";
 
 export interface Tab {
   id: string;

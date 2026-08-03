@@ -182,7 +182,7 @@ for (const def of DEFS) {
   DEFAULTS[def.id] = normalizeComboKey(def.defaultBinding);
 }
 
-const STORAGE = "md-reader-shortcuts";
+const STORAGE = "glim-reader-shortcuts";
 
 function loadOverrides(): Record<string, string> {
   try {

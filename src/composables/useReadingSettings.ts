@@ -28,7 +28,7 @@ const FONT_STACKS: Record<string, string> = {
   custom: "",
 };
 
-const STORAGE = "md-reader-reading";
+const STORAGE = "glim-reader-reading";
 
 function loadSettings(): ReadingSettings {
   try {

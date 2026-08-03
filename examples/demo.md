@@ -1,6 +1,6 @@
-# MD Reader 功能演示
+# Glim Reader 功能演示
 
-> 这是一个展示 MD Reader 全部渲染能力的示例文档。所有元素均为真实渲染效果，可用于截图展示。
+> 这是一个展示 Glim Reader 全部渲染能力的示例文档。所有元素均为真实渲染效果，可用于截图展示。
 
 ## 一、文本与排版
 
@@ -26,7 +26,7 @@
 
 ### 有序列表
 
-1. 启动 MD Reader
+1. 启动 Glim Reader
 2. 打开 Markdown 文件
 3. 享受所见即所得的阅读体验
 
@@ -128,7 +128,7 @@ sequenceDiagram
 
 ```mermaid
 gantt
-    title MD Reader 开发里程碑
+    title Glim Reader 开发里程碑
     dateFormat YYYY-MM-DD
     section P0 MVP
     基础渲染           :done, 2026-06-01, 2d
@@ -243,7 +243,7 @@ print([fibonacci(i) for i in range(10)])
 ### Shell
 
 ```bash
-# 构建 MD Reader
+# 构建 Glim Reader
 pnpm install
 pnpm tauri build --bundles msi
 
@@ -259,7 +259,7 @@ winget install --id JohnMacFarlane.Pandoc -e
 
 | 工具 | 体积 | 启动时间 | 内存占用 | 价格 |
 |---|---:|---:|---:|---:|
-| MD Reader | **5.6 MB** | **0.3 s** | **80 MB** | **免费** |
+| Glim Reader | **5.6 MB** | **0.3 s** | **80 MB** | **免费** |
 | Typora | 80 MB | 2.0 s | 200 MB | 89 元 |
 | Obsidian | 200 MB | 3.0 s | 400 MB | 免费 |
 | VS Code | 350 MB | 2.5 s | 300 MB | 免费 |
@@ -276,8 +276,8 @@ winget install --id JohnMacFarlane.Pandoc -e
 
 ## 七、链接与图片
 
-- 项目主页：[github.com/Neilooo/md-reader](https://github.com/Neilooo/md-reader)
-- 下载地址：[最新版本](https://github.com/Neilooo/md-reader/releases/latest)
+- 项目主页：[github.com/redtramp/glim](https://github.com/redtramp/glim)
+- 下载地址：[最新版本](https://github.com/redtramp/glim/releases/latest)
 - 内部链接（同目录其它 md 文件）：`[使用文档](./USAGE.md)` 会自动跳转
 - 锚点链接：[跳到第一节](#一文本与排版)
 
@@ -317,7 +317,7 @@ winget install --id JohnMacFarlane.Pandoc -e
 
 ## 结语
 
-如果你觉得这个项目还不错，请到 [GitHub 仓库](https://github.com/Neilooo/md-reader) 给一个 ⭐ Star，这是对作者最大的支持！
+如果你觉得这个项目还不错，请到 [GitHub 仓库](https://github.com/redtramp/glim) 给一个 ⭐ Star，这是对作者最大的支持！
 
 > "Make it work, make it right, make it fast." — Kent Beck
 

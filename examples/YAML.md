@@ -1,6 +1,6 @@
 ---
 title: "YAML Front Matter 测试"
-author: "MD Reader"
+author: "Glim Reader"
 date: "2026-06-30"
 tags: [测试, Front Matter, Markdown]
 draft: false

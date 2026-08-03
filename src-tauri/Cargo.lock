@@ -1365,6 +1365,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "glim-reader"
+version = "0.3.4"
+dependencies = [
+ "notify",
+ "notify-debouncer-mini",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-opener",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-system-fonts",
+ "tauri-plugin-window-state",
+ "walkdir",
+ "window-vibrancy 0.8.0",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2024,26 +2044,6 @@ dependencies = [
  "log",
  "tendril",
  "web_atoms",
-]
-
-[[package]]
-name = "md-reader"
-version = "0.3.4"
-dependencies = [
- "notify",
- "notify-debouncer-mini",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-opener",
- "tauri-plugin-single-instance",
- "tauri-plugin-system-fonts",
- "tauri-plugin-window-state",
- "walkdir",
- "window-vibrancy 0.8.0",
 ]
 
 [[package]]

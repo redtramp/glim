@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "MD Reader",
+  "productName": "Glim Reader",
   "version": "0.3.4",
-  "identifier": "com.mdreader.desktop",
+  "identifier": "com.glimreader.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "MD Reader",
+        "title": "Glim Reader",
         "width": 1100,
         "height": 760,
         "minWidth": 600,

@@ -119,13 +119,13 @@ function scheduleSuppressClear(p: string) {
 }
 
 const theme = ref<"light" | "dark">(
-  (localStorage.getItem("md-reader-theme") as "light" | "dark") || "light"
+  (localStorage.getItem("glim-reader-theme") as "light" | "dark") || "light"
 );
 const showFileTree = ref<boolean>(
-  localStorage.getItem("md-reader-show-tree") !== "0"
+  localStorage.getItem("glim-reader-show-tree") !== "0"
 );
 const showToc = ref<boolean>(
-  localStorage.getItem("md-reader-show-toc") !== "0"
+  localStorage.getItem("glim-reader-show-toc") !== "0"
 );
 const showSettings = ref(false);
 const leftMode = ref<"files" | "search" | "outline">("files");
@@ -161,15 +161,15 @@ const diffNewContent = ref("");
 const diffFileName = ref("");
 
 const autoReloadWhitelist = ref<string[]>(
-  JSON.parse(localStorage.getItem("md-reader-auto-reload-whitelist") || "[]")
+  JSON.parse(localStorage.getItem("glim-reader-auto-reload-whitelist") || "[]")
 );
 
 const { width: leftWidth, startResize: resizeLeft } = useResizable(
-  "md-reader-left-w",
+  "glim-reader-left-w",
   260
 );
 const { width: rightWidth, startResize: resizeRight } = useResizable(
-  "md-reader-right-w",
+  "glim-reader-right-w",
   240,
   { inverse: true }
 );
@@ -250,7 +250,7 @@ function toggleAutoReload(path: string) {
   } else {
     autoReloadWhitelist.value.push(normalized);
   }
-  localStorage.setItem("md-reader-auto-reload-whitelist", JSON.stringify(autoReloadWhitelist.value));
+  localStorage.setItem("glim-reader-auto-reload-whitelist", JSON.stringify(autoReloadWhitelist.value));
 }
 
 async function onBannerReload() {
@@ -779,7 +779,7 @@ async function restoreTabs(initialPath = "") {
     paths = persisted.paths;
     activePath = persisted.activePath;
   } else {
-    const last = localStorage.getItem("md-reader-last-file");
+    const last = localStorage.getItem("glim-reader-last-file");
     if (last) {
       paths = [last];
       activePath = last;
@@ -804,7 +804,7 @@ async function restoreTabs(initialPath = "") {
 
 function toggleTheme() {
   theme.value = theme.value === "light" ? "dark" : "light";
-  localStorage.setItem("md-reader-theme", theme.value);
+  localStorage.setItem("glim-reader-theme", theme.value);
   applyTheme();
   // Force Mermaid/KaTeX re-render so charts follow the new theme.
   renderTick.value++;
@@ -1058,10 +1058,10 @@ function onViewerScroll() {
 }
 
 watch(showFileTree, (v) =>
-  localStorage.setItem("md-reader-show-tree", v ? "1" : "0")
+  localStorage.setItem("glim-reader-show-tree", v ? "1" : "0")
 );
 watch(showToc, (v) =>
-  localStorage.setItem("md-reader-show-toc", v ? "1" : "0")
+  localStorage.setItem("glim-reader-show-toc", v ? "1" : "0")
 );
 
 watch(isEditing, (editing) => {
@@ -1095,7 +1095,7 @@ onMounted(async () => {
   // Listen for file-open events fired by Rust (file association / single-instance).
   try {
     const { listen } = await import("@tauri-apps/api/event");
-    unlistenOpen = await listen<string>("md-reader://open-file", async (e) => {
+    unlistenOpen = await listen<string>("glim-reader://open-file", async (e) => {
       const path = e.payload;
       if (typeof path === "string" && path) {
         await loadFile(path);
@@ -1215,8 +1215,8 @@ watch(
         :title="t('app.refresh')"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="1 4 1 10 7 10"/>
-          <path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+          <polyline points="1 4 1 10 7 10" />
+          <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
         </svg>
       </button>
       <button
@@ -1226,8 +1226,8 @@ watch(
         :title="t('app.closeFolder')"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
         </svg>
       </button>
       <div class="filename" :title="currentFile">{{ displayFileName }}</div>
@@ -1364,14 +1364,14 @@ watch(
               stroke-linejoin="round"
               style="vertical-align: -2px"
             >
-              <line x1="12" y1="2" x2="12" y2="6"/>
-              <line x1="12" y1="18" x2="12" y2="22"/>
-              <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/>
-              <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/>
-              <line x1="2" y1="12" x2="6" y2="12"/>
-              <line x1="18" y1="12" x2="22" y2="12"/>
-              <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/>
-              <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>
+              <line x1="12" y1="2" x2="12" y2="6" />
+              <line x1="12" y1="18" x2="12" y2="22" />
+              <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+              <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+              <line x1="2" y1="12" x2="6" y2="12" />
+              <line x1="18" y1="12" x2="22" y2="12" />
+              <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
+              <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
             </svg>
             <svg
               v-else
@@ -1392,7 +1392,7 @@ watch(
           <div v-if="showExportMenu" class="export-menu" @click.stop>
             <button
               class="menu-item"
-               @click="exportHtml()"
+              @click="exportHtml()"
             >
               <span class="mi-label">{{ t("export.html") }}</span>
               <span class="mi-hint">{{ t("export.htmlHint") }}</span>
@@ -1431,7 +1431,7 @@ watch(
             <div class="menu-divider"></div>
             <button
               class="menu-item"
-               @click="doPrint(); closeExportMenu()"
+              @click="doPrint(); closeExportMenu()"
             >
               <span class="mi-label">{{ t("export.print") }}</span>
               <span class="mi-hint">{{ t("export.printHint") }}</span>
@@ -1462,7 +1462,7 @@ watch(
         </button>
         <button
           class="btn"
-           @click="toggleFileTree"
+          @click="toggleFileTree"
           :title="t('app.toggleSidebar')"
         >
           {{ t("toolbar.sidebar") }}
@@ -1484,7 +1484,7 @@ watch(
         <button
           v-if="!tocOnLeft"
           class="btn"
-           @click="toggleToc"
+          @click="toggleToc"
           :title="t('app.toggleToc')"
         >
           {{ t("toolbar.outline") }}
@@ -1507,18 +1507,18 @@ watch(
           :title="t('app.toggleTheme')"
         >
           <svg v-if="theme === 'light'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
           </svg>
           <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="5"/>
-            <line x1="12" y1="1" x2="12" y2="3"/>
-            <line x1="12" y1="21" x2="12" y2="23"/>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-            <line x1="1" y1="12" x2="3" y2="12"/>
-            <line x1="21" y1="12" x2="23" y2="12"/>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
           </svg>
         </button>
         <button

@@ -11,7 +11,7 @@ export function useFileWatcher() {
   async function start(root: string, handler: FileChangeHandler) {
     await stop();
     await invoke("start_watch", { root });
-    unlisten = await listen<string[]>("md-reader://file-changed", (event) => {
+    unlisten = await listen<string[]>("glim-reader://file-changed", (event) => {
       handler(event.payload);
     });
     watching.value = root;

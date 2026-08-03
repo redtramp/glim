@@ -88,7 +88,7 @@ async function openFolder(): Promise<string | null> {
   const selected = await open({ multiple: false, directory: true });
   if (typeof selected === "string") {
     rootDir.value = selected;
-    localStorage.setItem("md-reader-root", selected);
+    localStorage.setItem("glim-reader-root", selected);
     await refresh();
     return selected;
   }
@@ -98,12 +98,12 @@ async function openFolder(): Promise<string | null> {
 async function changeRootDir(newDir: string) {
   if (!newDir || newDir === rootDir.value) return;
   rootDir.value = newDir;
-  localStorage.setItem("md-reader-root", newDir);
+  localStorage.setItem("glim-reader-root", newDir);
   await refresh();
 }
 
 async function restoreRoot(): Promise<void> {
-  const saved = localStorage.getItem("md-reader-root");
+  const saved = localStorage.getItem("glim-reader-root");
   if (saved) {
     rootDir.value = saved;
     await refresh();
@@ -113,7 +113,7 @@ async function restoreRoot(): Promise<void> {
 function clearRoot(): void {
   rootDir.value = "";
   files.value = [];
-  localStorage.removeItem("md-reader-root");
+  localStorage.removeItem("glim-reader-root");
 }
 
 export function useFileTree() {

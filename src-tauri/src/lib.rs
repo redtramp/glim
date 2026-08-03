@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -147,7 +148,7 @@ fn start_watch(
                     .into_iter()
                     .map(|e| e.path.to_string_lossy().to_string())
                     .collect();
-                let _ = app_handle.emit("md-reader://file-changed", paths);
+                let _ = app_handle.emit("glim-reader://file-changed", paths);
             }
             Err(error) => {
                 eprintln!("watch error: {error:?}");
@@ -190,12 +191,17 @@ pub struct SearchMatch {
     pub preview: String,
 }
 
+/// 最新搜索会话代次:每次新搜索发起时更新;遍历期间发现代次变化即提前中断,
+/// 避免过期搜索继续消耗资源(Rust 侧无法直接取消同步遍历,用代次实现协作式取消)。
+static SEARCH_SESSION: AtomicU64 = AtomicU64::new(0);
+
 #[tauri::command]
 fn search_in_files(
     root: String,
     query: String,
     case_sensitive: bool,
     max_results: Option<usize>,
+    session: Option<u64>,
 ) -> Result<Vec<SearchMatch>, String> {
     let root_path = PathBuf::from(&root);
     if !root_path.is_dir() {
@@ -218,6 +224,11 @@ fn search_in_files(
     let mut results = Vec::new();
     // 跳过超大文件（>500KB），避免内存占用过高和响应缓慢
     const MAX_FILE_SIZE: u64 = 512 * 1024;
+    // 将本次搜索标记为最新代次;后续更新的搜索会覆盖该值,使本遍历提前中断
+    let my_session = session.unwrap_or(0);
+    if my_session != 0 {
+        SEARCH_SESSION.store(my_session, Ordering::Relaxed);
+    }
 
     'outer: for entry in WalkDir::new(&root_path)
         .follow_links(false)
@@ -228,6 +239,10 @@ fn search_in_files(
         })
         .filter_map(|e| e.ok())
     {
+        // 协作式取消:有更新的搜索请求(代次变化)时,立即放弃本次遍历
+        if my_session != 0 && SEARCH_SESSION.load(Ordering::Relaxed) != my_session {
+            break;
+        }
         let path = entry.path();
         if !path.is_file() || !is_markdown_file(path) {
             continue;
@@ -247,6 +262,10 @@ fn search_in_files(
             .to_string_lossy()
             .to_string();
         for (idx, line) in content.lines().enumerate() {
+            // 行内循环同样检查代次,避免大文件内部长时间占用
+            if my_session != 0 && SEARCH_SESSION.load(Ordering::Relaxed) != my_session {
+                break 'outer;
+            }
             let hay = if case_sensitive {
                 line.to_string()
             } else {
@@ -305,7 +324,7 @@ fn register_windows_file_associations() -> Result<(), String> {
     let open_command = format!("\"{}\" \"%1\"", exe_path);
     let icon = format!("\"{}\",0", exe_path);
     let prog_id = "MDReader.Markdown";
-    let app_key = r"HKCU\Software\Classes\Applications\md-reader.exe";
+    let app_key = r"HKCU\Software\Classes\Applications\glim-reader.exe";
 
     reg_add(vec![
         "add".into(),
@@ -354,7 +373,7 @@ fn register_windows_file_associations() -> Result<(), String> {
         "/v".into(),
         "FriendlyAppName".into(),
         "/d".into(),
-        "MD Reader".into(),
+        "Glim Reader".into(),
         "/f".into(),
     ])?;
     reg_add(vec![
@@ -403,7 +422,7 @@ fn register_windows_file_associations() -> Result<(), String> {
         ])?;
         reg_add(vec![
             "add".into(),
-            format!(r"{}\OpenWithList\md-reader.exe", ext_key),
+            format!(r"{}\OpenWithList\glim-reader.exe", ext_key),
             "/ve".into(),
             "/d".into(),
             "".into(),
@@ -473,7 +492,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
             if let Some(path) = extract_md_path_from_args(&argv) {
-                let _ = app.emit("md-reader://open-file", path);
+                let _ = app.emit("glim-reader://open-file", path);
             }
         }))
         .plugin(tauri_plugin_fs::init())
@@ -567,6 +586,14 @@ pub struct ExportOptions {
     pub reference_doc: Option<String>,
 }
 
+/// 临时文件守卫:作用域结束时无论成败都删除临时文件,避免 pandoc 中途失败时残留。
+struct TempFileGuard(PathBuf);
+impl Drop for TempFileGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 #[tauri::command]
 fn export_with_pandoc(opts: ExportOptions) -> Result<String, String> {
     let format = opts.format.to_lowercase();
@@ -576,9 +603,11 @@ fn export_with_pandoc(opts: ExportOptions) -> Result<String, String> {
 
     let tmp_dir = std::env::temp_dir();
     let stamp = current_millis();
-    let in_path = tmp_dir.join(format!("md-reader-export-{}.html", stamp));
+    let in_path = tmp_dir.join(format!("glim-reader-export-{}.html", stamp));
     std::fs::write(&in_path, &opts.html)
         .map_err(|e| format!("Failed to write temp html: {}", e))?;
+    // 注册守卫:后续任何 Err 提前返回(如 pandoc 启动失败)都会清理临时文件
+    let _guard = TempFileGuard(in_path.clone());
 
     let out_path = PathBuf::from(&opts.out_path);
     if let Some(parent) = out_path.parent() {
@@ -613,8 +642,6 @@ fn export_with_pandoc(opts: ExportOptions) -> Result<String, String> {
     let output = cmd
         .output()
         .map_err(|e| format!("Failed to invoke pandoc: {}", e))?;
-
-    let _ = std::fs::remove_file(&in_path);
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();

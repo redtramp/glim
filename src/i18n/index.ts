@@ -4,7 +4,7 @@ import enUS from "./en-US";
 
 export type AppLocale = "zh-CN" | "en-US";
 
-const STORAGE_KEY = "md-reader-locale";
+const STORAGE_KEY = "glim-reader-locale";
 
 function detectLocale(): AppLocale {
   const saved = localStorage.getItem(STORAGE_KEY);

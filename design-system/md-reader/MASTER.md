@@ -6,7 +6,7 @@
 
 ---
 
-**Project:** md-reader
+**Project:** Glim Reader
 **Generated:** 2026-07-25 16:44:10
 **Category:** Cybersecurity Platform
 

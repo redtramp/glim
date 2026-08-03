@@ -108,7 +108,7 @@ export async function checkPandoc(): Promise<PandocInfo> {
   return await invoke<PandocInfo>("check_pandoc");
 }
 
-const PANDOC_REF_DOC_KEY = "md-reader-pandoc-reference-doc";
+const PANDOC_REF_DOC_KEY = "glim-reader-pandoc-reference-doc";
 
 export function getCachedPandocRefDoc(): string | null {
   return localStorage.getItem(PANDOC_REF_DOC_KEY);
@@ -167,7 +167,7 @@ export interface PdfExportErrorPayload {
   message: string;
 }
 
-const EDGE_PATH_KEY = "md-reader-edge-path";
+const EDGE_PATH_KEY = "glim-reader-edge-path";
 
 export function getCachedEdgePath(): string | null {
   return localStorage.getItem(EDGE_PATH_KEY);

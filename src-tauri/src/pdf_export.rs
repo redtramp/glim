@@ -77,8 +77,8 @@ fn run_edge_print(
     stamp: u128,
     attempt: u8,
 ) -> Result<EdgeAttemptResult, PdfExportError> {
-    let temp_pdf = tmp_dir.join(format!("md-reader-out-{}-{}.pdf", stamp, attempt));
-    let user_data_dir = tmp_dir.join(format!("md-reader-edge-{}-{}", stamp, attempt));
+    let temp_pdf = tmp_dir.join(format!("glim-reader-out-{}-{}.pdf", stamp, attempt));
+    let user_data_dir = tmp_dir.join(format!("glim-reader-edge-{}-{}", stamp, attempt));
     std::fs::create_dir_all(&user_data_dir)
         .map_err(|e| PdfExportError::IoError(e.to_string()))?;
 
@@ -140,7 +140,7 @@ pub fn export_pdf_via_edge(
 
     let tmp_dir = std::env::temp_dir();
     let stamp = current_millis();
-    let tmp_html = tmp_dir.join(format!("md-reader-export-{}.html", stamp));
+    let tmp_html = tmp_dir.join(format!("glim-reader-export-{}.html", stamp));
     std::fs::write(&tmp_html, &opts.html)
         .map_err(|e| PdfExportError::IoError(e.to_string()))?;
 
