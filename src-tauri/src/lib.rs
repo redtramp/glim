@@ -536,14 +536,18 @@ pub struct PandocInfo {
 }
 
 fn pandoc_cmd() -> Command {
-    let cmd = Command::new("pandoc");
     #[cfg(windows)]
     {
+        let mut cmd = Command::new("pandoc");
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd
     }
-    cmd
+    #[cfg(not(windows))]
+    {
+        Command::new("pandoc")
+    }
 }
 
 fn run_check(program: &str, arg: &str) -> Option<String> {
