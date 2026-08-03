@@ -81,12 +81,12 @@ function collapseAll() {
       <span v-if="headings.length" class="toc-actions">
         <button class="toc-action" @click="expandAll" :title="t('toc.expandAll')">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="15 10 12 7 9 10"/>
+            <polyline points="15 10 12 7 9 10" />
           </svg>
         </button>
         <button class="toc-action" @click="collapseAll" :title="t('toc.collapseAll')">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="9 14 12 17 15 14"/>
+            <polyline points="9 14 12 17 15 14" />
           </svg>
         </button>
       </span>
@@ -108,10 +108,10 @@ function collapseAll() {
           @click.stop="toggleCollapse(idx)"
         >
           <svg v-if="collapsed.has(idx)" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="9 6 15 12 9 18"/>
+            <polyline points="9 6 15 12 9 18" />
           </svg>
           <svg v-else width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="6 9 12 15 18 9"/>
+            <polyline points="6 9 12 15 18 9" />
           </svg>
         </span>
         <span v-else class="toc-toggle-spacer"></span>
