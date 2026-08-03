@@ -1,217 +1,157 @@
-# MD Reader
+# Glim
+
+> A quiet light for your Markdown tabs  
+> 一个安静的阅读微光 —— 多标签 Markdown 阅读器
 
 **English** | [简体中文](README.md)
 
-[![Release](https://img.shields.io/github/v/release/Neilooo/md-reader?include_prereleases&color=blue)](https://github.com/Neilooo/md-reader/releases)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/Neilooo/md-reader/total)](https://github.com/Neilooo/md-reader/releases)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20(experimental)-lightgrey)]()
+https://img.shields.io/github/v/release/redtramp/glim?include_prereleases&color=blue](https://github.com/redtramp/glim/releases)
+https://img.shields.io/badge/license-MIT-green](LICENSE)
+https://img.shields.io/github/downloads/redtramp/glim/total](https://github.com/redtramp/glim/releases)
+https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20(experimental-lightgrey)]()
 
-A lightweight, fast, WYSIWYG **Markdown viewer / reader / editor** desktop app. Built with **Tauri 2 + Vue 3 + Rust**.
+**Glim** is an active fork of https://github.com/Neilooo/md-reader, independently maintained.
 
-Small footprint (~6 MB), fast startup, multi-tab editing, source editing, KaTeX math, Mermaid diagrams, syntax highlighting, file tree, full-text search, and high-fidelity PDF/HTML/DOCX export.
-
-📦 **[Download the latest release](https://github.com/Neilooo/md-reader/releases/latest)**
+- Upstream last commit: 2026-07-23, PRs have been unresponsive for an extended period
+- This repository has been independently evolving since 2026-07-25 and is currently 60+ commits ahead of upstream
+- The original project's MIT license and copyright notices are fully retained; modifications in this repository are released under the same MIT license
 
 ---
 
-## Features
+## Relationship with the Original Project
 
-### Multi-tab
-- Open multiple Markdown files at once, switch via the horizontal tab bar under the toolbar
-- Click to switch, middle-click to close; reopening an already-open file focuses its tab instead of duplicating
-- Each tab independently keeps its content, unsaved draft, edit/preview mode, outline, and scroll position
-- Restores the last open tabs and active tab on restart
+| | Neilooo/md-reader | Glim (this repository) |
+|---|---|---|
+| Status | Low activity | Actively maintained |
+| Platforms | Windows primarily | Windows + macOS / Linux experimental builds |
+| Additions | - | Close other tabs, export menu refactor, dependency upgrades, Mermaid rendering fixes |
+| License | MIT | MIT (includes original copyright) |
+
+If you only need basic functionality, you may continue using the original project. If you need multi-tab enhancements, ongoing fixes, and new interactions, Glim is here for you.
+
+Original copyright: © 2026 Neilooo  
+Modification copyright: © 2026 redtramp
+
+---
+
+## Introduction
+
+Glim is a lightweight, fast, WYSIWYG Markdown desktop reader and editor, built with **Tauri 2 + Vue 3 + Rust**.
+
+Small footprint (~10 MB), fast startup, with support for multi-tabs, source editing, formulas, diagrams, code highlighting, file tree, full-text search, and PDF / HTML / DOCX export.
+
+📦 **https://github.com/redtramp/glim/releases/latest**
+
+---
+
+## Key Features
+
+### Multi-Tabs
+- Open multiple Markdown files simultaneously, switch via the horizontal tab bar below the toolbar
+- Click to switch, middle-click to close; reopening an already open file focuses on the existing tab rather than duplicating it
+- Each tab independently retains content, unsaved drafts, edit/preview mode, outline, and scroll position — everything is restored on switch
+- Automatically restores the last opened tab list and active tab after app restart
+- One-click close other tabs
 
 ### Reading
 - CommonMark + GitHub Flavored Markdown
-- YAML Front Matter parsing & preview: top `---` metadata renders as an info card, body and outline strip the metadata
-- Syntax highlighting with highlight.js (30+ languages)
-- Math formulas with KaTeX (lazy-loaded)
-- Diagrams / sequence / mindmap with Mermaid (lazy-loaded, SVG sanitized via DOM parsing — strips scripts and event handlers only)
-- Task lists, footnotes, emoji, heading anchors
-- Light / dark theme with persisted preference
+- YAML Front Matter parsing and preview
+- Code syntax highlighting (highlight.js, 30+ languages)
+- Math formulas (KaTeX, loaded on demand)
+- Flowcharts / sequence diagrams / mind maps (Mermaid, ✨ fixed C4Dynamic / C4Deployment rendering)
+- Task lists / footnotes / Emoji / heading anchors
+- Light / dark theme switching with theme preference persistence
+- Customizable reading font
 
 ### Editing
-- CodeMirror source editing mode with Markdown highlighting, line numbers, folding, bracket matching, find/replace, and go to line
-- One-click preview / edit switch (`Ctrl+E`), with viewport synced by source line on toggle
-- Markdown formatting shortcuts: `Ctrl+B` bold, `Ctrl+I` italic, `Ctrl+U` underline, `Ctrl+L` highlight, `` Ctrl+Shift+` `` inline code
-- Paste images in edit mode with `Ctrl+V`: auto-saves to `images/` next to the current file and inserts a Markdown link
-- Manual save / save as with unsaved-change protection for tab switches, tab close, window close, and external file changes
+- CodeMirror 6 source editing mode
+- One-click toggle between preview and edit (`Ctrl+E`), with synchronized viewport position based on source lines
+- Markdown formatting shortcuts
+- `Ctrl+V` to paste images in edit mode, automatically saving and inserting links
+- Unsaved changes protection
 
 ### Navigation
-- File tree for Markdown folders
-- Outline / TOC with scroll sync, hierarchical expand/collapse (▶/▼ arrows + expand all/collapse all buttons; collapse all shows up to level 2)
-- Outline position configurable in settings: left (sidebar tab, toolbar outline button hidden) / right (standalone panel), default right
-- Resizable three-column layout
-- Internal Markdown links: `[text](./other.md#heading)`
-- Relative image path rewriting
+- Left-side file tree with recursive folder scanning
+- Outline (TOC) with scroll-synchronized highlighting and collapsible hierarchical sections
+- Three-column draggable dividers with independent show/hide controls
+- Internal link navigation and relative path resolution for images
 
 ### Search
-- `Ctrl+F` find in current document
-- `Ctrl+Shift+F` full-text search across files (Rust backend)
+- `Ctrl+F` for current document search
+- `Ctrl+Shift+F` for cross-file full-text search (high-speed Rust backend)
 
 ### Export
-- **PDF**: Edge headless, 1-3 seconds, WYSIWYG, no LaTeX required
-- **HTML**: self-contained single file with images/CSS embedded
-- **DOCX**: powered by pandoc; optionally set a Word template `.docx` via `--reference-doc` to control fonts, headings and paragraph styles
+- **PDF**: Edge headless, WYSIWYG
+- **HTML**: Self-contained single file with all resources embedded
+- **DOCX**: Pandoc-based route with Word template customization support
 
-### Desktop integration
-- Reading settings: font size, editor font size, line height, width, font family, outline position
-- Customizable shortcuts: Settings -> View shortcuts, click a key cap to record a new combo; supports global and editor shortcuts, conflict detection, per-item and full reset
-- File watching with auto refresh
-- Recent files and per-file scroll position restore; empty state shows recent file list with click-to-open
-- File association for `.md / .markdown / .mdx`; settings page can register per-user file associations (works for the portable build too)
-- Single-instance behavior: opening another file reuses the existing window
-- Drag and drop files into the window
-- UI language switch: Chinese / English
-- Check for updates: settings page shows the current version and compares it with the latest GitHub Release, with a one-click link to the download page when a newer version is found
+### Experience
+- Adjustable font size, line height, width, and font for both reading and editing
+- Customizable keyboard shortcuts with conflict detection
+- File change monitoring with auto-refresh
+- Recent files and scroll position persistence
+- File association: double-click `.md / .markdown / .mdx` to open directly
+- Single-instance operation, drag-and-drop files to open
+- Simplified Chinese / English UI switching
+- Update checking with one-click navigation to the download page
+
+---
 
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
+| Key | Action |
 |---|---|
 | `Ctrl+E` | Toggle preview / edit mode |
-| `Ctrl+B` | Bold (edit mode) |
-| `Ctrl+I` | Italic (edit mode) |
-| `Ctrl+U` | Underline (edit mode) |
-| `Ctrl+L` | Highlight (edit mode) |
-| `` Ctrl+Shift+` `` | Inline code (edit mode) |
-| `Ctrl+F` | Find in current document; editor search in edit mode |
-| `Ctrl+H` | Replace in edit mode |
-| `Ctrl+G` | Go to line in edit mode |
+| `Ctrl+B` | Bold |
+| `Ctrl+I` | Italic |
+| `Ctrl+U` | Underline |
+| `Ctrl+L` | Highlight |
+| `` Ctrl+Shift+` `` | Inline code |
+| `Ctrl+F` | Current document search |
 | `Ctrl+Shift+F` | Full-text search |
-| `Ctrl+N` | New Markdown file |
+| `Ctrl+N` | New file |
 | `Ctrl+O` | Open file |
-| `Ctrl+,` | Reading settings |
-| `Ctrl+S` | Save current file |
+| `Ctrl+S` | Save |
 | `Ctrl+Shift+S` | Save as |
-| `Ctrl+P` | System print / Save as PDF |
-| `Ctrl+=` | Increase font size (editor font in edit mode, reading font in preview) |
-| `Ctrl+-` | Decrease font size (same as above) |
-| `Ctrl+0` | Reset font size to default (editor 14px, reading 16px) |
-| `Ctrl+Scroll` | Zoom font size (same as Ctrl+=/-, two-mode branching) |
-| `Esc` | Close find/settings/dialogs |
+| `Ctrl+= / - / 0` | Zoom in / zoom out / reset font |
+| `Esc` | Close modal |
 
-> All shortcuts above can be customized in **Settings -> View shortcuts** (except Esc and scroll zoom).
+> Shortcuts can be customized in "Settings → View Shortcuts".
 
-## Screenshots
-
-![image-20260701093258687](./screenshot/image-20260701093258687.png)
-
-![image-20260701093345426](./screenshot/image-20260701093345426.png)
+---
 
 ## Installation
 
-### Windows (official)
+### Windows (Recommended)
+- `Glim-*-windows-x64-setup.msi`: Installer version, automatically registers file associations
+- `Glim-*-windows-x64-portable.exe`: Portable version, extract and run
 
-Download from the [Releases page](https://github.com/Neilooo/md-reader/releases/latest):
+### macOS / Linux (Experimental)
+- macOS: `.dmg` / `.app.tar.gz`
+- Linux: `.AppImage` / `.deb` / `.rpm`
 
-| File | Description |
-|---|---|
-| `MD-Reader-*-windows-x64-setup.msi` | Installer with file association support |
-| `MD-Reader-*-windows-x64-portable.exe` | Portable executable, no registry changes |
+> The experimental builds are unsigned. On macOS, right-click to open or run `xattr -dr com.apple.quarantine "Glim.app"`.
 
-> Windows 10 / 11 usually includes WebView2 Runtime. Older Windows 10 builds may need the [Microsoft WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
-
-### macOS / Linux (experimental)
-
-macOS and Linux builds are **experimental**, produced via GitHub Actions on release tags and attached to the [Releases page](https://github.com/Neilooo/md-reader/releases). They are not code-signed:
-
-- macOS: download `.dmg` or `.app.tar.gz`
-- Linux: download `.AppImage` / `.deb` / `.rpm`
-
-> Unsigned builds: on macOS, right-click → Open on first launch, or run `xattr -dr com.apple.quarantine "MD Reader.app"`; on Linux, `chmod +x` the AppImage first.
-
-## External Dependencies
-
-Core reading and editing features require **no external tools**. Optional features need the tools below:
-
-| Feature | Dependency | Included on Windows 10/11 | Notes |
-|---|---|:-:|---|
-| Reading / editing / multi-tab / file tree / search / math / diagrams / HTML export | None | — | Works out of the box |
-| **PDF export** | Microsoft Edge (Chromium) / Chrome | ✅ Edge usually included | Used for WYSIWYG PDF export |
-| **DOCX export** | [pandoc](https://pandoc.org/) ≥ 2.x | ❌ | Install only if you need DOCX |
-| Print | System print dialog | ✅ | Optional fallback |
-
-### Install pandoc (DOCX export only)
-
-```powershell
-winget install --id JohnMacFarlane.Pandoc -e
-```
-
-Or download it from [pandoc.org/installing.html](https://pandoc.org/installing.html). Restart MD Reader after installing pandoc.
-
-> PDF / HTML export does **not** require pandoc.
+---
 
 ## Development
-
-### Requirements
-
-| Tool | Version | Install |
-|---|---|---|
-| Node.js | ≥ 18 | https://nodejs.org/ |
-| pnpm | ≥ 8 | `npm install -g pnpm` |
-| Rust | ≥ 1.77 | https://rustup.rs/ |
-| WebView2 Runtime | — | Usually included on Windows 10/11 |
-| Visual Studio Build Tools | 2019+ | `Desktop development with C++` workload |
-
-### Commands
 
 ```bash
 pnpm install
 pnpm tauri dev
 pnpm tauri build
-pnpm lint
-pnpm format
 ```
+
+Requirements: Node.js ≥ 18, pnpm ≥ 8, Rust ≥ 1.77, WebView2 Runtime, VS Build Tools.
+
+---
 
 ## Tech Stack
 
-- **Desktop**: Tauri 2 (Rust + WebView2)
-- **Frontend**: Vue 3 + TypeScript + Vite
-- **Markdown**: markdown-it plugins
-- **Editor**: CodeMirror 6
-- **Math**: KaTeX
-- **Diagrams**: Mermaid
-- **Highlighting**: highlight.js
-- **PDF export**: system Edge `--headless=new --print-to-pdf`
-- **DOCX export**: pandoc
-- **File watching**: notify + notify-debouncer-mini
-- **Full-text search**: walkdir + line scanning
-- **File association / single instance**: tauri-plugin-single-instance
-- **i18n**: vue-i18n
+Tauri 2 · Vue 3 · TypeScript · Vite · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · pandoc · notify · tauri-plugin-single-instance · vue-i18n
 
-## How PDF Export Works
-
-MD Reader does not use LaTeX for PDF export.
-
-1. The frontend clones the already-rendered DOM (KaTeX and Mermaid are already rendered)
-2. Images are embedded as base64 and CSS is inlined
-3. Rust writes a temporary HTML file under `%TEMP%`
-4. System Edge runs in headless mode: `--headless=new --print-to-pdf=...`
-5. The generated PDF is copied to the user-selected output path
-
-Result: fast, high-fidelity, WYSIWYG PDF export in 1-3 seconds.
-
-## FAQ
-
-### WebView2 is missing
-
-Install the WebView2 Evergreen Runtime from Microsoft: https://developer.microsoft.com/microsoft-edge/webview2/
-
-### PDF export cannot find Edge
-
-MD Reader will ask you to choose `msedge.exe`. Chrome also works if Edge is unavailable.
-
-### DOCX export says pandoc is missing
-
-Install pandoc and restart MD Reader.
-
-### Does it support macOS / Linux?
-
-Yes, but currently as experimental builds. The official release targets Windows; macOS / Linux can be built via GitHub Actions yourself (see Installation above). These experimental builds are not code-signed.
+---
 
 ## License
 
-MIT
+MIT © 2026 Neilooo & redtramp
