@@ -1610,6 +1610,7 @@ watch(
       <section
         ref="viewerEl"
         class="viewer"
+        data-scroll-root
         :class="{ editing: isEditing }"
         tabindex="0"
         @scroll.passive="onViewerScroll"

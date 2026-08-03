@@ -1,218 +1,51 @@
-import MarkdownIt from "markdown-it";
-import type Token from "markdown-it/lib/token.mjs";
-import type Renderer from "markdown-it/lib/renderer.mjs";
-import type { Options } from "markdown-it";
-import hljs from "highlight.js";
+/**
+ * markdown 渲染组合式函数(主线程侧)。
+ *
+ * 架构:
+ * - renderMarkdown:异步,优先在 Web Worker 中执行 markdown-it + hljs(纯字符串),
+ *   主线程只做 DOMPurify 净化;结果按源内容哈希缓存,命中时零开销。
+ * - renderMermaid:带 SVG 结果缓存 + 全局串行渲染队列 + 可视区域懒渲染
+ *   (IntersectionObserver),避免打开文档即全量渲染造成首屏卡顿。
+ * - renderMath / extractHeadings:保持同步/近同步语义,供各处调用。
+ */
 import DOMPurify from "dompurify";
-import { parse as parseYaml } from "yaml";
-import anchor from "markdown-it-anchor";
-import footnote from "markdown-it-footnote";
-import taskLists from "markdown-it-task-lists";
-import { full as emoji } from "markdown-it-emoji";
-import mathPlugin from "./mathPlugin";
+import { createMarkdownIt, extractHeadingsWith } from "./markdownEngine";
+import type { Heading } from "./markdownEngine";
+import {
+  markdownHtmlCache,
+  mermaidSvgCache,
+  markdownCacheKey,
+  mermaidCacheKey,
+} from "./renderCache";
+import { renderMarkdownOffThread } from "./markdownWorkerClient";
 
-const md: MarkdownIt = new MarkdownIt({
-  html: true,
-  linkify: true,
-  typographer: true,
-  breaks: false,
-  highlight(str: string, lang: string): string {
-    if (lang === "mermaid") {
-      return `<div class="mermaid-block">${md.utils.escapeHtml(str)}</div>`;
-    }
-    if (lang && hljs.getLanguage(lang)) {
-      try {
-        return (
-          '<pre class="hljs"><code>' +
-          hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
-          "</code></pre>"
-        );
-      } catch {
-        /* ignore */
-      }
-    }
-    return (
-      '<pre class="hljs"><code>' +
-      md.utils.escapeHtml(str) +
-      "</code></pre>"
-    );
-  },
-});
+export type { Heading };
 
-md.use(anchor, {
-  slugify: (s: string) =>
-    encodeURIComponent(String(s).trim().toLowerCase().replace(/\s+/g, "-")),
-  permalink: anchor.permalink.linkInsideHeader({
-    symbol: "#",
-    placement: "before",
-    ariaHidden: true,
-  }),
-});
-md.use(footnote);
-md.use(taskLists, { enabled: true, label: true });
-md.use(emoji);
-md.use(mathPlugin);
+const md = createMarkdownIt();
 
-md.core.ruler.push("source_line_attrs", (state) => {
-  const offset = Number((state.env as { sourceLineOffset?: number }).sourceLineOffset || 0);
-  for (const token of state.tokens) {
-    if (token.nesting === 1 && token.map) {
-      token.attrSet("data-source-line", String(token.map[0] + 1 + offset));
-    }
-  }
-});
-
-const defaultLinkOpen =
-  md.renderer.rules.link_open ||
-  function (
-    tokens: Token[],
-    idx: number,
-    options: Options,
-    _env: unknown,
-    self: Renderer
-  ): string {
-    return self.renderToken(tokens, idx, options);
-  };
-
-md.renderer.rules.link_open = function (
-  tokens: Token[],
-  idx: number,
-  options: Options,
-  env: unknown,
-  self: Renderer
-): string {
-  const token = tokens[idx];
-  const hrefIdx = token.attrIndex("href");
-  const href = hrefIdx >= 0 ? token.attrs![hrefIdx][1] : "";
-  if (/^https?:\/\//i.test(href)) {
-    token.attrSet("target", "_blank");
-    token.attrSet("rel", "noopener noreferrer");
-  }
-  return defaultLinkOpen(tokens, idx, options, env, self);
-};
-
-export interface Heading {
-  level: number;
-  text: string;
-  id: string;
+/**
+ * 异步渲染 markdown → 净化后 HTML。
+ * markdown-it + hljs 在 Worker 线程执行,主线程仅做 DOMPurify 净化;结果按源哈希缓存。
+ */
+export async function renderMarkdown(source: string): Promise<string> {
+  const { key, length } = markdownCacheKey(source);
+  const cached = markdownHtmlCache.get(key, length);
+  if (cached !== undefined) return cached;
+  const { html: raw } = await renderMarkdownOffThread(source);
+  const html = sanitizeHtml(raw);
+  markdownHtmlCache.set(key, html, length);
+  return html;
 }
 
-interface FrontMatterBlock {
-  raw: string;
-  body: string;
-  bodyStartLine: number;
-  data: unknown;
-  error: string;
-}
-
-function splitFrontMatter(source: string): FrontMatterBlock | null {
-  const normalized = source.startsWith("\ufeff") ? source.slice(1) : source;
-  const lines = normalized.split(/\r?\n/);
-  if (lines[0] !== "---") return null;
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i] !== "---") continue;
-    const raw = lines.slice(1, i).join("\n");
-    let data: unknown = null;
-    let error = "";
-    try {
-      data = raw.trim() ? parseYaml(raw) : null;
-    } catch (e: any) {
-      error = String(e?.message ?? e);
-    }
-    return {
-      raw,
-      body: lines.slice(i + 1).join("\n"),
-      bodyStartLine: i + 2,
-      data,
-      error,
-    };
-  }
-  return null;
-}
-
-function escapeHtml(s: string): string {
-  return md.utils.escapeHtml(s);
-}
-
-function formatFrontMatterValue(value: unknown): string {
-  if (value == null) return "";
-  if (Array.isArray(value)) {
-    if (!value.length) return "[]";
-    return `<ul>${value.map((item) => `<li>${formatFrontMatterValue(item)}</li>`).join("")}</ul>`;
-  }
-  if (typeof value === "object") {
-    return `<pre>${escapeHtml(JSON.stringify(value, null, 2))}</pre>`;
-  }
-  return escapeHtml(String(value));
-}
-
-function renderFrontMatter(block: FrontMatterBlock): string {
-  const rows: string[] = [];
-  if (block.error) {
-    rows.push(
-      `<tr><th>Error</th><td class="front-matter-error">${escapeHtml(block.error)}</td></tr>`
-    );
-    rows.push(`<tr><th>Raw</th><td><pre>${escapeHtml(block.raw)}</pre></td></tr>`);
-  } else if (block.data && typeof block.data === "object" && !Array.isArray(block.data)) {
-    for (const [key, value] of Object.entries(block.data as Record<string, unknown>)) {
-      rows.push(`<tr><th>${escapeHtml(key)}</th><td>${formatFrontMatterValue(value)}</td></tr>`);
-    }
-  } else if (block.data != null) {
-    rows.push(`<tr><th>Value</th><td>${formatFrontMatterValue(block.data)}</td></tr>`);
-  } else {
-    rows.push(`<tr><th>Raw</th><td><pre>${escapeHtml(block.raw)}</pre></td></tr>`);
-  }
-  return `<section class="front-matter" data-source-line="1"><div class="front-matter-title">YAML Front Matter</div><table><tbody>${rows.join("")}</tbody></table></section>`;
-}
-
-export function extractHeadings(source: string): Heading[] {
-  // 超大文件跳过全量 token 解析，仅提取前 100 行的 heading
-  if (source.length > 200_000) {
-    return extractHeadingsFallback(source);
-  }
-  const block = splitFrontMatter(source);
-  const body = block ? block.body : source;
-  const env = { sourceLineOffset: block ? block.bodyStartLine - 1 : 0 };
-  const tokens = md.parse(body, env);
-  const headings: Heading[] = [];
-  for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i];
-    if (t.type === "heading_open") {
-      const idAttr = t.attrGet("id") || "";
-      const level = parseInt(t.tag.slice(1), 10);
-      const next = tokens[i + 1];
-      const text = next && next.type === "inline" ? next.content : "";
-      headings.push({ level, text, id: idAttr });
-    }
-  }
-  return headings;
-}
-
-/** 大文件 fallback：逐行扫描 heading，避免 md.parse() 的全量 token 化开销 */
-function extractHeadingsFallback(source: string): Heading[] {
-  const headings: Heading[] = [];
-  const block = splitFrontMatter(source);
-  const body = block ? block.body : source;
-  for (const line of body.split(/\r?\n/).slice(0, 500)) {
-    const m = line.match(/^(#{1,6})\s+(.*)$/);
-    if (!m) continue;
-    const level = m[1].length;
-    const text = m[2].trim();
-    const id = encodeURIComponent(text.toLowerCase().replace(/\s+/g, "-"));
-    headings.push({ level, text, id });
-  }
-  return headings;
-}
-
-export function renderMarkdown(source: string): string {
-  const block = splitFrontMatter(source);
-  const body = block ? block.body : source;
-  const offset = block ? block.bodyStartLine - 1 : 0;
-  const rawFrontMatter = block ? renderFrontMatter(block) : "";
-  const raw = rawFrontMatter + md.render(body, { sourceLineOffset: offset });
+function sanitizeHtml(raw: string): string {
   return DOMPurify.sanitize(raw, {
     ADD_ATTR: ["target", "data-math", "data-source-line", "width", "height"],
   });
+}
+
+/** 提取标题大纲(同步;大文件自动走 fallback,避免全量 token 化) */
+export function extractHeadings(source: string): Heading[] {
+  return extractHeadingsWith(md, source);
 }
 
 let katexLoading: Promise<any> | null = null;
@@ -238,11 +71,14 @@ async function loadMermaid() {
   return mermaidLoading;
 }
 
+function getCurrentTheme(): string {
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
 function configureMermaid(mermaid: any): void {
-  const isDark = document.documentElement.dataset.theme === "dark";
   mermaid.initialize({
     startOnLoad: false,
-    theme: isDark ? "dark" : "default",
+    theme: getCurrentTheme(),
     securityLevel: "strict",
     htmlLabels: false,
     flowchart: { htmlLabels: false },
@@ -274,10 +110,10 @@ export async function renderMath(container: HTMLElement): Promise<void> {
 }
 
 function sanitizeMermaidSvg(svg: string): string {
-  // 字符串级清洗，避免 DOMParser XML 解析导致 <foreignObject> 内 HTML 标签（<p>/<br>）报 tag mismatch
+  // 字符串级清洗,避免 DOMParser XML 解析导致 <foreignObject> 内 HTML 标签(<p>/<br>)报 tag mismatch
   // 1. 移除 <script> 标签及其内容
   let cleaned = svg.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
-  // 2. 移除 event handler 属性（onclick/onerror 等）
+  // 2. 移除 event handler 属性(onclick/onerror 等)
   cleaned = cleaned.replace(/\s+on\w+="[^"]*"/gi, "");
   cleaned = cleaned.replace(/\s+on\w+='[^']*'/gi, "");
   cleaned = cleaned.replace(/\s+on\w+=\w+/gi, "");
@@ -288,6 +124,81 @@ function sanitizeMermaidSvg(svg: string): string {
 }
 
 let mermaidIdCounter = 0;
+
+/** mermaid 全局串行渲染队列:initialize() 与 render() 必须串行,避免并发污染主题 */
+type RenderTask = () => Promise<void>;
+const renderQueue: RenderTask[] = [];
+let isRendering = false;
+
+function enqueueRender(task: RenderTask): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    renderQueue.push(async () => {
+      try {
+        await task();
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    });
+    pumpQueue();
+  });
+}
+
+async function pumpQueue(): Promise<void> {
+  if (isRendering) return;
+  isRendering = true;
+  try {
+    while (renderQueue.length > 0) {
+      const task = renderQueue.shift()!;
+      await task();
+    }
+  } finally {
+    isRendering = false;
+  }
+}
+
+/** 懒渲染调度器:维护每个容器上的 IntersectionObserver */
+const containerObservers = new WeakMap<HTMLElement, IntersectionObserver>();
+const containerPending = new WeakMap<HTMLElement, Set<HTMLElement>>();
+
+function scheduleLazyRender(
+  container: HTMLElement,
+  blocks: HTMLElement[],
+  renderBlock: (el: HTMLElement) => Promise<void>
+): void {
+  const pendingSet = containerPending.get(container) ?? new Set<HTMLElement>();
+  for (const el of blocks) pendingSet.add(el);
+  containerPending.set(container, pendingSet);
+
+  let observer = containerObservers.get(container);
+  if (!observer) {
+    observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const el = entry.target as HTMLElement;
+          const set = containerPending.get(container);
+          if (!set || !set.delete(el)) continue;
+          observer!.unobserve(el);
+          void renderBlock(el).catch(() => {
+            /* 单块失败不影响其余块;错误态已写入块内 */
+          });
+        }
+      },
+      { root: container.closest("[data-scroll-root]") ?? null, rootMargin: "200px 0px" }
+    );
+    containerObservers.set(container, observer);
+  }
+
+  for (const el of pendingSet) observer.observe(el);
+}
+
+/**
+ * 渲染容器内所有 mermaid 块。
+ * - force=false:仅渲染尚未渲染且位于可视区域的块(懒渲染);
+ * - force=true:全量渲染(主题切换/导出前),跳过已渲染且主题未变、缓存命中的块。
+ * SVG 结果按 主题+代码 哈希缓存,二次渲染零成本。
+ */
 export async function renderMermaid(
   container: HTMLElement,
   force = false
@@ -295,13 +206,9 @@ export async function renderMermaid(
   let blocks = Array.from(
     container.querySelectorAll<HTMLElement>(".mermaid-block")
   );
-  if (!force) {
-    blocks = blocks.filter((el) => !el.classList.contains("mermaid-rendered"));
-  }
-  if (blocks.length === 0) return;
-  const mermaid = await loadMermaid();
-  configureMermaid(mermaid);
-  for (const el of blocks) {
+  const theme = getCurrentTheme();
+
+  const doRender = async (el: HTMLElement): Promise<void> => {
     let code: string;
     if (el.dataset.mermaidSrc != null) {
       code = el.dataset.mermaidSrc;
@@ -309,21 +216,54 @@ export async function renderMermaid(
       code = el.textContent ?? "";
       el.dataset.mermaidSrc = code;
     }
-    const id = `mermaid-${Date.now()}-${mermaidIdCounter++}`;
-    try {
-      const { svg } = await mermaid.render(id, code);
-      el.innerHTML = sanitizeMermaidSvg(svg);
+    const { key, length } = mermaidCacheKey(theme, code);
+    const cachedSvg = mermaidSvgCache.get(key, length);
+    if (cachedSvg !== undefined) {
+      el.innerHTML = cachedSvg;
       el.classList.add("mermaid-rendered");
-    } catch (e: any) {
-      const pre = document.createElement("pre");
-      pre.className = "mermaid-error";
-      pre.textContent = `Mermaid: ${String(e?.message ?? e)}`;
-      el.replaceChildren(pre);
-      el.classList.add("mermaid-rendered");
+      el.dataset.mermaidTheme = theme;
+      return;
     }
+
+    await enqueueRender(async () => {
+      if (el.classList.contains("mermaid-rendered")) return;
+      const mermaid = await loadMermaid();
+      configureMermaid(mermaid);
+      const id = `mermaid-${Date.now()}-${mermaidIdCounter++}`;
+      try {
+        const { svg } = await mermaid.render(id, code);
+        const cleaned = sanitizeMermaidSvg(svg);
+        mermaidSvgCache.set(key, cleaned, length);
+        el.innerHTML = cleaned;
+        el.classList.add("mermaid-rendered");
+        el.dataset.mermaidTheme = theme;
+      } catch (e: any) {
+        const pre = document.createElement("pre");
+        pre.className = "mermaid-error";
+        pre.textContent = `Mermaid: ${String(e?.message ?? e)}`;
+        el.replaceChildren(pre);
+        el.classList.add("mermaid-rendered");
+      }
+    });
+  };
+
+  if (force) {
+    for (const el of blocks) {
+      if (el.dataset.mermaidTheme === theme) continue;
+      await doRender(el);
+    }
+    return;
   }
+
+  // 懒渲染:已渲染的跳过,其余交给 IntersectionObserver 按可视区域触发
+  blocks = blocks.filter(
+    (el) => !el.classList.contains("mermaid-rendered")
+  );
+  if (blocks.length === 0) return;
+  scheduleLazyRender(container, blocks, doRender);
 }
 
-export function useMarkdown() {
-  return { renderMarkdown, renderMath, renderMermaid, extractHeadings };
+/** 立即渲染容器内所有未渲染的 mermaid 块(导出、打印、查找前调用,保证内容完整) */
+export async function renderMermaidAll(container: HTMLElement): Promise<void> {
+  await renderMermaid(container, true);
 }

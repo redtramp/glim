@@ -7,6 +7,7 @@ import katexCss from "katex/dist/katex.min.css?raw";
 import { EXPORT_BASE_CSS } from "./exportStyles";
 import { inlineImages, ensureSvgNamespace } from "./exportInline";
 import { i18n } from "../i18n";
+import { renderMermaidAll } from "./useMarkdown";
 
 function t(key: string): string {
   return i18n.global.t(key);
@@ -43,6 +44,8 @@ export async function buildExportHtml(
   title: string,
   opts: BuildExportOpts = {}
 ): Promise<string> {
+  // 懒渲染模式下可能存在未滚到的 mermaid 块,导出前强制全部渲染,保证内容完整
+  await renderMermaidAll(body);
   const clone = body.cloneNode(true) as HTMLElement;
   clone.querySelectorAll(".find-highlight").forEach((el) => {
     const parent = el.parentNode;

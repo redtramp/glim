@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick } from "vue";
+import { ref, watch, onMounted, nextTick, onBeforeUnmount } from "vue";
 import {
   renderMarkdown,
   renderMath,
@@ -21,9 +21,27 @@ const emit = defineEmits<{
 const html = ref<string>("");
 const root = ref<HTMLElement | null>(null);
 
+/** 渲染请求序号:仅最新一次 update 的结果被采用,避免快速切换时旧结果覆盖新内容 */
+let renderSeq = 0;
+
 async function update() {
-  html.value = renderMarkdown(props.source);
+  const seq = ++renderSeq;
+  // 渲染期间保留旧内容,避免切换文档时白屏闪烁;新结果就绪后原子替换
+  let renderedHtml: string;
+  try {
+    renderedHtml = await renderMarkdown(props.source);
+  } catch (e) {
+    console.error("markdown render failed:", e);
+    if (seq !== renderSeq) return;
+    html.value = `<pre class="mermaid-error">Markdown 渲染失败: ${String(
+      (e as Error)?.message ?? e
+    )}</pre>`;
+    return;
+  }
+  if (seq !== renderSeq) return; // 已有更新的渲染请求,丢弃本次结果
+  html.value = renderedHtml;
   await nextTick();
+  if (seq !== renderSeq) return;
   if (root.value) {
     rewriteImagesAndLinks(
       root.value,
@@ -32,11 +50,13 @@ async function update() {
     );
     await renderMath(root.value);
     await renderMermaid(root.value);
+    if (seq !== renderSeq) return;
     emit("rendered", root.value);
   }
 }
 
 async function refreshThemeRender() {
+  // 只重渲染 mermaid,不参与 markdown 渲染的请求序号,避免废弃进行中的渲染结果
   if (!root.value) return;
   await renderMermaid(root.value, true);
   emit("rendered", root.value);
@@ -51,6 +71,10 @@ watch(
   () => props.renderTick,
   () => refreshThemeRender()
 );
+
+onBeforeUnmount(() => {
+  renderSeq++;
+});
 
 defineExpose({ root });
 </script>
