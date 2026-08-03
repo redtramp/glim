@@ -24,7 +24,7 @@
 |---|---|---|
 | Status | Low activity | Actively maintained |
 | Platforms | Windows primarily | Windows + macOS / Linux experimental builds |
-| Additions | - | Close other tabs, export menu refactor, dependency upgrades, Mermaid rendering fixes |
+| Additions | - | Multi-tab enhancements, lazy-loading file tree, three-mode sidebar, find & replace, print export, Word template, update checker, customizable shortcuts |
 | License | MIT | MIT (includes original copyright) |
 
 If you only need basic functionality, you may continue using the original project. If you need multi-tab enhancements, ongoing fixes, and new interactions, Glim is here for you.
@@ -38,7 +38,7 @@ Modification copyright: © 2026 redtramp
 
 Glim is a lightweight, fast, WYSIWYG Markdown desktop reader and editor, built with **Tauri 2 + Vue 3 + Rust**.
 
-Small footprint (~10 MB), fast startup, with support for multi-tabs, source editing, formulas, diagrams, code highlighting, file tree, full-text search, and PDF / HTML / DOCX export.
+Small footprint (~10 MB), fast startup, with support for multi-tabs, source editing, formulas, diagrams, code highlighting, a lazy-loading file tree, full-text search, and PDF / HTML / DOCX export plus printing.
 
 📦 **https://github.com/redtramp/glim/releases/latest**
 
@@ -51,47 +51,52 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - Click to switch, middle-click to close; reopening an already open file focuses on the existing tab rather than duplicating it
 - Each tab independently retains content, unsaved drafts, edit/preview mode, outline, and scroll position — everything is restored on switch
 - Automatically restores the last opened tab list and active tab after app restart
-- One-click close other tabs
+- Close other / left / right tabs
 
 ### Reading
 - CommonMark + GitHub Flavored Markdown
 - YAML Front Matter parsing and preview
-- Code syntax highlighting (highlight.js, 30+ languages)
+- Code syntax highlighting (highlight.js)
 - Math formulas (KaTeX, loaded on demand)
-- Flowcharts / sequence diagrams / mind maps (Mermaid, ✨ fixed C4Dynamic / C4Deployment rendering)
+- Flowcharts / sequence diagrams / mind maps and more (Mermaid)
 - Task lists / footnotes / Emoji / heading anchors
 - Light / dark theme switching with theme preference persistence
-- Customizable reading font
+- Adjustable reading font size, line height, width, and font family (custom fonts and system fonts supported)
 
 ### Editing
 - CodeMirror 6 source editing mode
 - One-click toggle between preview and edit (`Ctrl+E`), with synchronized viewport position based on source lines
-- Markdown formatting shortcuts
+- Formatting shortcuts: bold / italic / underline / highlight / inline code
+- Find & replace (`Ctrl+F` / `Ctrl+H`) and go-to-line (`Ctrl+G`)
 - `Ctrl+V` to paste images in edit mode, automatically saving and inserting links
 - Unsaved changes protection
 
 ### Navigation
-- Left-side file tree with recursive folder scanning
-- Outline (TOC) with scroll-synchronized highlighting and collapsible hierarchical sections
+- Left-side file tree: **lazy-loading, non-recursive** — only lists direct children of the current directory, directories are collapsed by default, and clicking the caret loads the next level on demand; the `..` entry at the top goes up one level
+- Three sidebar modes: file tree / full-text search / outline, switchable in one click
+- Outline (TOC) with scroll-synchronized highlighting, collapsible, dockable on the left or right
 - Three-column draggable dividers with independent show/hide controls
 - Internal link navigation and relative path resolution for images
+- With a history document, the file tree is rooted at the document's directory; without one, it shows the user's home directory
 
 ### Search
-- `Ctrl+F` for current document search
-- `Ctrl+Shift+F` for cross-file full-text search (high-speed Rust backend)
+- `Ctrl+F` for current document search, `Ctrl+H` for find & replace
+- `Ctrl+Shift+F` for cross-file full-text search (high-speed Rust backend, results grouped by file)
 
-### Export
+### Export & Print
 - **PDF**: Edge headless, WYSIWYG
 - **HTML**: Self-contained single file with all resources embedded
-- **DOCX**: Pandoc-based route with Word template customization support
+- **DOCX**: Pandoc-based route with Word reference template support
+- **Print**: `Ctrl+P` to print the current document directly
 
 ### Experience
-- Adjustable font size, line height, width, and font for both reading and editing
-- Customizable keyboard shortcuts with conflict detection
-- File change monitoring with auto-refresh
+- Independent font size, line height, width, and font family for reading and editing
+- Customizable keyboard shortcuts with conflict detection and reset
+- File change monitoring with automatic file tree refresh
+- External modification detection: a prompt appears when a file is modified outside the app, with options to view the diff, reload, or ignore
 - Recent files and scroll position persistence
-- File association: double-click `.md / .markdown / .mdx` to open directly
-- Single-instance operation, drag-and-drop files to open
+- File association: double-click `.md / .markdown / .mdx` to open directly, re-registrable in Settings
+- Single-instance operation, open files from command line / drag-and-drop
 - Simplified Chinese / English UI switching
 - Update checking with one-click navigation to the download page
 
@@ -107,24 +112,41 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 | `Ctrl+U` | Underline |
 | `Ctrl+L` | Highlight |
 | `` Ctrl+Shift+` `` | Inline code |
-| `Ctrl+F` | Current document search |
-| `Ctrl+Shift+F` | Full-text search |
+| `Ctrl+F` | Search in current document |
+| `Ctrl+H` | Find & replace |
+| `Ctrl+G` | Go to line |
+| `Ctrl+Shift+F` | Full-text search (sidebar) |
 | `Ctrl+N` | New file |
 | `Ctrl+O` | Open file |
 | `Ctrl+S` | Save |
 | `Ctrl+Shift+S` | Save as |
-| `Ctrl+= / - / 0` | Zoom in / zoom out / reset font |
+| `Ctrl+P` | Print |
+| `Ctrl+,` | Open settings |
+| `Ctrl+= / - / 0` | Zoom in / zoom out / reset font size |
+| `Ctrl+Wheel` | Zoom font size |
 | `Esc` | Close modal |
 
-> Shortcuts can be customized in "Settings → View Shortcuts".
+> Shortcuts can be viewed and customized in "Settings → View Shortcuts".
+
+---
+
+## Settings
+
+- Reading & editor font size, line height, max width, and font family (built-in + system + custom fonts)
+- Outline (TOC) position: left / right
+- Word export reference template (.docx)
+- File association registration (`.md / .markdown / .mdx`)
+- View / customize keyboard shortcuts
+- Check for updates
+- Theme and UI language switching
 
 ---
 
 ## Installation
 
 ### Windows (Recommended)
-- `Glim-*-windows-x64-setup.msi`: Installer version, automatically registers file associations
-- `Glim-*-windows-x64-portable.exe`: Portable version, extract and run
+- `glim-reader-*-windows-x64-setup.msi`: Installer version, automatically registers file associations
+- `glim-reader-*-windows-x64-portable.exe`: Portable version, extract and run
 
 ### macOS / Linux (Experimental)
 - macOS: `.dmg` / `.app.tar.gz`
@@ -148,7 +170,7 @@ Requirements: Node.js ≥ 18, pnpm ≥ 8, Rust ≥ 1.77, WebView2 Runtime, VS Bu
 
 ## Tech Stack
 
-Tauri 2 · Vue 3 · TypeScript · Vite · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · pandoc · notify · tauri-plugin-single-instance · vue-i18n
+Tauri 2 · Vue 3 · TypeScript · Vite · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · vue-i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / window-state / system-fonts
 
 ---
 

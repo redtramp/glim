@@ -51,12 +51,10 @@ use tauri::{Emitter, State};
 use walkdir::WalkDir;
 
 #[derive(Debug, Serialize, Clone)]
-pub struct MdFile {
+pub struct DirEntry {
     pub path: String,
     pub name: String,
-    pub rel_path: String,
-    pub size: u64,
-    pub modified_ms: i64,
+    pub is_dir: bool,
 }
 
 #[derive(Default)]
@@ -75,58 +73,67 @@ fn is_markdown_file(path: &Path) -> bool {
     )
 }
 
+/// 列出指定目录的**直接**子项（仅一层，不递归）。
+/// 返回目录与 Markdown 相关文件（md/markdown/mdx/txt），排除隐藏目录、
+/// node_modules 与 target，避免整树扫描导致 UI 卡死。
 #[tauri::command]
-fn list_md_files(root: String) -> Result<Vec<MdFile>, String> {
+fn list_dir(root: String) -> Result<Vec<DirEntry>, String> {
     let root_path = PathBuf::from(&root);
     if !root_path.is_dir() {
         return Err(format!("Not a directory: {}", root));
     }
-    let mut files = Vec::new();
-    for entry in WalkDir::new(&root_path)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|e| {
-            let name = e.file_name().to_string_lossy();
-            !(name.starts_with('.') || name == "node_modules" || name == "target")
-        })
-        .filter_map(|e| e.ok())
-    {
+    let mut entries: Vec<DirEntry> = Vec::new();
+    let rd = std::fs::read_dir(&root_path).map_err(|e| e.to_string())?;
+    for entry in rd.filter_map(|e| e.ok()) {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') || name == "node_modules" || name == "target" {
+            continue;
+        }
         let path = entry.path();
-        if path.is_file() && is_markdown_file(path) {
-        let meta = match entry.metadata() {
-                Ok(m) => m,
-                Err(_) => continue,
-            };
-            let modified_ms = meta
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_millis() as i64)
-                .unwrap_or(0);
-            let rel = path
-                .strip_prefix(&root_path)
-                .unwrap_or(path)
-                .to_string_lossy()
-                .to_string();
-            let name = path
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_default();
-            files.push(MdFile {
+        if path.is_dir() {
+            entries.push(DirEntry {
                 path: path.to_string_lossy().to_string(),
                 name,
-                rel_path: rel,
-                size: meta.len(),
-                modified_ms,
+                is_dir: true,
+            });
+        } else if path.is_file() && is_markdown_file(&path) {
+            entries.push(DirEntry {
+                path: path.to_string_lossy().to_string(),
+                name,
+                is_dir: false,
             });
         }
     }
-    files.sort_by(|a, b| a.rel_path.to_lowercase().cmp(&b.rel_path.to_lowercase()));
-    Ok(files)
+    // 目录在前，同层按名称排序，保证视觉顺序稳定
+    entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+    });
+    Ok(entries)
+}
+
+/// 返回当前用户主目录（如 /home/user），用于无历史文档时文件树的初始根目录。
+#[tauri::command]
+fn get_home_dir() -> Result<String, String> {
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .ok_or_else(|| "Cannot determine home directory".to_string())?;
+    Ok(PathBuf::from(home).to_string_lossy().to_string())
+}
+
+/// 判断路径是否位于应排除的子树下（与 list_dir 的过滤保持一致）。
+/// 排除隐藏目录（.git 等）、node_modules 与构建产物目录 target，
+/// 避免对海量目录注册 inotify 监听导致 UI 卡死/事件洪流。
+fn is_excluded_path(path: &Path) -> bool {
+    path.components().any(|c| {
+        let name = c.as_os_str().to_string_lossy();
+        name.starts_with('.') || name == "node_modules" || name == "target"
+    })
 }
 
 #[tauri::command]
-fn start_watch(
+async fn start_watch(
     app: tauri::AppHandle,
     state: State<'_, WatcherState>,
     root: String,
@@ -140,27 +147,42 @@ fn start_watch(
         *guard = None;
     }
     let app_handle = app.clone();
-    let mut debouncer = new_debouncer(
-        Duration::from_millis(300),
-        move |res: DebounceEventResult| match res {
-            Ok(events) => {
-                let paths: Vec<String> = events
-                    .into_iter()
-                    .map(|e| e.path.to_string_lossy().to_string())
-                    .collect();
-                let _ = app_handle.emit("glim-reader://file-changed", paths);
-            }
-            Err(error) => {
-                eprintln!("watch error: {error:?}");
-            }
-        },
-    )
-    .map_err(|e| e.to_string())?;
 
-    debouncer
-        .watcher()
-        .watch(&path, RecursiveMode::Recursive)
+    // 建立监听移出主线程执行，避免在大目录上同步建 watch 阻塞 UI。
+    let watch_path = path.clone();
+    let debouncer = tauri::async_runtime::spawn_blocking(move || {
+        let mut debouncer = new_debouncer(
+            Duration::from_millis(300),
+            move |res: DebounceEventResult| match res {
+                Ok(events) => {
+                    // 双保险：回调中再过滤一次排除路径，避免被监听噪音刷屏前端
+                    let paths: Vec<String> = events
+                        .into_iter()
+                        .filter(|e| !is_excluded_path(&e.path))
+                        .map(|e| e.path.to_string_lossy().to_string())
+                        .collect();
+                    if !paths.is_empty() {
+                        let _ = app_handle.emit("glim-reader://file-changed", paths);
+                    }
+                }
+                Err(error) => {
+                    eprintln!("watch error: {error:?}");
+                }
+            },
+        )
         .map_err(|e| e.to_string())?;
+
+        // 只监听根目录本身（NonRecursive）：避免启动时对整棵目录树深度遍历
+        // 逐个注册 inotify watch（大目录如 ~/Work 下有数万目录，注册耗时且易触发
+        // 系统 watch 上限）。已打开文件的目录由前端通过 watch_path 按需追加监听。
+        debouncer
+            .watcher()
+            .watch(&watch_path, RecursiveMode::NonRecursive)
+            .map_err(|e| e.to_string())?;
+        Ok::<_, String>(debouncer)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
 
     {
         let mut guard = state.inner.lock().map_err(|e| e.to_string())?;
@@ -179,6 +201,24 @@ fn stop_watch(state: State<'_, WatcherState>) -> Result<(), String> {
     *guard = None;
     let mut cur = state.current_root.lock().map_err(|e| e.to_string())?;
     *cur = None;
+    Ok(())
+}
+
+/// 追加监听单个目录（NonRecursive）：打开文件后监听其所在目录，用于检测外部修改。
+/// 根目录已在 start_watch 中监听；此处仅覆盖已打开文件的目录，避免整树深度监听。
+/// 重复监听（notify 返回 AlreadyWatched）与路径不存在时静默忽略。
+#[tauri::command]
+fn watch_path(state: State<'_, WatcherState>, path: String) -> Result<(), String> {
+    let p = PathBuf::from(&path);
+    if !p.is_dir() {
+        return Err(format!("Not a directory: {}", path));
+    }
+    let mut guard = state.inner.lock().map_err(|e| e.to_string())?;
+    if let Some(debouncer) = guard.as_mut() {
+        if let Err(e) = debouncer.watcher().watch(&p, RecursiveMode::NonRecursive) {
+            eprintln!("watch_path failed for {}: {e}", p.display());
+        }
+    }
     Ok(())
 }
 
@@ -511,9 +551,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            list_md_files,
+            list_dir,
+            get_home_dir,
             start_watch,
             stop_watch,
+            watch_path,
             search_in_files,
             initial_open_file,
             register_file_associations,

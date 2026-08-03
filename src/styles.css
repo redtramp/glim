@@ -328,6 +328,7 @@ body {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   background: var(--shell-sidebar-bg);
   border-right: 1px solid var(--shell-sidebar-border);
   overflow: hidden;
@@ -335,6 +336,9 @@ body {
 
 .right {
   flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: var(--shell-right-bg);
   border-left: 1px solid var(--shell-sidebar-border);
   overflow: hidden;

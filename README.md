@@ -24,7 +24,7 @@
 |---|---|---|
 | 状态 | 低活跃 | 主动维护 |
 | 平台 | Windows 为主 | Windows + macOS / Linux 实验构建 |
-| 新增 | - | 关闭其他标签、导出菜单重构、依赖升级、Mermaid 渲染修复 |
+| 新增 | - | 多标签增强、懒加载文件树、三模式侧栏、查找替换、打印导出、Word 模板、检查更新、快捷键自定义 |
 | 协议 | MIT | MIT（含原版权） |
 
 如果你仅需基础功能，可继续使用原项目；如需多标签增强、持续修复与新交互，欢迎使用 Glim。
@@ -38,7 +38,7 @@
 
 Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与编辑器，基于 **Tauri 2 + Vue 3 + Rust** 构建。
 
-体积小（约 10 MB），启动快，支持多标签页、源码编辑、公式、图表、代码高亮、文件树、全文搜索、PDF / HTML / DOCX 导出。
+体积小（约 10 MB），启动快，支持多标签页、源码编辑、公式、图表、代码高亮、懒加载文件树、全文搜索，以及 PDF / HTML / DOCX 导出与打印。
 
 📦 **https://github.com/redtramp/glim/releases/latest**
 
@@ -51,47 +51,52 @@ Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与�
 - 点击切换、中键关闭，再次打开已打开的文件会聚焦到对应标签而非重复打开
 - 每个标签独立保留内容、未保存草稿、编辑/预览模式、大纲和滚动位置，切换即恢复现场
 - 应用重启后自动恢复上次打开的标签列表与激活项
-- 一键关闭其他标签
+- 关闭其他 / 左侧 / 右侧标签
 
 ### 阅读
 - CommonMark + GitHub Flavored Markdown
 - YAML Front Matter 解析与预览
-- 代码语法高亮（highlight.js，30+ 语言）
+- 代码语法高亮（highlight.js）
 - 数学公式（KaTeX，按需加载）
-- 流程图 / 时序图 / 思维导图（Mermaid，✨ 修复 C4Dynamic / C4Deployment 渲染）
+- 流程图 / 时序图 / 思维导图等（Mermaid）
 - 任务列表 / 脚注 / Emoji / 标题锚点
 - 亮 / 暗主题切换，记忆主题偏好
-- 可自定义阅读字体
+- 阅读字号、行高、宽度、字体可调（支持自定义字体与系统字体）
 
 ### 编辑
 - CodeMirror 6 源码编辑模式
 - 预览 / 编辑一键切换（`Ctrl+E`），按源码行同步视口位置
-- Markdown 格式化快捷键
+- 加粗 / 斜体 / 下划线 / 高亮 / 行内代码等格式化快捷键
+- 查找替换（`Ctrl+F` / `Ctrl+H`）与跳转行（`Ctrl+G`）
 - 编辑模式下 `Ctrl+V` 粘贴图片，自动保存并插入链接
 - 未保存修改保护
 
 ### 导航
-- 左侧文件树，递归扫描文件夹
-- 大纲（TOC）滚动同步高亮，支持分级展开折叠
-- 三栏可拖拽分隔条，独立显隐
+- 左侧文件树：**懒加载、非递归**——只列当前目录的直接子项，目录默认折叠，点击三角符号才加载下一级；顶部 `..` 可返回上一级目录
+- 左侧面板三种模式：文件树 / 全文搜索 / 大纲，一键切换
+- 大纲（TOC）滚动同步高亮，可折叠，可置于左侧或右侧
+- 三栏可拖拽分隔条，侧栏与目录独立显隐
 - 内部链接跳转与图片相对路径解析
+- 有历史文档时文件树定位到文档所在目录；无历史文档时显示用户主目录
 
 ### 查找
-- `Ctrl+F` 当前文档查找
-- `Ctrl+Shift+F` 跨文件全文搜索（Rust 后端高速）
+- `Ctrl+F` 当前文档查找，`Ctrl+H` 查找替换
+- `Ctrl+Shift+F` 跨文件全文搜索（Rust 后端高速，结果按文件分组）
 
-### 导出
+### 导出与打印
 - **PDF**：Edge headless，所见即所得
 - **HTML**：自包含单文件，资源全部内嵌
-- **DOCX**：pandoc 路线，支持 Word 模板定制
+- **DOCX**：pandoc 路线，支持 Word 参考模板定制
+- **打印**：`Ctrl+P` 直接打印当前文档
 
 ### 体验
-- 阅读与编辑器字号、行高、宽度、字体可调
-- 快捷键自定义，冲突检测
-- 文件变更监听，自动刷新
+- 阅读与编辑器字号、行高、宽度、字体独立可调
+- 快捷键自定义，冲突检测与重置
+- 文件变更监听，自动刷新文件树
+- 外部修改检测：文件被外部程序修改时提示，可查看差异、重新加载或忽略
 - 最近文件与滚动位置记忆
-- 文件关联：`.md / .markdown / .mdx` 双击直接打开
-- 单例运行，拖拽文件直接打开
+- 文件关联：双击 `.md / .markdown / .mdx` 直接打开，可在设置中重新注册
+- 单例运行，命令行 / 拖拽打开文件
 - 简体中文 / English 界面切换
 - 检查更新，一键跳转下载页
 
@@ -108,23 +113,40 @@ Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与�
 | `Ctrl+L` | 高亮 |
 | `` Ctrl+Shift+` `` | 行内代码 |
 | `Ctrl+F` | 当前文档查找 |
-| `Ctrl+Shift+F` | 全文搜索 |
+| `Ctrl+H` | 查找替换 |
+| `Ctrl+G` | 跳转到行 |
+| `Ctrl+Shift+F` | 全文搜索（左侧面板） |
 | `Ctrl+N` | 新建文件 |
 | `Ctrl+O` | 打开文件 |
 | `Ctrl+S` | 保存 |
 | `Ctrl+Shift+S` | 另存为 |
-| `Ctrl+= / - / 0` | 放大 / 缩小 / 重置字体 |
+| `Ctrl+P` | 打印 |
+| `Ctrl+,` | 打开设置 |
+| `Ctrl+= / - / 0` | 放大 / 缩小 / 重置字号 |
+| `Ctrl+滚轮` | 缩放字号 |
 | `Esc` | 关闭弹窗 |
 
-> 快捷键可在「设置 → 查看快捷键」中自定义。
+> 快捷键可在「设置 → 查看快捷键」中查看与自定义。
+
+---
+
+## 设置
+
+- 阅读与编辑字号、行高、最大宽度、字体（内置字体 + 系统字体 + 自定义）
+- 大纲（TOC）位置：左侧 / 右侧
+- Word 导出参考模板（.docx）
+- 文件关联注册（`.md / .markdown / .mdx`）
+- 查看 / 自定义快捷键
+- 检查更新
+- 主题与界面语言切换
 
 ---
 
 ## 安装
 
 ### Windows（推荐）
-- `Glim-*-windows-x64-setup.msi`：安装版，自动注册文件关联
-- `Glim-*-windows-x64-portable.exe`：绿色版，解压即用
+- `glim-reader-*-windows-x64-setup.msi`：安装版，自动注册文件关联
+- `glim-reader-*-windows-x64-portable.exe`：绿色版，解压即用
 
 ### macOS / Linux（实验版）
 - macOS：`.dmg` / `.app.tar.gz`
@@ -148,7 +170,7 @@ pnpm tauri build
 
 ## 技术栈
 
-Tauri 2 · Vue 3 · TypeScript · Vite · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · pandoc · notify · tauri-plugin-single-instance · vue-i18n
+Tauri 2 · Vue 3 · TypeScript · Vite · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · vue-i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / window-state / system-fonts
 
 ---
 

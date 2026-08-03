@@ -4,6 +4,7 @@ const zhCN = {
     folder: "文件夹",
     refresh: "刷新",
     closeFolder: "关闭文件夹",
+    goUp: "上一级目录",
     noFile: "未打开文件",
     files: "文件",
     search: "搜索",

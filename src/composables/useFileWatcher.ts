@@ -32,9 +32,18 @@ export function useFileWatcher() {
     }
   }
 
+  /** 追加监听单个目录（NonRecursive）：打开文件后监听其所在目录，检测外部修改 */
+  async function watchFile(path: string) {
+    try {
+      await invoke("watch_path", { path });
+    } catch {
+      /* 监听尽力而为，失败不影响打开文件 */
+    }
+  }
+
   onUnmounted(() => {
     void stop();
   });
 
-  return { watching, start, stop };
+  return { watching, start, stop, watchFile };
 }

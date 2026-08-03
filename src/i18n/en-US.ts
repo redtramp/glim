@@ -6,6 +6,7 @@ const enUS = {
     folder: "Folder",
     refresh: "Refresh",
     closeFolder: "Close folder",
+    goUp: "Parent directory",
     noFile: "No file opened",
     files: "Files",
     search: "Search",

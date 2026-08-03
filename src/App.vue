@@ -52,10 +52,13 @@ const {
   loading: treeLoading,
   error: treeError,
   refresh: refreshTree,
+  loadChildren,
   openFolder,
-  changeRootDir,
-  restoreRoot,
+  setRootFromFile,
+  setHomeRoot,
   clearRoot,
+  canGoUp,
+  goUp,
 } = useFileTree();
 
 const watcher = useFileWatcher();
@@ -136,6 +139,8 @@ const exportToast = ref("");
 const pandocInfo = ref<PandocInfo | null>(null);
 const pdfEnginePath = ref<string | null>(null);
 const renderTick = ref(0);
+/** 递增后通知文件树重新聚焦（点击 `..` 切换根目录后使用） */
+const treeFocusKey = ref(0);
 
 function toggleExportMenu() {
   showExportMenu.value = !showExportMenu.value;
@@ -197,7 +202,7 @@ function basename(p: string): string {
 async function syncRootDir(path: string) {
   const targetDir = dirOf(path);
   if (!targetDir || samePath(rootDir.value, targetDir)) return;
-  await changeRootDir(targetDir);
+  await setRootFromFile(path);
   // 重启文件监听器以监听新根目录；否则新目录下的文件发生外部变更时将无法被检测到
   // （useFileWatcher.start 内部会先 stop 旧的监听）
   await startWatching(targetDir);
@@ -327,6 +332,8 @@ function resolveDialog(choice: UnsavedChoice) {
      tab.pendingSourceLine = 0;
      tab.scrollTop = tab.pendingScrollTop;
      pushRecent(path);
+     // 追加监听该文件所在目录，以便外部修改时提示 stale（避免整树深度遍历）
+     void watcher.watchFile(dirOf(path));
      errorMsg.value = "";
      scheduleSuppressClear(path);
    } catch (e: any) {
@@ -728,6 +735,15 @@ async function pickFolder() {
   if (dir) await startWatching(dir);
 }
 
+/** 文件树 `..`：切换到上一级目录，并让文件树重新聚焦当前文件 */
+async function onGoUp() {
+  const parent = await goUp();
+  if (parent) {
+    treeFocusKey.value += 1;
+    await startWatching(parent);
+  }
+}
+
 async function startWatching(dir: string) {
   await watcher.start(dir, async (paths) => {
     await refreshTree();
@@ -735,6 +751,11 @@ async function startWatching(dir: string) {
       void onFilesChanged(paths);
     }, 150);
   });
+  // start_watch 会重建 debouncer，之前 watch_path 追加的目录监听全部丢失；
+  // 重建后重新监听所有已打开文件的目录，保证外部修改 stale 提醒不失效。
+  for (const tab of tabs.value) {
+    void watcher.watchFile(dirOf(tab.path));
+  }
 }
 
 async function onFilesChanged(paths: string[]) {
@@ -1089,7 +1110,17 @@ onMounted(async () => {
   applyReadingSettings();
   void checkPandoc().then((info) => (pandocInfo.value = info));
   void checkPdfEngine().then((p) => (pdfEnginePath.value = p));
-  await restoreRoot();
+
+  // 先恢复历史 tab（文档路径为绝对路径）
+  const initialPath = await getInitialOpenFile();
+  await restoreTabs(initialPath);
+
+  // 文件树根目录：有历史文档 → 激活文档所在目录（平级显示）；无 → 用户主目录
+  if (currentFile.value) {
+    await syncRootDir(currentFile.value);
+  } else {
+    await setHomeRoot();
+  }
   if (rootDir.value) await startWatching(rootDir.value);
 
   // Listen for file-open events fired by Rust (file association / single-instance).
@@ -1121,8 +1152,6 @@ onMounted(async () => {
     console.warn("close listener unavailable", e);
   }
 
-  const initialPath = await getInitialOpenFile();
-  await restoreTabs(initialPath);
   try {
     const webview = getCurrentWebview();
     unlistenDrop = await webview.onDragDropEvent(async (event) => {
@@ -1587,7 +1616,12 @@ watch(
               :nodes="tree"
               :current-path="currentFile"
               :scroll-container="treeScrollEl"
+              :can-go-up="canGoUp"
+              :focus-key="treeFocusKey"
+              :root-dir="rootDir"
+              :load-children="loadChildren"
               @open="loadFile"
+              @go-up="onGoUp"
             />
             <div v-else class="empty-tip">{{ t("app.openFolderHint") }}</div>
           </div>

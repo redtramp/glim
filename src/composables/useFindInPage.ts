@@ -2,6 +2,8 @@ import { ref, computed, Ref } from "vue";
 
 const HL = "find-highlight";
 const HL_ACTIVE = "find-highlight-active";
+/** 单次查找最大高亮数：避免常见词在大文档中产生海量 span 导致 DOM 爆炸/卡死 */
+const MAX_MATCHES = 1000;
 
 export function useFindInPage(bodyRef: Ref<HTMLElement | null>) {
   const visible = ref(false);
@@ -64,6 +66,7 @@ export function useFindInPage(bodyRef: Ref<HTMLElement | null>) {
     const nodes = collectTextNodes();
     const found: HTMLElement[] = [];
     for (const node of nodes) {
+      if (found.length >= MAX_MATCHES) break;
       const text = node.nodeValue || "";
       const hay = cs ? text : text.toLowerCase();
       const needle = cs ? q : q.toLowerCase();
@@ -78,6 +81,7 @@ export function useFindInPage(bodyRef: Ref<HTMLElement | null>) {
       if (positions.length === 0) continue;
       positions.sort((a, b) => b - a);
       for (const pos of positions) {
+        if (found.length >= MAX_MATCHES) break;
         try {
           const span = wrapRange(node, pos, pos + needle.length);
           found.push(span);
