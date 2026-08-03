@@ -5,10 +5,10 @@
 
 **简体中文** | [English](README.en.md)
 
-https://img.shields.io/github/v/release/redtramp/glim?include_prereleases&color=blue](https://github.com/redtramp/glim/releases)
-https://img.shields.io/badge/license-MIT-green](LICENSE)
-https://img.shields.io/github/downloads/redtramp/glim/total](https://github.com/redtramp/glim/releases)
-https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20(experimental-lightgrey)]()
+[![release](https://img.shields.io/github/v/release/redtramp/glim?include_prereleases&color=blue)](https://github.com/redtramp/glim/releases)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![downloads](https://img.shields.io/github/downloads/redtramp/glim/total)](https://github.com/redtramp/glim/releases)
+[![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20-experimental-lightgrey)](https://github.com/redtramp/glim/releases)
 
 **Glim 是 https://github.com/Neilooo/md-reader 的独立维护分支（active fork）。**
 
