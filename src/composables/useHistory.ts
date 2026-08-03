@@ -1,7 +1,7 @@
 import { ref } from "vue";
 
-const STORAGE_RECENT = "md-reader-recent";
-const STORAGE_SCROLL = "md-reader-scroll-positions";
+const STORAGE_RECENT = "glim-reader-recent";
+const STORAGE_SCROLL = "glim-reader-scroll-positions";
 const MAX_RECENT = 20;
 const MAX_SCROLL_ENTRIES = 100;
 
@@ -32,7 +32,12 @@ function loadScrollMap(): Record<string, number> {
 }
 
 const recent = ref<RecentItem[]>(loadRecent());
-const scrollMap = ref<Record<string, number>>(loadScrollMap());
+const scrollMap = ref<Record<string, number | ScrollEntry>>(loadScrollMap());
+
+interface ScrollEntry {
+  top: number;
+  ts: number;
+}
 
 function basename(p: string): string {
   const parts = p.split(/[\\/]/);
@@ -52,24 +57,35 @@ function clearRecent() {
   localStorage.setItem(STORAGE_RECENT, "[]");
 }
 
+/** 读滚动位置,兼容旧格式(纯数字)与当前格式({ top, ts }) */
+function scrollTopOf(entry: number | ScrollEntry | undefined): number {
+  if (entry == null) return 0;
+  if (typeof entry === "number") return entry;
+  return entry.top || 0;
+}
+
 function saveScroll(path: string, top: number) {
   if (!path) return;
-  scrollMap.value[path] = top;
-  // 超出容量上限时，移除最近记录中不存在的旧 key
-  while (Object.keys(scrollMap.value).length > MAX_SCROLL_ENTRIES) {
-    const recentPaths = new Set(recent.value.map((x) => x.path));
-    for (const key of Object.keys(scrollMap.value)) {
-      if (!recentPaths.has(key)) {
-        delete scrollMap.value[key];
-        break;
-      }
+  scrollMap.value[path] = { top, ts: Date.now() };
+  const keys = Object.keys(scrollMap.value);
+  if (keys.length > MAX_SCROLL_ENTRIES) {
+    // 按最近访问时间升序淘汰最旧的条目,直到回到容量上限(时间戳 LRU)
+    keys.sort((a, b) => {
+      const ea = scrollMap.value[a];
+      const eb = scrollMap.value[b];
+      const ta = typeof ea === "number" ? 0 : ea?.ts ?? 0;
+      const tb = typeof eb === "number" ? 0 : eb?.ts ?? 0;
+      return ta - tb;
+    });
+    for (let i = 0; i < keys.length - MAX_SCROLL_ENTRIES; i++) {
+      delete scrollMap.value[keys[i]];
     }
   }
   localStorage.setItem(STORAGE_SCROLL, JSON.stringify(scrollMap.value));
 }
 
 function getScroll(path: string): number {
-  return scrollMap.value[path] || 0;
+  return scrollTopOf(scrollMap.value[path]);
 }
 
 export function useHistory() {

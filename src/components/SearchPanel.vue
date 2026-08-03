@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
-import { searchInFiles, type SearchMatch } from "../composables/useGlobalSearch";
+import { searchInFiles, nextSearchSession, type SearchMatch } from "../composables/useGlobalSearch";
 
 const { t } = useI18n();
 
@@ -30,6 +30,8 @@ const grouped = computed(() => {
   return Object.entries(map).map(([rel, matches]) => ({ rel, matches }));
 });
 
+let runSeq = 0;
+
 async function run() {
   error.value = "";
   if (!props.rootDir) {
@@ -42,19 +44,25 @@ async function run() {
     results.value = [];
     return;
   }
+  const seq = ++runSeq;
+  const session = nextSearchSession();
   loading.value = true;
   try {
-    results.value = await searchInFiles(
+    const data = await searchInFiles(
       props.rootDir,
       q,
       caseSensitive.value,
-      500
+      500,
+      session
     );
+    if (seq !== runSeq) return; // 已有更新的搜索请求,丢弃过期结果
+    results.value = data;
   } catch (e: any) {
+    if (seq !== runSeq) return;
     error.value = String(e?.message ?? e);
     results.value = [];
   } finally {
-    loading.value = false;
+    if (seq === runSeq) loading.value = false;
   }
 }
 
@@ -124,15 +132,15 @@ watch(
         :title="t('find.caseSensitive')"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 5h11a4 4 0 010 8H3"/>
-          <path d="M3 19h11a4 4 0 000-8H3"/>
-          <path d="M15 5v14"/>
+          <path d="M3 5h11a4 4 0 010 8H3" />
+          <path d="M3 19h11a4 4 0 000-8H3" />
+          <path d="M15 5v14" />
         </svg>
       </button>
       <button class="ic" @click="emit('close')" :title="t('find.close') + ' (Esc)'">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
         </svg>
       </button>
     </div>

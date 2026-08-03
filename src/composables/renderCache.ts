@@ -75,7 +75,14 @@ class LengthCheckedLRU<V> {
   }
 }
 
-/** markdown 渲染结果缓存:源哈希 → 净化后的 HTML(与主题无关) */
+/**
+ * markdown 渲染结果缓存:源哈希 → 净化后的 HTML。
+ *
+ * ⚠️ 主题维度说明:当前 markdown 渲染输出(含 hljs 高亮)只产出类名,颜色由 CSS
+ * 按主题控制,因此 HTML 与主题无关,缓存键无需包含主题。若未来 markdown 渲染
+ * 直接内联主题相关样式(如按主题切换高亮输出),此缓存键必须加入主题维度,
+ * 否则会命中错误主题的 HTML。
+ */
 export const markdownHtmlCache = new LengthCheckedLRU<string>(10);
 
 /** mermaid SVG 缓存:theme+代码哈希 → 净化后的 SVG(与主题相关) */

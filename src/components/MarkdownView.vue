@@ -4,6 +4,7 @@ import {
   renderMarkdown,
   renderMath,
   renderMermaid,
+  disposeMermaidObserver,
 } from "../composables/useMarkdown";
 import { rewriteImagesAndLinks } from "../composables/useLinkRewriter";
 
@@ -74,6 +75,10 @@ watch(
 
 onBeforeUnmount(() => {
   renderSeq++;
+  if (root.value) {
+    disposeMermaidObserver(root.value);
+    root.value = null;
+  }
 });
 
 defineExpose({ root });

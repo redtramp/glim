@@ -22,9 +22,16 @@ interface PendingRequest {
 }
 
 const REQUEST_TIMEOUT_MS = 15_000;
+/** Worker 崩溃后的冷却时间:期间回退主线程,避免热循环反复重建 */
+const WORKER_RETRY_COOLDOWN_MS = 30_000;
+/** 最大重建次数:超过后本会话内不再尝试 Worker */
+const WORKER_MAX_RETRIES = 3;
 
 let worker: Worker | null = null;
-let workerFailed = false;
+/** 下次允许重建 Worker 的时间戳(0 表示允许) */
+let workerRetryAt = 0;
+/** 已连续重建失败次数 */
+let workerFailures = 0;
 let nextId = 1;
 const pending = new Map<number, PendingRequest>();
 /** source → in-flight Promise,用于并发请求合并 */
@@ -43,19 +50,25 @@ function renderOnMainThread(source: string): MarkdownRenderResult {
 }
 
 function ensureWorker(): Worker | null {
-  if (workerFailed) return null;
   if (worker) return worker;
+  // 冷却期或已达最大重建次数:回退主线程
+  if (workerFailures >= WORKER_MAX_RETRIES || Date.now() < workerRetryAt) {
+    return null;
+  }
   try {
-    worker = new Worker(new URL("../workers/markdown.worker.ts", import.meta.url), {
-      type: "module",
-      name: "markdown-renderer",
-    });
-    worker.onerror = () => {
-      workerFailed = true;
-      failAllPending(new Error("markdown worker error"));
+    const w = new Worker(
+      new URL("../workers/markdown.worker.ts", import.meta.url),
+      { type: "module", name: "markdown-renderer" }
+    );
+    worker = w;
+    w.onerror = () => {
+      // 冷却后允许重建(最多 WORKER_MAX_RETRIES 次)
+      workerFailures += 1;
+      workerRetryAt = Date.now() + WORKER_RETRY_COOLDOWN_MS;
       worker = null;
+      failAllPending(new Error("markdown worker error"));
     };
-    worker.onmessage = (
+    w.onmessage = (
       e: MessageEvent<{ id: number; html?: string; headings?: Heading[]; error?: string }>
     ) => {
       const { id, html, headings, error } = e.data;
@@ -71,9 +84,10 @@ function ensureWorker(): Worker | null {
         req.resolve({ html, headings: headings ?? [] });
       }
     };
-    return worker;
+    return w;
   } catch {
-    workerFailed = true;
+    workerFailures += 1;
+    workerRetryAt = Date.now() + WORKER_RETRY_COOLDOWN_MS;
     worker = null;
     return null;
   }

@@ -96,16 +96,28 @@ function isPrivateUrl(url: string): boolean {
   return false;
 }
 
+/** 外部图片抓取超时(ms):防止慢速网络阻塞导出 */
+const FETCH_TIMEOUT_MS = 8_000;
+/** 外部图片大小上限:超过则放弃内联,避免内存峰值(base64 膨胀 ~33%) */
+const MAX_FETCH_BYTES = 10 * 1024 * 1024;
+
 async function fetchAsDataUrl(url: string): Promise<string | null> {
   if (isPrivateUrl(url)) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const r = await fetch(url);
+    const r = await fetch(url, { signal: controller.signal });
     if (!r.ok) return null;
+    const length = Number(r.headers.get("content-length") || 0);
+    if (length > MAX_FETCH_BYTES) return null;
     const buf = new Uint8Array(await r.arrayBuffer());
+    if (buf.byteLength > MAX_FETCH_BYTES) return null;
     const ct = r.headers.get("content-type") || mimeFromExt(extFromPath(url));
     return `data:${ct};base64,${bytesToBase64(buf)}`;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

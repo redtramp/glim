@@ -111,6 +111,15 @@ export async function renderMath(container: HTMLElement): Promise<void> {
 
 function sanitizeMermaidSvg(svg: string): string {
   // 字符串级清洗,避免 DOMParser XML 解析导致 <foreignObject> 内 HTML 标签(<p>/<br>)报 tag mismatch
+  //
+  // ⚠️ 边界说明(已知限制,勿在未评估前放宽):
+  // - 这是字符串正则清洗而非 DOM 遍历,对 <style>/<text> 内容中恰好出现
+  //   `onclick=`、`<script` 等字面文本的边界场景可能误删(当前 htmlLabels:false
+  //   下 mermaid 不输出 foreignObject/内联脚本,风险未触发);
+  // - 若未来开启 htmlLabels:true 或引入含内联样式的图表,应回归验证此处;
+  // - 替代方案:改用 DOMParser(HTML 模式)解析后按节点遍历清洗,但需处理
+  //   foreignObject 内 HTML 标签与 XML 序列化的兼容性。
+  //
   // 1. 移除 <script> 标签及其内容
   let cleaned = svg.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
   // 2. 移除 event handler 属性(onclick/onerror 等)
@@ -191,6 +200,19 @@ function scheduleLazyRender(
   }
 
   for (const el of pendingSet) observer.observe(el);
+}
+
+/**
+ * 清理容器上的懒渲染观察器:组件卸载时调用,disconnect 观察器并释放 pending 引用,
+ * 避免容器销毁后 IntersectionObserver 与 DOM 块残留造成资源堆积。
+ */
+export function disposeMermaidObserver(container: HTMLElement): void {
+  const observer = containerObservers.get(container);
+  if (observer) {
+    observer.disconnect();
+    containerObservers.delete(container);
+  }
+  containerPending.delete(container);
 }
 
 /**
