@@ -24,7 +24,7 @@
 |---|---|---|
 | 状态 | 低活跃 | 主动维护 |
 | 平台 | Windows 为主 | Windows + macOS / Linux 实验构建 |
-| 新增 | - | 多标签增强、懒加载文件树、三模式侧栏、查找替换、打印导出、Word 模板、检查更新、快捷键自定义 |
+| 新增 | - | 多标签增强、懒加载文件树、三模式侧栏、查找替换、打印导出、Word 模板、检查更新、快捷键自定义、CriticMarkup 批注、审阅面板、AI 面板 |
 | 协议 | MIT | MIT（含原版权） |
 
 如果你仅需基础功能，可继续使用原项目；如需多标签增强、持续修复与新交互，欢迎使用 Glim。
@@ -71,6 +71,17 @@ Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与�
 - 编辑模式下 `Ctrl+V` 粘贴图片，自动保存并插入链接
 - 未保存修改保护
 
+### 批注与审阅
+- **CriticMarkup 批注**：选中文本后浮动工具栏出现，支持删除、新增、替换、高亮、评论五种批注类型，即时应用 CriticMarkup 语法标记
+- **审阅面板**：解析文档中的批注，逐条显示类型、行号、内容，支持逐条接受/拒绝与全部接受/全部拒绝，点击条目聚焦到文档对应行
+- **一键复制给 AI**：将全文（含批注）填入模板，写入剪贴板，供用户粘贴到 AI 对话审阅
+
+### AI 面板
+- 选中文本后执行**摘要、翻译、解释**，或按批注**改写**全文
+- 结果以 Markdown 渲染展示，支持复制结果与应用到文档
+- 支持 **Ollama**（本地默认，无需 API Key）与 **OpenAI 兼容**服务（需 API Key）
+- 配置持久化，经 Tauri http 插件绕过 CSP/CORS 限制
+
 ### 导航
 - 左侧文件树：**懒加载、非递归**——只列当前目录的直接子项，目录默认折叠，点击三角符号才加载下一级；顶部 `..` 可返回上一级目录
 - 左侧面板三种模式：文件树 / 全文搜索 / 大纲，一键切换
@@ -116,6 +127,8 @@ Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与�
 | `Ctrl+H` | 查找替换 |
 | `Ctrl+G` | 跳转到行 |
 | `Ctrl+Shift+F` | 全文搜索（左侧面板） |
+| `Ctrl+Shift+C` | 复制批注给 AI |
+| `Ctrl+Shift+A` | 打开 AI 面板 |
 | `Ctrl+N` | 新建文件 |
 | `Ctrl+O` | 打开文件 |
 | `Ctrl+S` | 保存 |
@@ -134,6 +147,7 @@ Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与�
 
 - 阅读与编辑字号、行高、最大宽度、字体（内置字体 + 系统字体 + 自定义）
 - 大纲（TOC）位置：左侧 / 右侧
+- AI 提供商配置：Ollama 地址 / OpenAI 兼容 API Key 与端点
 - Word 导出参考模板（.docx）
 - 文件关联注册（`.md / .markdown / .mdx`）
 - 查看 / 自定义快捷键
@@ -170,7 +184,7 @@ pnpm tauri build
 
 ## 技术栈
 
-Tauri 2 · Vue 3 · TypeScript · Vite · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · vue-i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / window-state / system-fonts
+Tauri 2 · Vue 3 · TypeScript · Vite · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · vue-i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / http / window-state / system-fonts
 
 ---
 

@@ -24,7 +24,7 @@
 |---|---|---|
 | Status | Low activity | Actively maintained |
 | Platforms | Windows primarily | Windows + macOS / Linux experimental builds |
-| Additions | - | Multi-tab enhancements, lazy-loading file tree, three-mode sidebar, find & replace, print export, Word template, update checker, customizable shortcuts |
+| Additions | - | Multi-tab enhancements, lazy-loading file tree, three-mode sidebar, find & replace, print export, Word template, update checker, customizable shortcuts, CriticMarkup annotations, review panel, AI panel |
 | License | MIT | MIT (includes original copyright) |
 
 If you only need basic functionality, you may continue using the original project. If you need multi-tab enhancements, ongoing fixes, and new interactions, Glim is here for you.
@@ -71,6 +71,17 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - `Ctrl+V` to paste images in edit mode, automatically saving and inserting links
 - Unsaved changes protection
 
+### Annotations & Review
+- **CriticMarkup annotations**: select text to reveal a floating toolbar, supporting deletion, insertion, substitution, highlighting, and comments — instantly applied as CriticMarkup syntax
+- **Review panel**: parses annotations in the document, displaying each by type, line number, and content; supports accept/reject individually or accept/reject all; click an entry to focus the corresponding line
+- **One-click copy to AI**: fills the full document (with annotations) into a template, writes to the clipboard for pasting into an AI chat
+
+### AI Panel
+- Execute **summarize, translate, explain** on selected text, or **rewrite** the full document based on annotations
+- Results rendered in Markdown, with copy-result and apply-to-document support
+- Supports **Ollama** (local default, no API Key required) and **OpenAI-compatible** services (API Key required)
+- Configuration persisted, requests routed through the Tauri http plugin to bypass CSP/CORS restrictions
+
 ### Navigation
 - Left-side file tree: **lazy-loading, non-recursive** — only lists direct children of the current directory, directories are collapsed by default, and clicking the caret loads the next level on demand; the `..` entry at the top goes up one level
 - Three sidebar modes: file tree / full-text search / outline, switchable in one click
@@ -116,6 +127,8 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 | `Ctrl+H` | Find & replace |
 | `Ctrl+G` | Go to line |
 | `Ctrl+Shift+F` | Full-text search (sidebar) |
+| `Ctrl+Shift+C` | Copy annotations to AI |
+| `Ctrl+Shift+A` | Open AI panel |
 | `Ctrl+N` | New file |
 | `Ctrl+O` | Open file |
 | `Ctrl+S` | Save |
@@ -134,6 +147,7 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 
 - Reading & editor font size, line height, max width, and font family (built-in + system + custom fonts)
 - Outline (TOC) position: left / right
+- AI provider configuration: Ollama address / OpenAI-compatible API Key and endpoint
 - Word export reference template (.docx)
 - File association registration (`.md / .markdown / .mdx`)
 - View / customize keyboard shortcuts
@@ -170,7 +184,7 @@ Requirements: Node.js ≥ 18, pnpm ≥ 8, Rust ≥ 1.77, WebView2 Runtime, VS Bu
 
 ## Tech Stack
 
-Tauri 2 · Vue 3 · TypeScript · Vite · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · vue-i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / window-state / system-fonts
+Tauri 2 · Vue 3 · TypeScript · Vite · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · vue-i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / http / window-state / system-fonts
 
 ---
 
