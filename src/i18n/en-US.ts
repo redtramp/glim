@@ -95,6 +95,10 @@ const enUS = {
     associationSuccess:
       "File associations registered. If the context menu does not refresh immediately, reopen Explorer or restart once.",
     associationFailed: "Failed to register file associations",
+    aiTemplate: "Copy-for-AI template",
+    aiTemplateHint:
+      "Use {{content}} (annotated full text) and {{file}} (file name) placeholders. Leave empty for the default template.",
+    restoreDefaultTemplate: "Restore default",
     done: "Done",
   },
   export: {
@@ -177,6 +181,30 @@ const enUS = {
     readFailed: "Failed to read file",
     fileExists: "File already exists. Choose another name.",
   },
+  annotation: {
+    del: "Delete",
+    ins: "Insert",
+    sub: "Replace",
+    hl: "Highlight",
+    comment: "Comment",
+    copyAI: "Copy for AI",
+    clearAll: "Clear all",
+    inputPlaceholder: "Type content…",
+    subPlaceholder: "Replace with…",
+    commentPlaceholder: "Comment…",
+    confirm: "OK",
+    cancel: "Cancel",
+    unsupportedSelection:
+      "This selection contains formatting syntax, annotations are not supported",
+    locateFailed: "Could not locate this selection, file not modified",
+    clearConfirmTitle: "Clear all annotations",
+    clearConfirmMessage:
+      "This removes every CriticMarkup annotation (deletions/comments become empty, replacements keep the new value). Continue?",
+    clearDone: "All annotations cleared",
+    copyDone: "Copied to clipboard",
+    copyFailed: "Copy failed",
+    copyShortcut: "Copy for AI",
+  },
   shortcuts: {
     title: "Shortcuts",
     hint: "View and customize all shortcuts",
@@ -198,6 +226,7 @@ const enUS = {
     saveAs: "Save as",
     settings: "Reading settings",
     print: "Print",
+    copyAI: "Copy for AI",
     zoomIn: "Increase font size",
     zoomOut: "Decrease font size",
     zoomReset: "Reset font size",

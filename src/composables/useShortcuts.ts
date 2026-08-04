@@ -72,6 +72,13 @@ const DEFS: ShortcutDef[] = [
     descKey: "print",
   },
   {
+    id: "copy-ai",
+    defaultBinding: "Ctrl+Shift+C",
+    target: "app",
+    category: "global",
+    descKey: "copyAI",
+  },
+  {
     id: "zoom-in",
     defaultBinding: "Ctrl+=",
     target: "app",

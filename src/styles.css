@@ -15,6 +15,20 @@
   --mdr-success: #1a7f37;
   --mdr-danger: #cf222e;
 
+  --critic-del-color: #cf222e;
+  --critic-del-bg: rgba(207, 34, 46, 0.12);
+  --critic-ins-color: #1a7f37;
+  --critic-ins-bg: rgba(26, 127, 55, 0.12);
+  --critic-hl-bg: #fff3bf;
+  --critic-hl-fg: #5b4400;
+  --critic-comment-color: #0969da;
+  --critic-comment-bg: rgba(9, 105, 218, 0.1);
+  --critic-tooltip-bg: #ffffff;
+  --critic-tooltip-fg: #24292f;
+  --critic-tooltip-border: rgba(208, 215, 222, 0.9);
+  --critic-tooltip-shadow: 0 8px 24px rgba(31, 35, 40, 0.14),
+    0 2px 8px rgba(31, 35, 40, 0.08);
+
   --bg: #ffffff;
   --bg-toolbar: #f8f8f8;
   --bg-btn: #ffffff;
@@ -85,6 +99,20 @@
   --mdr-accent-teal: #4fa29b;
   --mdr-success: #6aa878;
   --mdr-danger: #d16d68;
+
+  --critic-del-color: #d16d68;
+  --critic-del-bg: rgba(209, 109, 104, 0.16);
+  --critic-ins-color: #6aa878;
+  --critic-ins-bg: rgba(106, 168, 120, 0.16);
+  --critic-hl-bg: #6e5500;
+  --critic-hl-fg: #f0e6c8;
+  --critic-comment-color: #6bb7d6;
+  --critic-comment-bg: rgba(107, 183, 214, 0.14);
+  --critic-tooltip-bg: #1e2632;
+  --critic-tooltip-fg: #d8dee9;
+  --critic-tooltip-border: rgba(76, 88, 110, 0.9);
+  --critic-tooltip-shadow: 0 8px 24px rgba(0, 0, 0, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.3);
 
   --bg: var(--mdr-paper-soft);
   --bg-toolbar: var(--mdr-panel);
@@ -734,6 +762,91 @@ body {
   line-height: 1.7;
   border: 1px solid var(--border);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+/* ---- critic markup 批注 ---- */
+.markdown-body del.critic-del,
+.markdown-body ins.critic-ins {
+  text-decoration: none;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.markdown-body del.critic-del {
+  color: var(--critic-del-color);
+  background: var(--critic-del-bg);
+  text-decoration: line-through;
+}
+.markdown-body ins.critic-ins {
+  color: var(--critic-ins-color);
+  background: var(--critic-ins-bg);
+  text-decoration: none;
+}
+.markdown-body mark.critic-hl {
+  color: var(--critic-hl-fg);
+  background: var(--critic-hl-bg);
+  padding: 0 1px;
+  border-radius: 3px;
+}
+/* 评论气泡:空 span + 图标,悬停显示 title 内容(现代 tooltip 卡片) */
+.markdown-body span.critic-comment {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  margin: 0 2px;
+  vertical-align: -2px;
+  border-radius: 50%;
+  background: var(--critic-comment-color);
+  cursor: help;
+  position: relative;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.markdown-body span.critic-comment:hover {
+  box-shadow: 0 0 0 3px var(--critic-comment-bg);
+  transform: scale(1.1);
+}
+.markdown-body span.critic-comment::after {
+  content: "!";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.markdown-body span.critic-comment::before {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  width: max-content;
+  min-width: 240px;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--critic-tooltip-bg);
+  color: var(--critic-tooltip-fg);
+  border: 1px solid var(--critic-tooltip-border);
+  box-shadow: var(--critic-tooltip-shadow);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left;
+  z-index: 10;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+}
+.markdown-body span.critic-comment:hover::before {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* ---- math & mermaid ---- */

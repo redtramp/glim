@@ -43,6 +43,7 @@ yarn-error.log*
 # Local agent instructions
 AGENTS.md
 .claude/
+.atomcode
 
 # Kilo local tooling
 .kilo/

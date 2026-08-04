@@ -16,6 +16,7 @@ import FindBar from "./components/FindBar.vue";
 import SearchPanel from "./components/SearchPanel.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
 import MarkdownEditor from "./components/MarkdownEditor.vue";
+import AnnotationToolbar from "./components/AnnotationToolbar.vue";
 import UnsavedChangesDialog from "./components/UnsavedChangesDialog.vue";
 import TabBar from "./components/TabBar.vue";
 import { useFileTree } from "./composables/useFileTree";
@@ -27,6 +28,8 @@ import { useFindInPage } from "./composables/useFindInPage";
 import { useHistory, type RecentItem } from "./composables/useHistory";
 import { useReadingSettings } from "./composables/useReadingSettings";
 import { useShortcuts } from "./composables/useShortcuts";
+import { useAnnotations } from "./composables/useAnnotations";
+import type { CriticType } from "./composables/criticMarkup";
 import { useTabs, samePath, type Tab } from "./composables/useTabs";
 import {
   exportToHtml,
@@ -72,6 +75,39 @@ const {
 const { getBinding, normalizeEvent, formatBinding } = useShortcuts();
 function shortcutSuffix(id: string): string {
   return " (" + formatBinding(getBinding(id)) + ")";
+}
+
+/** 批注闭环(选区写回 / 复制给 AI / 清除全部) */
+const annotations = useAnnotations();
+const annotationToast = ref("");
+let annotationToastTimer: number | null = null;
+function showAnnotationToast(message: string) {
+  annotationToast.value = message;
+  if (annotationToastTimer) clearTimeout(annotationToastTimer);
+  annotationToastTimer = window.setTimeout(() => {
+    annotationToast.value = "";
+  }, 2500);
+}
+/** 当前文件上下文;无文件(或编辑模式)时返回 null,工具栏不出现 */
+function annotationContext() {
+  const tab = activeTab.value;
+  if (!tab || !tab.path) return null;
+  return {
+    getSource: () => tab.draftContent,
+    getFileName: () => basename(tab.path),
+    setSource: (next: string) => {
+      tab.draftContent = next;
+      tab.isDirty = true;
+    },
+    notify: (key: string) => showAnnotationToast(t(key)),
+    confirmClear: () =>
+      window.confirm(
+        `${t("annotation.clearConfirmTitle")}\n\n${t("annotation.clearConfirmMessage")}`
+      ),
+  };
+}
+function onAnnotationApply(type: CriticType, payload?: string) {
+  annotations.applyMarkup(type, payload);
 }
 const {
   tabs,
@@ -647,6 +683,9 @@ function onRendered() {
   nextTick(() => {
     const tab = activeTab.value;
     if (!viewerEl.value || !tab) return;
+    // 渲染完成后初始化批注选区监听(幂等:configure 每次刷新上下文,监听只注册一次)
+    annotations.configure(annotationContext, () => bodyRef.value);
+    annotations.initSelectionWatch();
     if (tab.pendingHash) {
       jumpTo(tab.pendingHash);
       tab.pendingHash = "";
@@ -746,6 +785,15 @@ async function onGoUp() {
 
 async function startWatching(dir: string) {
   await watcher.start(dir, async (paths) => {
+    // 自身写盘/读取触发的事件必须在回调到达时立即判定并忽略:
+    // 若等 refreshTree + 150ms 延迟后再判,保存的 suppress 窗口(1000ms)
+    // 可能已过期,导致保存后误报「外部修改」。
+    const relevant = paths.filter((p) =>
+      tabs.value.some((t) => samePath(p, t.path))
+    );
+    if (relevant.length > 0 && relevant.every((p) => isSuppressed(p))) {
+      return;
+    }
     await refreshTree();
     window.setTimeout(() => {
       void onFilesChanged(paths);
@@ -762,8 +810,20 @@ async function onFilesChanged(paths: string[]) {
   for (const tab of [...tabs.value]) {
     if (!paths.some((p) => samePath(p, tab.path))) continue;
     if (isSuppressed(tab.path)) {
-      clearSuppress(tab.path);
+      // 仍在抑制窗口内:忽略保存/读取自身触发的变更事件。
+      // 一次写盘可能产生多个事件批次(notify 多事件 + 多目录监听),
+      // 不能在这里清除抑制标记,否则后续批次会误报「外部修改」;
+      // 统一由 scheduleSuppressClear 定时清除。
       continue;
+    }
+    // 内容级校验:磁盘内容与当前文档草稿一致 → 事件源于自身写入(保存),忽略。
+    // 比 suppress 窗口更可靠:不受事件到达时序/批次影响,即使写盘事件
+    // (如原子写 tmp+rename 产生的目录级事件)延迟到窗口外也能被拦截。
+    try {
+      const diskText = await readTextFile(tab.path);
+      if (diskText === tab.draftContent) continue;
+    } catch {
+      // 读取失败(文件被删除/移动):按外部修改处理
     }
     const normalized = tab.path.replace(/\\/g, "/").toLowerCase();
     if (autoReloadWhitelist.value.includes(normalized) && !tab.isDirty) {
@@ -1043,6 +1103,9 @@ function onKeydown(e: KeyboardEvent) {
   } else if (combo === getBinding("print")) {
     e.preventDefault();
     doPrint();
+  } else if (!isEdit && combo === getBinding("copy-ai")) {
+    e.preventDefault();
+    void annotations.copyForAI();
   } else if (combo === getBinding("save")) {
     e.preventDefault();
     void saveCurrentFile();
@@ -1088,6 +1151,8 @@ watch(showToc, (v) =>
 watch(isEditing, (editing) => {
   if (editing) {
     markdownRef.value = null;
+    // 编辑模式下无预览选区,清理批注监听与工具栏,避免残留
+    annotations.dispose();
     return;
   }
   nextTick(onScroll);
@@ -1097,6 +1162,8 @@ watch(activeTabId, () => {
   errorMsg.value = "";
   find.close();
   find.clearHighlights();
+  // 切换文档时清理批注状态,避免旧文档的工具栏残留
+  annotations.dispose();
   if (!activeTab.value?.isEditing) nextTick(onScroll);
 });
 
@@ -1177,6 +1244,7 @@ onUnmounted(() => {
   unlistenClose?.();
   if (headingTimer) clearTimeout(headingTimer);
   void watcher.stop();
+  annotations.dispose();
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("wheel", onWheel);
 });
@@ -1700,6 +1768,17 @@ watch(
           @rendered="onRendered"
           @internal-link="onInternalLink"
         />
+        <AnnotationToolbar
+          :visible="annotations.toolbar.visible"
+          :x="annotations.toolbar.x"
+          :y="annotations.toolbar.y"
+          :mode="annotations.toolbar.mode"
+          @apply="onAnnotationApply"
+          @input-start="(m) => (annotations.toolbar.mode = m)"
+          @cancel="annotations.toolbar.mode = ''"
+          @copy-ai="() => void annotations.copyForAI()"
+          @clear-all="() => void annotations.clearAll()"
+        />
       </section>
 
       <div
@@ -1767,6 +1846,13 @@ watch(
 
     <div v-if="exportToast" class="toast" @click="exportToast = ''">
       ✓ {{ exportToast }}
+    </div>
+    <div
+      v-if="annotationToast"
+      class="toast"
+      @click="annotationToast = ''"
+    >
+      ✓ {{ annotationToast }}
     </div>
     <DiffView
       :old-content="diffOldContent"

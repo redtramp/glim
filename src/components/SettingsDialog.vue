@@ -11,6 +11,12 @@ import {
   setCachedPandocRefDoc,
 } from "../composables/useExport";
 import ShortcutsDialog from "./ShortcutsDialog.vue";
+import {
+  getAITemplate,
+  setAITemplate,
+  resetAITemplate,
+  DEFAULT_AI_TEMPLATE,
+} from "../composables/useAnnotations";
 
 const RELEASE_API =
   "https://api.github.com/repos/redtramp/glim/releases/latest";
@@ -159,6 +165,23 @@ watch(
     else await loadFonts();
   }
 );
+
+/** 「复制给 AI」模板:进入设置时读取,编辑即持久化 */
+const aiTemplate = ref(getAITemplate());
+watch(
+  () => props.visible,
+  (v) => {
+    if (v) aiTemplate.value = getAITemplate();
+  }
+);
+function onAiTemplateInput(e: Event) {
+  aiTemplate.value = (e.target as HTMLTextAreaElement).value;
+  setAITemplate(aiTemplate.value);
+}
+function restoreAiTemplate() {
+  resetAITemplate();
+  aiTemplate.value = DEFAULT_AI_TEMPLATE;
+}
 
 const systemFonts = ref<{ name: string }[]>([]);
 
@@ -460,6 +483,24 @@ async function registerAssociations() {
         </button>
       </div>
 
+      <div class="association column">
+        <div>
+          <div class="association-title">{{ t("settings.aiTemplate") }}</div>
+          <div class="association-hint">{{ t("settings.aiTemplateHint") }}</div>
+        </div>
+        <textarea
+          class="ai-template-input"
+          :value="aiTemplate"
+          rows="6"
+          @input="onAiTemplateInput"
+        ></textarea>
+        <div class="update-actions">
+          <button class="btn" @click="restoreAiTemplate">
+            {{ t("settings.restoreDefaultTemplate") }}
+          </button>
+        </div>
+      </div>
+
       <div class="footer">
         <button class="btn" @click="reset">{{ t("settings.reset") }}</button>
         <button class="btn primary" @click="emit('close')">
@@ -572,6 +613,27 @@ select {
   margin-top: 18px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
+}
+.association.column {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+.ai-template-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg-btn);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--editor-font-family, monospace);
+  line-height: 1.6;
+  outline: none;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.ai-template-input:focus {
+  border-color: var(--link);
 }
 .association-title {
   font-size: 13px;

@@ -15,6 +15,7 @@ import footnote from "markdown-it-footnote";
 import taskLists from "markdown-it-task-lists";
 import { full as emoji } from "markdown-it-emoji";
 import mathPlugin from "./mathPlugin";
+import { createCriticMarkupPlugin } from "./criticMarkup";
 
 export interface Heading {
   level: number;
@@ -119,6 +120,8 @@ export function createMarkdownIt(): MarkdownIt {
   md.use(taskLists, { enabled: true, label: true });
   md.use(emoji);
   md.use(mathPlugin);
+  // CriticMarkup 批注语法:主线程与 Worker 共用同一实例配置,保证渲染一致
+  md.use(createCriticMarkupPlugin());
 
   md.core.ruler.push("source_line_attrs", (state) => {
     const offset = Number(

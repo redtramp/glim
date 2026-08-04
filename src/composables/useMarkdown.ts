@@ -39,7 +39,15 @@ export async function renderMarkdown(source: string): Promise<string> {
 
 function sanitizeHtml(raw: string): string {
   return DOMPurify.sanitize(raw, {
-    ADD_ATTR: ["target", "data-math", "data-source-line", "width", "height"],
+    // title 供 CriticMarkup 评论气泡悬停显示
+    ADD_ATTR: [
+      "target",
+      "data-math",
+      "data-source-line",
+      "width",
+      "height",
+      "title",
+    ],
   });
 }
 

@@ -92,6 +92,10 @@ const zhCN = {
     associationSuccess:
       "文件关联已注册。若右键菜单未立即刷新，请重新打开资源管理器或重启一次。",
     associationFailed: "注册文件关联失败",
+    aiTemplate: "复制给 AI 模板",
+    aiTemplateHint:
+      "使用 {{content}}(批注全文)与 {{file}}(文件名) 占位符；留空使用默认模板。",
+    restoreDefaultTemplate: "恢复默认",
     done: "完成",
   },
   export: {
@@ -173,6 +177,30 @@ const zhCN = {
     readFailed: "读取失败",
     fileExists: "文件已存在，请换个文件名",
   },
+  annotation: {
+    del: "删除",
+    ins: "新增",
+    sub: "替换",
+    hl: "高亮",
+    comment: "评论",
+    copyAI: "复制给 AI",
+    clearAll: "清除全部",
+    inputPlaceholder: "输入内容…",
+    subPlaceholder: "替换为…",
+    commentPlaceholder: "评论内容…",
+    confirm: "确定",
+    cancel: "取消",
+    unsupportedSelection:
+      "该选区含格式化语法，暂不支持批注",
+    locateFailed: "该选区无法精确定位，未修改文件",
+    clearConfirmTitle: "清除全部批注",
+    clearConfirmMessage:
+      "将移除文档中所有 CriticMarkup 批注语法（删除/评论取空、替换取新值），是否继续？",
+    clearDone: "已清除全部批注",
+    copyDone: "已复制到剪贴板",
+    copyFailed: "复制失败",
+    copyShortcut: "复制给 AI",
+  },
   shortcuts: {
     title: "快捷键",
     hint: "查看和自定义所有快捷键",
@@ -194,6 +222,7 @@ const zhCN = {
     saveAs: "另存为",
     settings: "阅读设置",
     print: "打印",
+    copyAI: "复制给 AI",
     zoomIn: "放大字体",
     zoomOut: "缩小字体",
     zoomReset: "重置字体",
