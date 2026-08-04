@@ -7,8 +7,13 @@ export type AppLocale = "zh-CN" | "en-US";
 const STORAGE_KEY = "glim-reader-locale";
 
 function detectLocale(): AppLocale {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved === "zh-CN" || saved === "en-US") return saved;
+  // localStorage 在隐私模式/受限 webview 可能不可用,防御性回退系统语言
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved === "zh-CN" || saved === "en-US") return saved;
+  } catch {
+    /* ignore */
+  }
   const lang = navigator.language.toLowerCase();
   return lang.startsWith("zh") ? "zh-CN" : "en-US";
 }

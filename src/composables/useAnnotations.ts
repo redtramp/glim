@@ -15,6 +15,7 @@
 import { reactive } from "vue";
 import type { CriticType } from "./criticMarkup";
 import { stripCriticMarkup } from "./criticMarkup";
+import { copyTextToClipboard } from "./clipboard";
 import type { AnnotationToolbarMode } from "../components/AnnotationToolbar.vue";
 
 /** App.vue 注入的上下文:读写当前文件的草稿并给出用户提示 */
@@ -287,31 +288,6 @@ function anchorOffsetHint(
   return lineStartOffset(source, line) + domOffset;
 }
 
-/** 剪贴板写入:优先 Clipboard API,失败回退 execCommand(快捷键触发等场景) */
-async function copyTextToClipboard(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return;
-    } catch {
-      /* 回退 execCommand */
-    }
-  }
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  ta.style.position = "fixed";
-  ta.style.opacity = "0";
-  document.body.appendChild(ta);
-  ta.select();
-  let ok = false;
-  try {
-    ok = document.execCommand("copy");
-  } finally {
-    document.body.removeChild(ta);
-  }
-  if (!ok) throw new Error("copy failed");
-}
-
 export function useAnnotations() {
   const toolbar = reactive<AnnotationToolbarState>({
     visible: false,
@@ -455,6 +431,7 @@ export function useAnnotations() {
     configure,
     initSelectionWatch,
     dispose,
+    hide,
     applyMarkup,
     copyForAI,
     clearAll,

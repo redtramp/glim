@@ -115,7 +115,7 @@ const timeText = computed(() => {
 
 .banner-icon {
   flex: 0 0 auto;
-  color: #d97706;
+  color: var(--warn);
   display: flex;
   align-items: center;
 }

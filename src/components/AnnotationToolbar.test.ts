@@ -27,6 +27,8 @@ const i18n = createI18n({
         comment: "评论",
         copyAI: "复制给 AI",
         clearAll: "清除全部",
+        review: "审阅",
+        ai: "AI",
         inputPlaceholder: "输入内容…",
         subPlaceholder: "替换为…",
         commentPlaceholder: "评论内容…",
@@ -56,10 +58,10 @@ function mountToolbar(props: {
 }
 
 describe("AnnotationToolbar - 渲染", () => {
-  it("visible=true 时渲染五个批注按钮与复制/清除", () => {
+  it("visible=true 时渲染五个批注按钮与复制/清除/审阅/AI", () => {
     const wrapper = mountToolbar();
     const buttons = wrapper.findAll("button");
-    expect(buttons.length).toBe(7);
+    expect(buttons.length).toBe(9);
     expect(wrapper.find(".at-del").exists()).toBe(true);
     expect(wrapper.find(".at-ins").exists()).toBe(true);
     expect(wrapper.find(".at-sub").exists()).toBe(true);
@@ -67,6 +69,8 @@ describe("AnnotationToolbar - 渲染", () => {
     expect(wrapper.find(".at-comment").exists()).toBe(true);
     expect(wrapper.find(".at-copy").exists()).toBe(true);
     expect(wrapper.find(".at-clear").exists()).toBe(true);
+    expect(wrapper.find(".at-review").exists()).toBe(true);
+    expect(wrapper.find(".at-ai").exists()).toBe(true);
     expect(wrapper.find(".at-sep").exists()).toBe(true);
   });
 
@@ -112,6 +116,16 @@ describe("AnnotationToolbar - 按钮 emit", () => {
   it("点击清除全部 emit clear-all", async () => {
     await wrapper.find(".at-clear").trigger("click");
     expect(wrapper.emitted("clear-all")).toBeTruthy();
+  });
+
+  it("点击审阅 emit review", async () => {
+    await wrapper.find(".at-review").trigger("click");
+    expect(wrapper.emitted("review")).toBeTruthy();
+  });
+
+  it("点击 AI emit ai", async () => {
+    await wrapper.find(".at-ai").trigger("click");
+    expect(wrapper.emitted("ai")).toBeTruthy();
   });
 });
 

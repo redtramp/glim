@@ -31,6 +31,8 @@ const emit = defineEmits<{
   (e: "cancel"): void;
   (e: "copy-ai"): void;
   (e: "clear-all"): void;
+  (e: "review"): void;
+  (e: "ai"): void;
 }>();
 
 const { t } = useI18n();
@@ -153,6 +155,20 @@ function cancelInput(): void {
         @click="emit('clear-all')"
       >
         {{ t("annotation.clearAll") }}
+      </button>
+      <button
+        class="at-btn at-review"
+        :title="t('annotation.review')"
+        @click="emit('review')"
+      >
+        {{ t("annotation.review") }}
+      </button>
+      <button
+        class="at-btn at-ai"
+        :title="t('annotation.ai')"
+        @click="emit('ai')"
+      >
+        {{ t("annotation.ai") }}
       </button>
     </template>
 

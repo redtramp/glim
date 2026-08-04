@@ -149,7 +149,7 @@ onBeforeUnmount(() => {
 .sc-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -274,7 +274,7 @@ onBeforeUnmount(() => {
 }
 .sc-conflict {
   font-size: 11px;
-  color: #c00;
+  color: var(--mdr-danger);
   margin-top: 2px;
   text-align: right;
   padding-right: 28px;

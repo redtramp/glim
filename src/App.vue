@@ -17,6 +17,8 @@ import SearchPanel from "./components/SearchPanel.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
 import MarkdownEditor from "./components/MarkdownEditor.vue";
 import AnnotationToolbar from "./components/AnnotationToolbar.vue";
+import ReviewPanel from "./components/ReviewPanel.vue";
+import AiPanel from "./components/AiPanel.vue";
 import UnsavedChangesDialog from "./components/UnsavedChangesDialog.vue";
 import TabBar from "./components/TabBar.vue";
 import { useFileTree } from "./composables/useFileTree";
@@ -29,7 +31,17 @@ import { useHistory, type RecentItem } from "./composables/useHistory";
 import { useReadingSettings } from "./composables/useReadingSettings";
 import { useShortcuts } from "./composables/useShortcuts";
 import { useAnnotations } from "./composables/useAnnotations";
+import {
+  resolveSelectionRange,
+} from "./composables/useAnnotations";
+import { useAiPanel } from "./composables/useAiPanel";
 import type { CriticType } from "./composables/criticMarkup";
+import {
+  parseCriticMarkup,
+  applyDecision,
+  acceptAllCriticMarkup,
+  rejectAllCriticMarkup,
+} from "./composables/criticMarkup";
 import { useTabs, samePath, type Tab } from "./composables/useTabs";
 import {
   exportToHtml,
@@ -108,6 +120,70 @@ function annotationContext() {
 }
 function onAnnotationApply(type: CriticType, payload?: string) {
   annotations.applyMarkup(type, payload);
+}
+
+/** 内置 AI 面板(Phase 3):选区摘要/翻译/解释 + 按批注改写 */
+const aiPanel = useAiPanel();
+
+/** 打开 AI 面板:隐藏浮动工具栏,带入当前选区文本(无选区则为空) */
+function openAiPanel() {
+  annotations.hide();
+  const container = bodyRef.value;
+  const range =
+    container && resolveSelectionRange(container, window.getSelection());
+  aiPanel.openWithSelection(range ? range.toString().trim() : "");
+}
+
+/**
+ * AI 改写结果应用到文档:确认后写回草稿。
+ * AI 输出兜底 rejectAllCriticMarkup:模型偶发残留批注语法时源文件仍干净。
+ */
+function onAiApplyResult(text: string) {
+  const tab = activeTab.value;
+  if (!tab) return;
+  if (!window.confirm(t("ai.applyConfirm"))) return;
+  tab.draftContent = rejectAllCriticMarkup(text);
+  tab.isDirty = true;
+  aiPanel.close();
+}
+
+/** 打开审阅面板:隐藏浮动工具栏,避免残留遮挡 */
+function openReviewPanel() {
+  annotations.hide();
+  showReviewPanel.value = true;
+}
+
+/**
+ * 审阅面板逐条决策:重新解析当前草稿定位该 id 的批注后应用。
+ * 面板的 source 与 draftContent 同源(prop 透传),id 一致;
+ * 若外部变更已刷新 draftContent,此处基于最新文本定位,天然消除偏移。
+ */
+function onReviewApply(decision: "accept" | "reject", id: number) {
+  const tab = activeTab.value;
+  if (!tab) return;
+  const ann = parseCriticMarkup(tab.draftContent).find((a) => a.id === id);
+  if (!ann) return;
+  tab.draftContent = applyDecision(tab.draftContent, ann, decision);
+  tab.isDirty = true;
+}
+
+/** 审阅面板全部接受/拒绝 */
+function onReviewApplyAll(decision: "accept" | "reject") {
+  const tab = activeTab.value;
+  if (!tab) return;
+  tab.draftContent =
+    decision === "accept"
+      ? acceptAllCriticMarkup(tab.draftContent)
+      : rejectAllCriticMarkup(tab.draftContent);
+  tab.isDirty = true;
+}
+
+/** 审阅面板条目点击 → 滚动预览到批注所在行 */
+function onReviewFocus(id: number) {
+  const tab = activeTab.value;
+  if (!tab) return;
+  const ann = parseCriticMarkup(tab.draftContent).find((a) => a.id === id);
+  if (ann) scrollPreviewToSourceLine(ann.line);
 }
 const {
   tabs,
@@ -200,6 +276,8 @@ const showDiffView = ref(false);
 const diffOldContent = ref("");
 const diffNewContent = ref("");
 const diffFileName = ref("");
+/** 审阅面板（Accept/Reject）:只在预览模式可用,面板打开时遮罩遮挡无法编辑 */
+const showReviewPanel = ref(false);
 
 const autoReloadWhitelist = ref<string[]>(
   JSON.parse(localStorage.getItem("glim-reader-auto-reload-whitelist") || "[]")
@@ -686,6 +764,11 @@ function onRendered() {
     // 渲染完成后初始化批注选区监听(幂等:configure 每次刷新上下文,监听只注册一次)
     annotations.configure(annotationContext, () => bodyRef.value);
     annotations.initSelectionWatch();
+    // AI 面板上下文:getSource 经闭包读取当前 tab,配置一次即可保持最新
+    aiPanel.configure(() => ({
+      getSource: () => activeTab.value?.draftContent ?? "",
+      applyResult: onAiApplyResult,
+    }));
     if (tab.pendingHash) {
       jumpTo(tab.pendingHash);
       tab.pendingHash = "";
@@ -1106,6 +1189,9 @@ function onKeydown(e: KeyboardEvent) {
   } else if (!isEdit && combo === getBinding("copy-ai")) {
     e.preventDefault();
     void annotations.copyForAI();
+  } else if (!isEdit && combo === getBinding("review-annotations")) {
+    e.preventDefault();
+    openReviewPanel();
   } else if (combo === getBinding("save")) {
     e.preventDefault();
     void saveCurrentFile();
@@ -1287,6 +1373,9 @@ watch(
 <template>
   <div class="app">
     <header class="toolbar">
+      <span class="toolbar-brand" :title="t('app.title')">
+        GLIM<span class="caret" aria-hidden="true"></span>
+      </span>
       <button
         class="btn"
         @click="createNewFile"
@@ -1778,6 +1867,8 @@ watch(
           @cancel="annotations.toolbar.mode = ''"
           @copy-ai="() => void annotations.copyForAI()"
           @clear-all="() => void annotations.clearAll()"
+          @review="openReviewPanel"
+          @ai="openAiPanel"
         />
       </section>
 
@@ -1860,6 +1951,26 @@ watch(
       :file-name="diffFileName"
       :visible="showDiffView"
       @close="closeDiffView"
+    />
+    <ReviewPanel
+      :visible="showReviewPanel"
+      :source="draftContent"
+      :file-name="currentFile"
+      @apply="onReviewApply"
+      @apply-all="onReviewApplyAll"
+      @focus="onReviewFocus"
+      @close="showReviewPanel = false"
+    />
+    <AiPanel
+      :visible="aiPanel.state.visible"
+      :selection-text="aiPanel.state.selectionText"
+      :result="aiPanel.state.result"
+      :loading="aiPanel.state.loading"
+      :error="aiPanel.state.error"
+      :active-action="aiPanel.state.activeAction"
+      @run-action="(a) => void aiPanel.runAction(a)"
+      @apply-result="() => void aiPanel.applyResultToDoc()"
+      @close="aiPanel.close"
     />
     <div
       v-if="showExportMenu"

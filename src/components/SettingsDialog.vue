@@ -183,6 +183,33 @@ function restoreAiTemplate() {
   aiTemplate.value = DEFAULT_AI_TEMPLATE;
 }
 
+/** AI 面板设置:进入设置时读取,编辑即持久化(模式同 aiTemplate) */
+import {
+  getAiSettings,
+  setAiSettings,
+  resetAiSettings,
+  type AiProvider,
+} from "../composables/aiProvider";
+
+const aiSettings = ref(getAiSettings());
+watch(
+  () => props.visible,
+  (v) => {
+    if (v) aiSettings.value = getAiSettings();
+  }
+);
+function patchAiSettings(patch: Partial<typeof aiSettings.value>) {
+  aiSettings.value = { ...aiSettings.value, ...patch };
+  setAiSettings(patch);
+}
+function onAiProviderChange(e: Event) {
+  patchAiSettings({ provider: (e.target as HTMLSelectElement).value as AiProvider });
+}
+function restoreAiSettings() {
+  resetAiSettings();
+  aiSettings.value = getAiSettings();
+}
+
 const systemFonts = ref<{ name: string }[]>([]);
 
 async function loadFonts() {
@@ -242,8 +269,9 @@ async function registerAssociations() {
         <button class="close" @click="emit('close')">✕</button>
       </div>
 
-      <div class="row">
-        <label>{{ t("settings.fontSize") }}</label>
+      <div class="settings-grid">
+        <div class="row">
+          <label>{{ t("settings.fontSize") }}</label>
         <input
           type="range"
           :value="settings.fontSize"
@@ -383,6 +411,7 @@ async function registerAssociations() {
           <option value="right">{{ t("settings.tocRight") }}</option>
         </select>
       </div>
+      </div>
 
       <div class="association">
         <div>
@@ -501,6 +530,64 @@ async function registerAssociations() {
         </div>
       </div>
 
+      <div class="association column ai-settings">
+        <div>
+          <div class="association-title">{{ t("settings.aiPanel") }}</div>
+          <div class="association-hint">{{ t("settings.aiPanelHint") }}</div>
+        </div>
+
+        <label class="ai-row">
+          <span>{{ t("settings.aiEnabled") }}</span>
+          <input
+            type="checkbox"
+            :checked="aiSettings.enabled"
+            @change="patchAiSettings({ enabled: (($event.target as HTMLInputElement).checked) })"
+          />
+        </label>
+
+        <label class="ai-row">
+          <span>{{ t("settings.aiProvider") }}</span>
+          <select :value="aiSettings.provider" @change="onAiProviderChange">
+            <option value="ollama">{{ t("settings.aiProviderOllama") }}</option>
+            <option value="openai">{{ t("settings.aiProviderOpenai") }}</option>
+          </select>
+        </label>
+
+        <label class="ai-row">
+          <span>{{ t("settings.aiBaseUrl") }}</span>
+          <input
+            :value="aiSettings.baseUrl"
+            placeholder="http://localhost:11434"
+            @input="patchAiSettings({ baseUrl: ($event.target as HTMLInputElement).value })"
+          />
+        </label>
+
+        <label v-if="aiSettings.provider === 'openai'" class="ai-row">
+          <span>{{ t("settings.aiApiKey") }}</span>
+          <input
+            type="password"
+            :value="aiSettings.apiKey"
+            :placeholder="t('settings.aiApiKeyPlaceholder')"
+            @input="patchAiSettings({ apiKey: ($event.target as HTMLInputElement).value })"
+          />
+        </label>
+
+        <label class="ai-row">
+          <span>{{ t("settings.aiModel") }}</span>
+          <input
+            :value="aiSettings.model"
+            :placeholder="aiSettings.provider === 'ollama' ? 'qwen2.5' : 'gpt-4o-mini'"
+            @input="patchAiSettings({ model: ($event.target as HTMLInputElement).value })"
+          />
+        </label>
+
+        <div class="update-actions">
+          <button class="btn" @click="restoreAiSettings">
+            {{ t("settings.restoreAiSettings") }}
+          </button>
+        </div>
+      </div>
+
       <div class="footer">
         <button class="btn" @click="reset">{{ t("settings.reset") }}</button>
         <button class="btn primary" @click="emit('close')">
@@ -516,7 +603,7 @@ async function registerAssociations() {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -528,6 +615,11 @@ async function registerAssociations() {
   border-radius: 8px;
   padding: 20px 24px;
   min-width: 420px;
+  max-width: min(720px, 92vw);
+  /* 视口内可滚动：内容超高时纵向滚动，避免被裁切看不到全部设置 */
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
   color: var(--fg);
 }
@@ -552,6 +644,17 @@ async function registerAssociations() {
   gap: 12px;
   margin: 10px 0;
   font-size: 13px;
+}
+/* 阅读/编辑器设置两列排布，降低对话框总高度（窄视口回退单列） */
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+}
+@media (max-width: 680px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .row label {
   color: var(--fg-muted);
@@ -653,7 +756,7 @@ select {
   color: var(--link);
 }
 .association-status.error {
-  color: #c00;
+  color: var(--mdr-danger);
 }
 .update-actions {
   display: flex;
@@ -691,6 +794,36 @@ select {
 .btn.primary {
   background: var(--link);
   color: #fff;
+  border-color: var(--link);
+}
+.ai-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.ai-row > span {
+  flex: 0 0 auto;
+  color: var(--fg);
+}
+.ai-row input[type="text"],
+.ai-row input[type="password"],
+.ai-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-btn);
+  color: var(--fg);
+  font-size: 13px;
+  box-sizing: border-box;
+}
+.ai-row input:focus,
+.ai-row select:focus {
+  outline: none;
   border-color: var(--link);
 }
 </style>

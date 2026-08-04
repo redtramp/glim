@@ -10,6 +10,10 @@ import MarkdownIt from "markdown-it";
 import {
   createCriticMarkupPlugin,
   stripCriticMarkup,
+  parseCriticMarkup,
+  applyDecision,
+  acceptAllCriticMarkup,
+  rejectAllCriticMarkup,
 } from "./criticMarkup";
 
 function render(source: string): string {
@@ -152,5 +156,167 @@ describe("stripCriticMarkup", () => {
 
   it("无批注文本原样返回", () => {
     expect(stripCriticMarkup("plain text")).toBe("plain text");
+  });
+});
+
+describe("parseCriticMarkup", () => {
+  it("五种语法:类型与展示文本正确", () => {
+    const src = "a{--del--}b{++ins++}c{~~old~>new~~}d{==hl==}e{>>cmt<<}f";
+    const anns = parseCriticMarkup(src);
+    expect(anns.map((a) => a.type)).toEqual([
+      "del",
+      "ins",
+      "sub",
+      "hl",
+      "comment",
+    ]);
+    const [del, ins, sub, hl, comment] = anns;
+    expect(del.oldText).toBe("del");
+    expect(del.newText).toBe("");
+    expect(ins.oldText).toBe("");
+    expect(ins.newText).toBe("ins");
+    expect(sub.oldText).toBe("old");
+    expect(sub.newText).toBe("new");
+    expect(hl.oldText).toBe("hl");
+    expect(comment.newText).toBe("cmt");
+  });
+
+  it("偏移:start/end 为源文本绝对位置且按序递增", () => {
+    const src = "a{--x--}b{++y++}";
+    const anns = parseCriticMarkup(src);
+    expect(anns).toHaveLength(2);
+    expect(anns[0].start).toBe(1);
+    expect(anns[0].end).toBe(8); // "{--x--}"
+    expect(anns[1].start).toBe(9);
+    expect(anns[1].end).toBe(16);
+  });
+
+  it("行号:1-based 起始行号", () => {
+    const src = "line1\nline2{==x==}\nline3";
+    const anns = parseCriticMarkup(src);
+    expect(anns).toHaveLength(1);
+    expect(anns[0].line).toBe(2);
+  });
+
+  it("嵌套:只列顶层,内层保留在 oldText/newText 中", () => {
+    const anns = parseCriticMarkup("{=={--x--}==}");
+    expect(anns).toHaveLength(1);
+    expect(anns[0].type).toBe("hl");
+    expect(anns[0].oldText).toBe("{--x--}");
+    expect(anns[0].newText).toBe("");
+  });
+
+  it("嵌套 sub:顶层分隔符定位不受内层 ~> 干扰", () => {
+    const anns = parseCriticMarkup("{~~{--a~>b--}~>c~~}");
+    expect(anns).toHaveLength(1);
+    expect(anns[0].type).toBe("sub");
+    expect(anns[0].oldText).toBe("{--a~>b--}");
+    expect(anns[0].newText).toBe("c");
+  });
+
+  it("代码块/行内代码跳过", () => {
+    const src = "```\n{--x--}\n```\n`{++y++}` {==z==}";
+    const anns = parseCriticMarkup(src);
+    expect(anns).toHaveLength(1);
+    expect(anns[0].type).toBe("hl");
+  });
+
+  it("未闭合/缺顶层分隔符/转义不列出", () => {
+    expect(parseCriticMarkup("a{--x b")).toHaveLength(0);
+    expect(parseCriticMarkup("a{~~x~~}b")).toHaveLength(0); // 缺分隔符
+    expect(parseCriticMarkup("\\{--x--\\}")).toHaveLength(0);
+  });
+
+  it("空文本/无批注返回空数组", () => {
+    expect(parseCriticMarkup("")).toEqual([]);
+    expect(parseCriticMarkup("plain text")).toEqual([]);
+  });
+});
+
+describe("applyDecision", () => {
+  const decide = (src: string, decision: "accept" | "reject") =>
+    applyDecision(src, parseCriticMarkup(src)[0], decision);
+
+  it("del:accept 取空,reject 保留原文", () => {
+    expect(decide("a{--x--}b", "accept")).toBe("ab");
+    expect(decide("a{--x--}b", "reject")).toBe("axb");
+  });
+
+  it("ins:accept 保留内容,reject 取空", () => {
+    expect(decide("a{++x++}b", "accept")).toBe("axb");
+    expect(decide("a{++x++}b", "reject")).toBe("ab");
+  });
+
+  it("sub:accept 取新值,reject 取旧值", () => {
+    expect(decide("a{~~old~>new~~}b", "accept")).toBe("anewb");
+    expect(decide("a{~~old~>new~~}b", "reject")).toBe("aoldb");
+  });
+
+  it("sub 边界:旧/新值为空时不被 || 误选", () => {
+    expect(decide("a{~~x~>~~}b", "accept")).toBe("ab"); // 新值为空
+    expect(decide("a{~~x~>~~}b", "reject")).toBe("axb");
+  });
+
+  it("hl:accept/reject 均保留内容", () => {
+    expect(decide("a{==x==}b", "accept")).toBe("axb");
+    expect(decide("a{==x==}b", "reject")).toBe("axb");
+  });
+
+  it("comment:accept/reject 均取空", () => {
+    expect(decide("a{>>c<<}b", "accept")).toBe("ab");
+    expect(decide("a{>>c<<}b", "reject")).toBe("ab");
+  });
+});
+
+describe("acceptAll/rejectAllCriticMarkup", () => {
+  it("acceptAll 与 stripCriticMarkup 接受语义一致", () => {
+    const cases = [
+      "a{--x--}b",
+      "a{++x++}b",
+      "a{~~old~>new~~}b",
+      "a{==x==}b",
+      "a{>>c<<}b",
+      "{=={--x--}==}",
+      "{++{--x--}++}",
+      "{==a{==b==}c==}",
+      "{~~{++x++}~>y~~}",
+      "plain text",
+      "a{--x--}b{++y++}c{~~o~>n~~}d",
+    ];
+    for (const src of cases) {
+      expect(acceptAllCriticMarkup(src)).toBe(stripCriticMarkup(src));
+    }
+  });
+
+  it("rejectAll:del 恢复原文", () => {
+    expect(rejectAllCriticMarkup("a{--x--}b")).toBe("axb");
+  });
+
+  it("rejectAll:ins/comment 移除", () => {
+    expect(rejectAllCriticMarkup("a{++x++}b")).toBe("ab");
+    expect(rejectAllCriticMarkup("a{>>c<<}b")).toBe("ab");
+  });
+
+  it("rejectAll:sub 取旧值", () => {
+    expect(rejectAllCriticMarkup("a{~~old~>new~~}b")).toBe("aoldb");
+  });
+
+  it("rejectAll:hl 保留内容", () => {
+    expect(rejectAllCriticMarkup("a{==x==}b")).toBe("axb");
+  });
+
+  it("rejectAll:嵌套逐层拒绝收敛", () => {
+    // {=={--x--}==}:hl 拒绝保留内层语法 → del 拒绝恢复 x
+    expect(rejectAllCriticMarkup("{=={--x--}==}")).toBe("x");
+  });
+
+  it("acceptAll:嵌套逐层接受收敛", () => {
+    expect(acceptAllCriticMarkup("{=={--x--}==}")).toBe("");
+    expect(acceptAllCriticMarkup("{++{--x--}++}")).toBe("");
+  });
+
+  it("批量:代码段内批注不受影响", () => {
+    const src = "```\n{--x--}\n```\na{--y--}b";
+    expect(acceptAllCriticMarkup(src)).toBe("```\n{--x--}\n```\nab");
   });
 });

@@ -14,7 +14,7 @@ export interface ReadingSettings {
   tocPosition: "left" | "right";
 }
 
-const FONT_KEYS = ["system", "sans", "serif", "mono", "custom"] as const;
+const FONT_KEYS = ["system", "sans", "serif", "mono", "terminal", "custom"] as const;
 
 const FONT_STACKS: Record<string, string> = {
   system:
@@ -25,6 +25,9 @@ const FONT_STACKS: Record<string, string> = {
     '"Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", Georgia, serif',
   mono:
     'ui-monospace, SFMono-Regular, "JetBrains Mono", "Cascadia Code", "Source Code Pro", Consolas, monospace',
+  /* MUD 终端：正文等宽沉浸选项（与 UI 骨架 --ui-font 同风格） */
+  terminal:
+    'ui-monospace, SFMono-Regular, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace',
   custom: "",
 };
 

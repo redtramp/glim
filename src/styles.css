@@ -1,53 +1,68 @@
 :root {
-  --mdr-ink: #20242c;
-  --mdr-muted: #757b86;
-  --mdr-faint: #a8adb6;
-  --mdr-paper: #ffffff;
-  --mdr-paper-soft: #ffffff;
-  --mdr-line: #d0d7de;
-  --mdr-panel: #f8f8f8;
-  --mdr-panel-soft: #ffffff;
-  --mdr-panel-raised: #f0f0f0;
-  --mdr-panel-line: #d0d7de;
-  --mdr-panel-muted: #6e7781;
-  --mdr-accent-gold: #0969da;
-  --mdr-accent-teal: #0969da;
-  --mdr-success: #1a7f37;
-  --mdr-danger: #cf222e;
+  /* MUD 终端 · 亮色 = 打印纸终端变体（米白纸面 + 墨绿字符） */
+  --mdr-ink: #1c241c;
+  --mdr-muted: #5c6b5c;
+  --mdr-faint: #8a948a;
+  --mdr-paper: #f7f5ec;
+  --mdr-paper-soft: #f7f5ec;
+  --mdr-line: #d8d4c2;
+  --mdr-panel: #f0eee2;
+  --mdr-panel-soft: #faf9f1;
+  --mdr-panel-raised: #e6e3d4;
+  --mdr-panel-line: #d8d4c2;
+  --mdr-panel-muted: #5c6b5c;
+  --mdr-accent-gold: #00853d;
+  --mdr-accent-teal: #0e7490;
+  --mdr-success: #00853d;
+  --mdr-danger: #b3261e;
 
-  --critic-del-color: #cf222e;
-  --critic-del-bg: rgba(207, 34, 46, 0.12);
-  --critic-ins-color: #1a7f37;
-  --critic-ins-bg: rgba(26, 127, 55, 0.12);
-  --critic-hl-bg: #fff3bf;
+  /* 语义色：diff / 警告 / 遮罩（组件层收编硬编码） */
+  --diff-add: #00853d;
+  --diff-add-bg: rgba(0, 133, 61, 0.1);
+  --diff-remove: #b3261e;
+  --diff-remove-bg: rgba(179, 38, 30, 0.1);
+  --warn: #b45309;
+  --search-hl-bg: rgba(255, 176, 0, 0.4);
+  --search-hl-fg: #1c241c;
+  --overlay: rgba(0, 0, 0, 0.55);
+
+  /* UI 骨架等宽栈（顶栏/侧栏/大纲/按钮/标签；正文由 --reader-font-family 覆盖） */
+  --ui-font: ui-monospace, SFMono-Regular, "Cascadia Mono", "JetBrains Mono",
+    Menlo, Consolas, "Liberation Mono", monospace;
+
+  --critic-del-color: #b3261e;
+  --critic-del-bg: rgba(179, 38, 30, 0.1);
+  --critic-ins-color: #00853d;
+  --critic-ins-bg: rgba(0, 133, 61, 0.1);
+  --critic-hl-bg: #fde68a;
   --critic-hl-fg: #5b4400;
-  --critic-comment-color: #0969da;
-  --critic-comment-bg: rgba(9, 105, 218, 0.1);
-  --critic-tooltip-bg: #ffffff;
-  --critic-tooltip-fg: #24292f;
-  --critic-tooltip-border: rgba(208, 215, 222, 0.9);
-  --critic-tooltip-shadow: 0 8px 24px rgba(31, 35, 40, 0.14),
-    0 2px 8px rgba(31, 35, 40, 0.08);
+  --critic-comment-color: #0e7490;
+  --critic-comment-bg: rgba(14, 116, 144, 0.1);
+  --critic-tooltip-bg: #faf9f1;
+  --critic-tooltip-fg: #1c241c;
+  --critic-tooltip-border: rgba(216, 212, 194, 0.9);
+  --critic-tooltip-shadow: 0 8px 24px rgba(28, 36, 28, 0.14),
+    0 2px 8px rgba(28, 36, 28, 0.08);
 
-  --bg: #ffffff;
-  --bg-toolbar: #f8f8f8;
-  --bg-btn: #ffffff;
-  --bg-btn-hover: #f0f0f0;
-  --bg-active: #e3f0ff;
-  --bg-code: #f6f8fa;
-  --fg: #24292f;
-  --fg-muted: #6e7781;
-  --border: #d0d7de;
-  --link: #0969da;
-  --editor-selection-bg: rgba(173, 214, 255, 0.7);
+  --bg: #f7f5ec;
+  --bg-toolbar: #f0eee2;
+  --bg-btn: #faf9f1;
+  --bg-btn-hover: #e6e3d4;
+  --bg-active: rgba(0, 133, 61, 0.12);
+  --bg-code: #efece0;
+  --fg: #1c241c;
+  --fg-muted: #5c6b5c;
+  --border: #d8d4c2;
+  --link: #00853d;
+  --editor-selection-bg: rgba(0, 133, 61, 0.2);
   --editor-active-line-bg: rgba(0, 0, 0, 0.025);
-  --blockquote-border: #d0d7de;
-  --blockquote-fg: #57606a;
-  --table-border: #d0d7de;
-  --table-stripe: #f6f8fa;
-  --scrollbar-track: #f6f8fa;
-  --scrollbar-thumb: #c9d1d9;
-  --scrollbar-thumb-hover: #8c959f;
+  --blockquote-border: #00853d;
+  --blockquote-fg: #5c6b5c;
+  --table-border: #d8d4c2;
+  --table-stripe: #efece0;
+  --scrollbar-track: #f0eee2;
+  --scrollbar-thumb: #c9c4b0;
+  --scrollbar-thumb-hover: #00853d;
 
   --shell-toolbar-bg: var(--bg-toolbar);
   --shell-toolbar-border: var(--border);
@@ -84,33 +99,44 @@
 }
 
 :root[data-theme="dark"] {
-  --mdr-ink: #d8dee9;
-  --mdr-muted: #9aa4b2;
-  --mdr-faint: #747f8d;
-  --mdr-paper: #111820;
-  --mdr-paper-soft: #0d1117;
-  --mdr-line: #2c3340;
-  --mdr-panel: #0f141c;
-  --mdr-panel-soft: #141922;
-  --mdr-panel-raised: #1e2632;
-  --mdr-panel-line: #2c3340;
-  --mdr-panel-muted: #8c96a6;
-  --mdr-accent-gold: #c69b55;
-  --mdr-accent-teal: #4fa29b;
-  --mdr-success: #6aa878;
-  --mdr-danger: #d16d68;
+  /* MUD 终端 · 暗色主视觉（近黑微绿底 + 磷光绿字符） */
+  --mdr-ink: #c9d8c9;
+  --mdr-muted: #7d8f7d;
+  --mdr-faint: #556655;
+  --mdr-paper: #0f1410;
+  --mdr-paper-soft: #0b0f0b;
+  --mdr-line: #22301f;
+  --mdr-panel: #0e130e;
+  --mdr-panel-soft: #111811;
+  --mdr-panel-raised: #18221a;
+  --mdr-panel-line: #22301f;
+  --mdr-panel-muted: #7d8f7d;
+  --mdr-accent-gold: #33ff66;
+  --mdr-accent-teal: #33cccc;
+  --mdr-success: #2ecc71;
+  --mdr-danger: #ff5f5f;
 
-  --critic-del-color: #d16d68;
-  --critic-del-bg: rgba(209, 109, 104, 0.16);
-  --critic-ins-color: #6aa878;
-  --critic-ins-bg: rgba(106, 168, 120, 0.16);
-  --critic-hl-bg: #6e5500;
-  --critic-hl-fg: #f0e6c8;
-  --critic-comment-color: #6bb7d6;
-  --critic-comment-bg: rgba(107, 183, 214, 0.14);
-  --critic-tooltip-bg: #1e2632;
-  --critic-tooltip-fg: #d8dee9;
-  --critic-tooltip-border: rgba(76, 88, 110, 0.9);
+  /* 语义色：diff / 警告 / 遮罩（组件层收编硬编码） */
+  --diff-add: #2ecc71;
+  --diff-add-bg: rgba(46, 204, 113, 0.14);
+  --diff-remove: #ff5f5f;
+  --diff-remove-bg: rgba(255, 95, 95, 0.14);
+  --warn: #ffb000;
+  --search-hl-bg: rgba(255, 176, 0, 0.35);
+  --search-hl-fg: #0b0f0b;
+  --overlay: rgba(0, 0, 0, 0.55);
+
+  --critic-del-color: #ff5f5f;
+  --critic-del-bg: rgba(255, 95, 95, 0.14);
+  --critic-ins-color: #33ff66;
+  --critic-ins-bg: rgba(51, 255, 102, 0.14);
+  --critic-hl-bg: rgba(255, 176, 0, 0.18);
+  --critic-hl-fg: #ffd75e;
+  --critic-comment-color: #33cccc;
+  --critic-comment-bg: rgba(51, 204, 204, 0.14);
+  --critic-tooltip-bg: #18221a;
+  --critic-tooltip-fg: #c9d8c9;
+  --critic-tooltip-border: rgba(34, 48, 31, 0.9);
   --critic-tooltip-shadow: 0 8px 24px rgba(0, 0, 0, 0.45),
     0 2px 8px rgba(0, 0, 0, 0.3);
 
@@ -118,21 +144,21 @@
   --bg-toolbar: var(--mdr-panel);
   --bg-btn: var(--mdr-panel-soft);
   --bg-btn-hover: var(--mdr-panel-raised);
-  --bg-active: rgba(198, 155, 85, 0.18);
-  --bg-code: #151d27;
+  --bg-active: rgba(51, 255, 102, 0.14);
+  --bg-code: #0f1410;
   --fg: var(--mdr-ink);
   --fg-muted: var(--mdr-muted);
   --border: var(--mdr-line);
-  --link: #6bb7d6;
-  --editor-selection-bg: rgba(100, 160, 255, 0.45);
+  --link: #33ff66;
+  --editor-selection-bg: rgba(51, 255, 102, 0.25);
   --editor-active-line-bg: rgba(255, 255, 255, 0.035);
-  --blockquote-border: #3a4350;
-  --blockquote-fg: #a5adba;
-  --table-border: #323b48;
-  --table-stripe: #151d27;
-  --scrollbar-track: #0d1117;
-  --scrollbar-thumb: #303a46;
-  --scrollbar-thumb-hover: #4fa29b;
+  --blockquote-border: #2ecc71;
+  --blockquote-fg: #8f9f8f;
+  --table-border: #22301f;
+  --table-stripe: #0f1410;
+  --scrollbar-track: #0b0f0b;
+  --scrollbar-thumb: #22301f;
+  --scrollbar-thumb-hover: #33ff66;
 
   --shell-toolbar-bg: linear-gradient(180deg, var(--mdr-panel-soft), var(--mdr-panel));
   --shell-toolbar-border: var(--mdr-panel-line);
@@ -143,27 +169,27 @@
   --shell-panel-header-color: var(--mdr-panel-muted);
   --shell-panel-header-border: var(--mdr-panel-line);
   --shell-tab-color: var(--mdr-panel-muted);
-  --shell-tab-hover-color: #e7edf6;
+  --shell-tab-hover-color: #d8f5d8;
   --shell-tab-active-color: var(--mdr-accent-gold);
   --shell-tab-active-border: var(--mdr-accent-gold);
   --shell-export-bg: var(--mdr-paper);
   --shell-export-hover-bg: color-mix(in srgb, var(--mdr-accent-gold) 12%, transparent);
 
-  --tree-row-color: #d8dee9;
+  --tree-row-color: #c9d8c9;
   --tree-row-hover-bg: var(--mdr-panel-soft);
-  --tree-row-active-bg: color-mix(in srgb, var(--mdr-accent-gold) 18%, transparent);
-  --tree-row-active-color: #fff7e8;
+  --tree-row-active-bg: rgba(51, 255, 102, 0.12);
+  --tree-row-active-color: #d8f5d8;
   --tree-row-active-shadow: inset 2px 0 0 var(--mdr-accent-gold);
-  --tree-dir-color: #f1f5f9;
-  --tree-file-color: #d8dee9;
+  --tree-dir-color: #d8f5d8;
+  --tree-file-color: #c9d8c9;
   --tree-caret-color: var(--mdr-panel-muted);
 
   --toc-item-color: var(--fg-muted);
-  --toc-hover-color: #b8e6d6;
-  --toc-hover-bg: #0a2725;
-  --toc-active-color: #7fffd4;
-  --toc-active-bg: #0d3d38;
-  --toc-active-line: #4fd1c5;
+  --toc-hover-color: #d8f5d8;
+  --toc-hover-bg: rgba(51, 255, 102, 0.08);
+  --toc-active-color: #33ff66;
+  --toc-active-bg: rgba(51, 255, 102, 0.12);
+  --toc-active-line: #33ff66;
   --toc-active-shadow: inset 2px 0 0 var(--toc-active-line);
   color-scheme: dark;
 }
@@ -204,8 +230,8 @@ body,
   height: 100%;
 }
 body {
-  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC",
-    "Hiragino Sans GB", system-ui, sans-serif;
+  /* MUD 终端：UI 骨架统一等宽；正文由 .markdown-body 的 --reader-font-family 覆盖 */
+  font-family: var(--ui-font);
   color: var(--fg);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
@@ -964,4 +990,73 @@ textarea,
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+  /* 关闭 CRT 扫描线与游标闪烁 */
+  .app::after,
+  .toolbar-brand .caret {
+    display: none !important;
+  }
+}
+
+/* ================= MUD 终端特效 ================= */
+
+/* 顶栏品牌：GLIM 文字 + 闪烁磷光游标 */
+.toolbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 4px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--mdr-accent-gold);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--mdr-accent-gold) 55%, transparent);
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+}
+.toolbar-brand .caret {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  background: var(--mdr-accent-gold);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--mdr-accent-gold) 70%, transparent);
+  animation: mdr-caret-blink 1.1s steps(1) infinite;
+}
+@keyframes mdr-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* CRT 扫描线：全屏细线叠加，仅暗色主题生效，pointer-events 穿透 */
+.app::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.028) 0px,
+    rgba(255, 255, 255, 0.028) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  display: none;
+}
+:root[data-theme="dark"] .app::after {
+  display: block;
+}
+
+/* 磷光辉光：链接悬停与激活标签 */
+.markdown-body a:hover {
+  text-shadow: 0 0 6px color-mix(in srgb, var(--link) 45%, transparent);
+}
+.panel-tabs .tab.active {
+  text-shadow: 0 0 6px color-mix(in srgb, var(--mdr-accent-gold) 45%, transparent);
 }

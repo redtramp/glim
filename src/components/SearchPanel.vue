@@ -219,7 +219,7 @@ watch(
   border-bottom: 1px solid var(--border);
 }
 .status .error {
-  color: #c00;
+  color: var(--mdr-danger);
 }
 .status .muted {
   color: var(--fg-muted);
@@ -268,8 +268,8 @@ watch(
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 :deep(mark) {
-  background: #ffd84d;
-  color: #000;
+  background: var(--search-hl-bg);
+  color: var(--search-hl-fg);
   padding: 0 1px;
   border-radius: 2px;
 }

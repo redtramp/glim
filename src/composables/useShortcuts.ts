@@ -79,6 +79,13 @@ const DEFS: ShortcutDef[] = [
     descKey: "copyAI",
   },
   {
+    id: "review-annotations",
+    defaultBinding: "Ctrl+Shift+R",
+    target: "app",
+    category: "global",
+    descKey: "reviewAnnotations",
+  },
+  {
     id: "zoom-in",
     defaultBinding: "Ctrl+=",
     target: "app",

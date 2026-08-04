@@ -129,7 +129,7 @@ function onClose() {
   position: fixed;
   inset: 0;
   z-index: 101;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -217,11 +217,11 @@ function onClose() {
 }
 
 .diff-line.added {
-  background: rgba(34, 197, 94, 0.12);
+  background: var(--diff-add-bg);
 }
 
 .diff-line.removed {
-  background: rgba(239, 68, 68, 0.12);
+  background: var(--diff-remove-bg);
 }
 
 .diff-sign {
@@ -232,11 +232,11 @@ function onClose() {
 }
 
 .diff-line.added .diff-sign {
-  color: #16a34a;
+  color: var(--diff-add);
 }
 
 .diff-line.removed .diff-sign {
-  color: #dc2626;
+  color: var(--diff-remove);
 }
 
 .diff-text {
