@@ -24,7 +24,7 @@
 |---|---|---|
 | Status | Low activity | Actively maintained |
 | Platforms | Windows primarily | Windows + macOS / Linux experimental builds |
-| Additions | - | Multi-tab enhancements, lazy-loading file tree, three-mode sidebar, find & replace, print export, Word template, update checker, customizable shortcuts, CriticMarkup annotations, review panel, AI panel |
+| Additions | - | Multi-tab enhancements, lazy-loading file tree, floating layout, CriticMarkup annotations, review panel, AI panel |
 | License | MIT | MIT (includes original copyright) |
 
 If you only need basic functionality, you may continue using the original project. If you need multi-tab enhancements, ongoing fixes, and new interactions, Glim is here for you.
@@ -45,6 +45,16 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 ---
 
 ## Key Features
+
+### Floating Layout (default)
+- 40px floating left toolbar + right section-marker rail, full-width immersive reading without sidebars compressing content
+- 12 SVG line icons grouped by navigation / content / tools / actions: file tree, recent, search, annotations, bookmarks, AI, settings, new file, open file, open folder, export, edit/preview toggle
+- Right section markers: current / read / unread status dots plus bookmark squares, click to jump, hover shows title tooltip, scroll-synced highlight
+- Floating top tab bar always visible, still allows document switching in edit mode
+- 7 frosted-glass floating panels: file tree, recent, full-text search, annotations, bookmarks, AI assistant, quick settings
+- Outline panel supports title search, Ctrl+click collapse, parent-heading level highlight
+- Responsive breakpoints for desktop / tablet / phone; mobile bottom toolbar with bottom-sheet panels
+- Classic / floating dual layouts switchable, preference persisted
 
 ### Multi-Tabs
 - Open multiple Markdown files simultaneously, switch via the horizontal tab bar below the toolbar
@@ -83,10 +93,9 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - Configuration persisted, requests routed through the Tauri http plugin to bypass CSP/CORS restrictions
 
 ### Navigation
-- Left-side file tree: **lazy-loading, non-recursive** — only lists direct children of the current directory, directories are collapsed by default, and clicking the caret loads the next level on demand; the `..` entry at the top goes up one level
-- Three sidebar modes: file tree / full-text search / outline, switchable in one click
-- Outline (TOC) with scroll-synchronized highlighting, collapsible, dockable on the left or right
-- Three-column draggable dividers with independent show/hide controls
+- Floating file tree (🗂): **lazy-loading, non-recursive** — only lists direct children of the current directory, directories collapsed by default, clicking the caret loads the next level on demand; the `..` entry at the top goes up one level
+- Floating panels: file tree / recent / full-text search / annotations / bookmarks / AI assistant / quick settings
+- Right section markers + outline panel: scroll-synchronized highlighting, collapsible, supports title search
 - Internal link navigation and relative path resolution for images
 - With a history document, the file tree is rooted at the document's directory; without one, it shows the user's home directory
 
@@ -128,7 +137,9 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 | `Ctrl+G` | Go to line |
 | `Ctrl+Shift+F` | Full-text search (sidebar) |
 | `Ctrl+Shift+C` | Copy annotations to AI |
-| `Ctrl+Shift+A` | Open AI panel |
+| `Ctrl+D` | Toggle bookmark |
+| `Ctrl+E` | Open file tree panel |
+| `Ctrl+Shift+A` | Open annotations panel |
 | `Ctrl+N` | New file |
 | `Ctrl+O` | Open file |
 | `Ctrl+S` | Save |
@@ -146,7 +157,7 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 ## Settings
 
 - Reading & editor font size, line height, max width, and font family (built-in + system + custom fonts)
-- Outline (TOC) position: left / right
+- Floating layout toggle (classic / floating dual layouts)
 - AI provider configuration: Ollama address / OpenAI-compatible API Key and endpoint
 - Word export reference template (.docx)
 - File association registration (`.md / .markdown / .mdx`)
