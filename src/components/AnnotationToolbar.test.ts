@@ -58,10 +58,10 @@ function mountToolbar(props: {
 }
 
 describe("AnnotationToolbar - 渲染", () => {
-  it("visible=true 时渲染五个批注按钮与复制/清除/审阅/AI", () => {
+  it("visible=true 时渲染五个批注按钮与复制/粘贴/复制给AI/清除/审阅/AI", () => {
     const wrapper = mountToolbar();
     const buttons = wrapper.findAll("button");
-    expect(buttons.length).toBe(9);
+    expect(buttons.length).toBe(11);
     expect(wrapper.find(".at-del").exists()).toBe(true);
     expect(wrapper.find(".at-ins").exists()).toBe(true);
     expect(wrapper.find(".at-sub").exists()).toBe(true);

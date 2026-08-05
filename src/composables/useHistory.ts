@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { basename } from "../utils/path";
 
 const STORAGE_RECENT = "glim-reader-recent";
 const STORAGE_SCROLL = "glim-reader-scroll-positions";
@@ -39,10 +40,6 @@ interface ScrollEntry {
   ts: number;
 }
 
-function basename(p: string): string {
-  const parts = p.split(/[\\/]/);
-  return parts[parts.length - 1];
-}
 
 function pushRecent(path: string) {
   if (!path) return;

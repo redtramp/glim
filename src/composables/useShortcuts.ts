@@ -180,6 +180,27 @@ const DEFS: ShortcutDef[] = [
     descKey: "zoomWheel",
     readonly: true,
   },
+  {
+    id: "toggle-bookmark",
+    defaultBinding: "Ctrl+D",
+    target: "app",
+    category: "global",
+    descKey: "toggleBookmark",
+  },
+  {
+    id: "open-filetree",
+    defaultBinding: "Ctrl+E",
+    target: "app",
+    category: "global",
+    descKey: "openFiletree",
+  },
+  {
+    id: "open-annotations",
+    defaultBinding: "Ctrl+Shift+A",
+    target: "app",
+    category: "global",
+    descKey: "openAnnotations",
+  },
 ];
 
 function normalizeComboKey(combo: string): string {

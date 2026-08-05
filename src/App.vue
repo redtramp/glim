@@ -11,7 +11,6 @@ import { useI18n } from "vue-i18n";
 import { persistLocale, type AppLocale } from "./i18n";
 import MarkdownView from "./components/MarkdownView.vue";
 import FileTree from "./components/FileTree.vue";
-import TocPanel from "./components/TocPanel.vue";
 import FindBar from "./components/FindBar.vue";
 import SearchPanel from "./components/SearchPanel.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
@@ -24,7 +23,6 @@ import TabBar from "./components/TabBar.vue";
 import { useFileTree } from "./composables/useFileTree";
 import { useFileWatcher } from "./composables/useFileWatcher";
 import { extractHeadings } from "./composables/useMarkdown";
-import { useResizable } from "./composables/useResizable";
 import { useScrollSpy } from "./composables/useScrollSpy";
 import { useFindInPage } from "./composables/useFindInPage";
 import { useHistory, type RecentItem } from "./composables/useHistory";
@@ -43,6 +41,7 @@ import {
   rejectAllCriticMarkup,
 } from "./composables/criticMarkup";
 import { useTabs, samePath, type Tab } from "./composables/useTabs";
+import { copyTextToClipboard } from "./composables/clipboard";
 import {
   exportToHtml,
   exportToDocx,
@@ -53,7 +52,95 @@ import {
   type PandocInfo,
 } from "./composables/useExport";
 
+// 悬浮布局（P0）
+import LeftRail from "./components/LeftRail.vue";
+import RightRail from "./components/RightRail.vue";
+import FloatingPanel from "./components/FloatingPanel.vue";
+import HistoryPanel from "./components/HistoryPanel.vue";
+import QuickSettings from "./components/QuickSettings.vue";
+import { useFloatLayout, ACTION_PANEL_IDS } from "./composables/useFloatLayout";
+import { useSectionMarkers } from "./composables/useSectionMarkers";
+import { useBookmarks } from "./composables/useBookmarks";
+import { basename, dirOf } from "./utils/path";
+import TocPanel from "./components/TocPanel.vue";
+import AnnotationList from "./components/AnnotationList.vue";
+import BookmarkPanel from "./components/BookmarkPanel.vue";
+import AiPanelInline from "./components/AiPanelInline.vue";
+import Toolbar from "./components/Toolbar.vue";
+import ExportMenu from "./components/ExportMenu.vue";
+import MobileBottomBar from "./components/MobileBottomBar.vue";
+import TopTrigger from "./components/TopTrigger.vue";
+
 const { t, locale } = useI18n();
+
+/** 悬浮布局（P0）—— 浮层状态管理 */
+const floatLayout = useFloatLayout();
+
+/** 书签管理 */
+const bookmarks = useBookmarks();
+
+/** 当前文件的书签（用于 RightRail 显示） */
+const currentFileBookmarks = computed(() => {
+  if (!currentFile.value) return [];
+  return bookmarks.forFile(currentFile.value).map((b) => ({
+    id: b.id,
+    scrollTop: b.scrollTop,
+    label: b.label,
+  }));
+});
+
+/** 当前滚动位置是否有书签（用于工具栏按钮高亮） */
+const hasBookmarkAtCurrentPos = computed(() => {
+  if (!currentFile.value || !viewerEl.value) return false;
+  return bookmarks.hasAt(currentFile.value, viewerEl.value.scrollTop);
+});
+
+/** 悬浮 Tab 条显隐（由 TopTrigger 控制） */
+const topTabBarVisible = ref(true);
+let topTabBarHideTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** 是否为移动端视口（<768px） */
+const isMobileViewport = ref(window.innerWidth < 768);
+function onResize(): void {
+  isMobileViewport.value = window.innerWidth < 768;
+}
+window.addEventListener("resize", onResize, { passive: true });
+
+/** 切换当前滚动位置的书签 */
+function toggleBookmark(): void {
+  const tab = activeTab.value;
+  if (!tab || !viewerEl.value || isEditing.value) return;
+  const scrollTop = viewerEl.value.scrollTop;
+  // 从最近标题获取标签
+  const heading = headings.value
+    .filter((h) => {
+      const el = bodyRef.value?.querySelector(`#${CSS.escape(h.id)}`);
+      if (!el) return false;
+      const elTop = el.getBoundingClientRect().top + viewerEl.value!.scrollTop - viewerEl.value!.getBoundingClientRect().top;
+      return elTop <= scrollTop + 16;
+    })
+    .pop();
+  const label = heading?.text;
+  const result = bookmarks.toggle(tab.path, scrollTop, label, label);
+  showAnnotationToast(
+    result ? t("float.bookmarkAdded") : t("float.bookmarkRemoved")
+  );
+}
+
+/** 浮层布局开关（localStorage 持久化，默认关闭，与经典布局共存） */
+const enableFloatLayout = ref(
+  localStorage.getItem("glim-reader-float-layout") !== "0"
+);
+
+/** 右侧大纲浮层搜索激活状态 */
+const tocSearchActive = ref(false);
+function toggleFloatLayout(): void {
+  enableFloatLayout.value = !enableFloatLayout.value;
+  localStorage.setItem(
+    "glim-reader-float-layout",
+    enableFloatLayout.value ? "1" : "0"
+  );
+}
 
 function toggleLocale() {
   const next = locale.value === "zh-CN" ? "en-US" : "zh-CN";
@@ -65,7 +152,6 @@ const {
   rootDir,
   tree,
   loading: treeLoading,
-  error: treeError,
   refresh: refreshTree,
   loadChildren,
   openFolder,
@@ -83,11 +169,10 @@ const {
   settings: readingSettings,
   setFontSize,
   setEditorFontSize,
+  setMaxWidth,
+  setLineHeight,
 } = useReadingSettings();
-const { getBinding, normalizeEvent, formatBinding } = useShortcuts();
-function shortcutSuffix(id: string): string {
-  return " (" + formatBinding(getBinding(id)) + ")";
-}
+const { normalizeEvent } = useShortcuts();
 
 /** 批注闭环(选区写回 / 复制给 AI / 清除全部) */
 const annotations = useAnnotations();
@@ -120,6 +205,34 @@ function annotationContext() {
 }
 function onAnnotationApply(type: CriticType, payload?: string) {
   annotations.applyMarkup(type, payload);
+}
+
+/** 选区工具栏「复制」：复制选中文本到剪贴板 */
+async function onAnnotationCopy(): Promise<void> {
+  const container = bodyRef.value;
+  const range =
+    container && resolveSelectionRange(container, window.getSelection());
+  const text = range?.toString().trim() ?? "";
+  if (!text) return;
+  try {
+    await copyTextToClipboard(text);
+    showAnnotationToast(t("annotation.copyDone"));
+  } catch {
+    showAnnotationToast(t("annotation.copyFailed"));
+  }
+}
+
+/** 选区工具栏「粘贴」：读取剪贴板文本，以新增批注写入选区 */
+async function onAnnotationPaste(): Promise<void> {
+  let text = "";
+  try {
+    text = await navigator.clipboard.readText();
+  } catch {
+    showAnnotationToast(t("annotation.pasteFailed"));
+    return;
+  }
+  if (!text.trim()) return;
+  onAnnotationApply("ins", text);
 }
 
 /** 内置 AI 面板(Phase 3):选区摘要/翻译/解释 + 按批注改写 */
@@ -236,15 +349,7 @@ function scheduleSuppressClear(p: string) {
 const theme = ref<"light" | "dark">(
   (localStorage.getItem("glim-reader-theme") as "light" | "dark") || "light"
 );
-const showFileTree = ref<boolean>(
-  localStorage.getItem("glim-reader-show-tree") !== "0"
-);
-const showToc = ref<boolean>(
-  localStorage.getItem("glim-reader-show-toc") !== "0"
-);
 const showSettings = ref(false);
-const leftMode = ref<"files" | "search" | "outline">("files");
-const tocOnLeft = computed(() => readingSettings.value.tocPosition === "left");
 const showExportMenu = ref(false);
 const exportBusy = ref(false);
 const exportToast = ref("");
@@ -262,14 +367,6 @@ function closeExportMenu() {
   showExportMenu.value = false;
 }
 
-function toggleFileTree() {
-  showFileTree.value = !showFileTree.value;
-}
-
-function toggleToc() {
-  showToc.value = !showToc.value;
-}
-
 const showBanner = ref(false);
 const bannerTab = ref<Tab | null>(null);
 const showDiffView = ref(false);
@@ -283,22 +380,12 @@ const autoReloadWhitelist = ref<string[]>(
   JSON.parse(localStorage.getItem("glim-reader-auto-reload-whitelist") || "[]")
 );
 
-const { width: leftWidth, startResize: resizeLeft } = useResizable(
-  "glim-reader-left-w",
-  260
-);
-const { width: rightWidth, startResize: resizeRight } = useResizable(
-  "glim-reader-right-w",
-  240,
-  { inverse: true }
-);
-
 const viewerEl = ref<HTMLElement | null>(null);
 const markdownRef = ref<{ root: HTMLElement | null } | null>(null);
 const treeScrollEl = ref<HTMLElement | null>(null);
 const bodyRef = computed(() => markdownRef.value?.root ?? null);
 
-const { activeId, onScroll, jumpTo } = useScrollSpy(viewerEl, bodyRef);
+const { onScroll } = useScrollSpy(viewerEl, bodyRef);
 const find = useFindInPage(bodyRef);
 
 const currentFile = computed(() => activeTab.value?.path ?? "");
@@ -307,10 +394,9 @@ const isDirty = computed(() => activeTab.value?.isDirty ?? false);
 const isEditing = computed(() => activeTab.value?.isEditing ?? false);
 const headings = computed(() => activeTab.value?.headings ?? []);
 
-function basename(p: string): string {
-  const parts = p.split(/[\\/]/);
-  return parts[parts.length - 1];
-}
+/** 悬浮布局：章节标记点 */
+const sectionMarkers = useSectionMarkers(headings, viewerEl, bodyRef);
+
 
 /** 将 rootDir 同步到当前文件所在目录（如果不同），然后刷新文件树 */
 async function syncRootDir(path: string) {
@@ -770,7 +856,7 @@ function onRendered() {
       applyResult: onAiApplyResult,
     }));
     if (tab.pendingHash) {
-      jumpTo(tab.pendingHash);
+      sectionMarkers.jumpTo(tab.pendingHash);
       tab.pendingHash = "";
     } else if (tab.pendingSourceLine > 0) {
       scrollPreviewToSourceLine(tab.pendingSourceLine);
@@ -1091,8 +1177,105 @@ function doPrint() {
   if (bodyRef.value) printDocument(bodyRef.value, fileName.value);
 }
 
-function onSearchOpen(path: string, _line: number) {
+/** 悬浮布局：浮层内打开文件（FileTree） */
+function onFloatPanelOpenFile(path: string): void {
+  floatLayout.closePanel();
   void loadFile(path);
+}
+
+/** 悬浮布局：处理左栏特殊动作（文件操作/编辑切换等） */
+function onFloatPanelAction(id: string): void {
+  floatLayout.closePanel();
+  switch (id) {
+    case "edit":
+      toggleEditorMode();
+      break;
+    case "new-file":
+      void createNewFile();
+      break;
+    case "open-file":
+      void pickFile();
+      break;
+    case "open-folder":
+      void pickFolder();
+      break;
+    case "export":
+      toggleExportMenu();
+      break;
+  }
+}
+
+/** 悬浮布局：浮层内打开文件（HistoryPanel） */
+function onFloatPanelOpen(path: string): void {
+  floatLayout.closePanel();
+  void loadFile(path);
+}
+
+/** 悬浮布局：浮层内打开搜索文件 */
+function onFloatPanelOpenSearch(path: string, _line: number): void {
+  floatLayout.closePanel();
+  void loadFile(path);
+}
+
+/** 悬浮布局：章节标记点跳转 */
+function onFloatPanelJumpTo(id: string): void {
+  sectionMarkers.jumpTo(id);
+}
+
+/** 悬浮布局：右侧大纲浮层跳转 */
+function onFloatPanelTocJump(id: string): void {
+  sectionMarkers.jumpTo(id);
+  floatLayout.closeRightPanel();
+}
+
+/** 悬浮布局：批注列表聚焦到指定批注行 */
+function onFloatPanelAnnotationFocus(id: number): void {
+  const tab = activeTab.value;
+  if (!tab) return;
+  const ann = parseCriticMarkup(tab.draftContent).find((a) => a.id === id);
+  if (ann) scrollPreviewToSourceLine(ann.line);
+}
+
+/** 悬浮布局：书签跳转到指定位置 */
+function onFloatPanelBookmarkJump(path: string, scrollTop: number): void {
+  floatLayout.closePanel();
+  void loadFile(path).then(() => {
+    nextTick(() => {
+      if (viewerEl.value) {
+        viewerEl.value.scrollTop = scrollTop;
+      }
+    });
+  });
+}
+
+/** 悬浮 Tab 条切换文档：切换后暂时保持显示，2s 后自动隐藏 */
+function onFloatFloatingTabActivate(id: string): void {
+  void switchToTab(id);
+  // 切换后保持 2s 显示，方便用户继续操作
+  topTabBarVisible.value = true;
+  setTimeout(() => {
+    topTabBarVisible.value = false;
+  }, 2000);
+}
+
+/** 悬浮 Tab 条：鼠标进入 → 取消自动隐藏 */
+function onFloatTabBarMouseEnter(): void {
+  topTabBarVisible.value = true;
+  if (topTabBarHideTimer !== null) {
+    clearTimeout(topTabBarHideTimer);
+    topTabBarHideTimer = null;
+  }
+}
+
+/** 悬浮 Tab 条：鼠标离开 → 2s 后自动隐藏 */
+function onFloatTabBarMouseLeave(): void {
+  if (topTabBarHideTimer !== null) {
+    clearTimeout(topTabBarHideTimer);
+  }
+  topTabBarHideTimer = setTimeout(() => {
+    topTabBarVisible.value = false;
+    topTabBarHideTimer = null;
+  }, 2000);
 }
 
 function onInternalLink(path: string, hash: string) {
@@ -1110,11 +1293,6 @@ function onDraftUpdate(value: string) {
   }, 200);
 }
 
-function dirOf(p: string): string {
-  const normalized = p.replace(/\\/g, "/");
-  const i = normalized.lastIndexOf("/");
-  return i < 0 ? "" : normalized.slice(0, i);
-}
 
 const recentFiltered = ref<RecentItem[]>([]);
 
@@ -1164,59 +1342,45 @@ function onKeydown(e: KeyboardEvent) {
   const combo = normalizeEvent(e);
   const isEdit = isEditing.value;
 
-  if (combo === getBinding("toggle-mode")) {
-    e.preventDefault();
-    toggleEditorMode();
-  } else if (combo === getBinding("new-file")) {
-    e.preventDefault();
-    void createNewFile();
-  } else if (combo === getBinding("open-file")) {
-    e.preventDefault();
-    void pickFile();
-  } else if (combo === getBinding("search-panel")) {
-    e.preventDefault();
-    leftMode.value = "search";
-    showFileTree.value = true;
-  } else if (combo === getBinding("save-as")) {
-    e.preventDefault();
-    void saveAsCurrentFile();
-  } else if (combo === getBinding("settings")) {
-    e.preventDefault();
-    showSettings.value = true;
-  } else if (combo === getBinding("print")) {
-    e.preventDefault();
-    doPrint();
-  } else if (!isEdit && combo === getBinding("copy-ai")) {
-    e.preventDefault();
-    void annotations.copyForAI();
-  } else if (!isEdit && combo === getBinding("review-annotations")) {
-    e.preventDefault();
-    openReviewPanel();
-  } else if (combo === getBinding("save")) {
-    e.preventDefault();
-    void saveCurrentFile();
-  } else if (combo === getBinding("zoom-in")) {
-    e.preventDefault();
-    zoomFont(1);
-  } else if (combo === getBinding("zoom-out")) {
-    e.preventDefault();
-    zoomFont(-1);
-  } else if (combo === getBinding("zoom-reset")) {
-    e.preventDefault();
-    resetFont();
-  } else if (isEdit && combo === getBinding("find")) {
-    e.preventDefault();
-    editorRef.value?.openSearch();
-  } else if (isEdit && combo === getBinding("replace")) {
-    e.preventDefault();
-    editorRef.value?.openReplace();
-  } else if (isEdit && combo === getBinding("go-to-line")) {
-    e.preventDefault();
-    editorRef.value?.goToLine();
-  } else if (!isEdit && combo === getBinding("find")) {
-    e.preventDefault();
-    find.open();
+  const handlers: Record<string, () => void> = {
+    "toggle-mode": () => { e.preventDefault(); toggleEditorMode(); },
+    "new-file": () => { e.preventDefault(); void createNewFile(); },
+    "open-file": () => { e.preventDefault(); void pickFile(); },
+    "search-panel": () => {
+      e.preventDefault();
+      if (!isEditing.value) floatLayout.openPanel("search");
+    },
+    "save-as": () => { e.preventDefault(); void saveAsCurrentFile(); },
+    settings: () => { e.preventDefault(); showSettings.value = true; },
+    print: () => { e.preventDefault(); doPrint(); },
+    save: () => { e.preventDefault(); void saveCurrentFile(); },
+    "zoom-in": () => { e.preventDefault(); zoomFont(1); },
+    "zoom-out": () => { e.preventDefault(); zoomFont(-1); },
+    "zoom-reset": () => { e.preventDefault(); resetFont(); },
+    "toggle-bookmark": () => { e.preventDefault(); toggleBookmark(); },
+    "open-filetree": () => {
+      e.preventDefault();
+      if (!isEditing.value) floatLayout.openPanel("filetree");
+    },
+    "open-annotations": () => {
+      e.preventDefault();
+      if (!isEditing.value) floatLayout.openPanel("annotations");
+    },
+  };
+
+  // Editor-only shortcuts
+  if (isEdit) {
+    handlers.find = () => { e.preventDefault(); editorRef.value?.openSearch(); };
+    handlers.replace = () => { e.preventDefault(); editorRef.value?.openReplace(); };
+    handlers["go-to-line"] = () => { e.preventDefault(); editorRef.value?.goToLine(); };
+  } else {
+    handlers.find = () => { e.preventDefault(); find.open(); };
+    handlers["copy-ai"] = () => { e.preventDefault(); void annotations.copyForAI(); };
+    handlers["review-annotations"] = () => { e.preventDefault(); openReviewPanel(); };
   }
+
+  const handler = handlers[combo];
+  if (handler) handler();
 }
 
 let scrollSaveTimer: number | null = null;
@@ -1226,13 +1390,6 @@ function onViewerScroll() {
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
   scrollSaveTimer = window.setTimeout(saveCurrentScroll, 400);
 }
-
-watch(showFileTree, (v) =>
-  localStorage.setItem("glim-reader-show-tree", v ? "1" : "0")
-);
-watch(showToc, (v) =>
-  localStorage.setItem("glim-reader-show-toc", v ? "1" : "0")
-);
 
 watch(isEditing, (editing) => {
   if (editing) {
@@ -1322,6 +1479,7 @@ onMounted(async () => {
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("wheel", onWheel, { passive: false });
   void refreshRecent();
+  floatLayout.bindGlobalClick();
 });
 
 onUnmounted(() => {
@@ -1331,6 +1489,7 @@ onUnmounted(() => {
   if (headingTimer) clearTimeout(headingTimer);
   void watcher.stop();
   annotations.dispose();
+  floatLayout.unbindGlobalClick();
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("wheel", onWheel);
 });
@@ -1359,366 +1518,53 @@ watch(errorMsg, (v) => {
 watch(hasActiveFile, (v) => {
   if (!v) void refreshRecent();
 });
-
-watch(
-  () => readingSettings.value.tocPosition,
-  (pos) => {
-    if (pos === "right" && leftMode.value === "outline") {
-      leftMode.value = "files";
-    }
-  }
-);
 </script>
 
 <template>
   <div class="app">
-    <header class="toolbar">
-      <span class="toolbar-brand" :title="t('app.title')">
-        GLIM<span class="caret" aria-hidden="true"></span>
-      </span>
-      <button
-        class="btn"
-        @click="createNewFile"
-        :title="t('toolbar.new') + shortcutSuffix('new-file')"
-      >
-        {{ t("toolbar.new") }}
-      </button>
-      <button
-        class="btn"
-        @click="pickFile"
-        :title="t('app.file') + shortcutSuffix('open-file')"
-      >
-        {{ t("app.file") }}
-      </button>
-      <button class="btn" @click="pickFolder" :title="t('app.folder')">
-        {{ t("app.folder") }}
-      </button>
-      <button
-        v-if="rootDir"
-        class="btn"
-        @click="handleRefresh"
-        :disabled="treeLoading"
-        :title="t('app.refresh')"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="1 4 1 10 7 10" />
-          <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
-        </svg>
-      </button>
-      <button
-        v-if="rootDir"
-        class="btn"
-        @click="closeFolder"
-        :title="t('app.closeFolder')"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
-      <div class="filename" :title="currentFile">{{ displayFileName }}</div>
-      <div class="toolbar-right">
-        <button
-          class="btn"
-          @click="toggleEditorMode"
-          :disabled="!hasActiveFile"
-          :title="
-            (isEditing ? t('editor.preview') : t('editor.edit')) +
-              shortcutSuffix('toggle-mode')
-          "
-        >
-          {{ isEditing ? t("editor.preview") : t("editor.edit") }}
-          <svg
-            v-if="isEditing"
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            style="vertical-align: -2px; margin-left: 2px"
-          >
-            <path
-              d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"
-            />
-            <circle cx="8" cy="8" r="2" />
-          </svg>
-          <svg
-            v-else
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            style="vertical-align: -2px; margin-left: 2px"
-          >
-            <path d="M11 2l3 3L4 15H1v-3z" />
-            <path d="M8 6l2 2" />
-          </svg>
-        </button>
-        <button
-          class="btn"
-          @click="() => saveCurrentFile()"
-          :disabled="!hasActiveFile || !isDirty || saving"
-          :title="t('editor.save') + shortcutSuffix('save')"
-        >
-          {{ t("editor.save") }}
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            style="vertical-align: -2px; margin-left: 2px"
-          >
-            <path d="M3 2h8l4 4v9H3V2z" />
-            <path d="M11 2v4h4" />
-            <path d="M5 8h6v5H5z" />
-          </svg>
-        </button>
-        <button
-          class="btn"
-          @click="() => saveAsCurrentFile()"
-          :disabled="!hasActiveFile || saving"
-          :title="t('editor.saveAs') + shortcutSuffix('save-as')"
-        >
-          {{ t("editor.saveAs") }}
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            style="vertical-align: -2px; margin-left: 2px"
-          >
-            <path d="M3 2h6l4 4v8H3V2z" />
-            <path d="M9 2v4h4" />
-            <path d="M6 10h6M6 12h6" />
-          </svg>
-        </button>
-        <button
-          class="btn"
-          @click="isEditing ? editorRef?.openSearch() : find.open()"
-          :title="t('toolbar.find') + shortcutSuffix('find')"
-          :disabled="!hasActiveFile"
-        >
-          {{ t("toolbar.find") }}
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            style="vertical-align: -2px; margin-left: 2px"
-          >
-            <circle cx="6.5" cy="6.5" r="4.5" />
-            <path d="M10 10l4.5 4.5" />
-          </svg>
-        </button>
-        <div class="export-wrap">
-          <button
-            class="btn"
-            @click="toggleExportMenu"
-            :disabled="!canExport || exportBusy"
-            :title="
-              exportBusy ? t('export.exportBusy') : t('export.exportShortcut')
-            "
-          >
-            {{ t("toolbar.export") + " " }}
-            <svg
-              v-if="exportBusy"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              style="vertical-align: -2px"
-            >
-              <line x1="12" y1="2" x2="12" y2="6" />
-              <line x1="12" y1="18" x2="12" y2="22" />
-              <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
-              <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
-              <line x1="2" y1="12" x2="6" y2="12" />
-              <line x1="18" y1="12" x2="22" y2="12" />
-              <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
-              <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
-            </svg>
-            <svg
-              v-else
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              style="vertical-align: -2px"
-            >
-              <path d="M8 2v9M4 6l4-4 4 4" />
-              <path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" />
-            </svg>
-          </button>
-          <div v-if="showExportMenu" class="export-menu" @click.stop>
-            <button
-              class="menu-item"
-              @click="exportHtml()"
-            >
-              <span class="mi-label">{{ t("export.html") }}</span>
-              <span class="mi-hint">{{ t("export.htmlHint") }}</span>
-            </button>
-            <button
-              class="menu-item"
-              :disabled="!pandocInfo?.available"
-              @click="exportDocx"
-              :title="
-                !pandocInfo?.available ? t('export.docxRequiresPandoc') : ''
-              "
-            >
-              <span class="mi-label">{{ t("export.docx") }}</span>
-              <span class="mi-hint">
-                {{
-                  pandocInfo?.available
-                    ? t("export.docxHint")
-                    : t("export.docxRequiresPandoc")
-                }}
-              </span>
-            </button>
-            <button
-              class="menu-item"
-              @click="exportPdf"
-              :title="
-                pdfEnginePath
-                  ? t('app.usePath', { path: pdfEnginePath })
-                  : t('app.specifyEdgePath')
-              "
-            >
-              <span class="mi-label">{{ t("export.pdf") }}</span>
-              <span class="mi-hint">
-                {{ pdfEnginePath ? t("export.pdfHint") : t("export.pdfNoEdge") }}
-              </span>
-            </button>
-            <div class="menu-divider"></div>
-            <button
-              class="menu-item"
-              @click="doPrint(); closeExportMenu()"
-            >
-              <span class="mi-label">{{ t("export.print") }}</span>
-              <span class="mi-hint">{{ t("export.printHint") }}</span>
-            </button>
-          </div>
-        </div>
-        <button
-          class="btn"
-          @click="showSettings = true"
-          :title="t('toolbar.settings') + shortcutSuffix('settings')"
-        >
-          {{ t("toolbar.settingsBtn") }}
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            style="vertical-align: -2px; margin-left: 2px"
-          >
-            <circle cx="8" cy="8" r="2.5" />
-            <path
-              d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"
-            />
-          </svg>
-        </button>
-        <button
-          class="btn"
-          @click="toggleFileTree"
-          :title="t('app.toggleSidebar')"
-        >
-          {{ t("toolbar.sidebar") }}
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            style="vertical-align: -2px; margin-left: 2px"
-          >
-            <rect x="2" y="2" width="12" height="12" rx="1" />
-            <path d="M6 2v12" />
-          </svg>
-        </button>
-        <button
-          v-if="!tocOnLeft"
-          class="btn"
-          @click="toggleToc"
-          :title="t('app.toggleToc')"
-        >
-          {{ t("toolbar.outline") }}
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            style="vertical-align: -2px; margin-left: 2px"
-          >
-            <path d="M3 3h10M3 7h10M3 11h7" />
-          </svg>
-        </button>
-        <button
-          class="btn icon"
-          @click="toggleTheme"
-          :title="t('app.toggleTheme')"
-        >
-          <svg v-if="theme === 'light'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-          </svg>
-          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="5" />
-            <line x1="12" y1="1" x2="12" y2="3" />
-            <line x1="12" y1="21" x2="12" y2="23" />
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-            <line x1="1" y1="12" x2="3" y2="12" />
-            <line x1="21" y1="12" x2="23" y2="12" />
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-          </svg>
-        </button>
-        <button
-          class="btn lang"
-          @click="toggleLocale"
-          :title="t('app.switchLanguage')"
-        >
-          {{ locale === "zh-CN" ? "EN" : "中" }}
-        </button>
-      </div>
-    </header>
+    <Toolbar v-if="!enableFloatLayout"
+      :is-editing="isEditing"
+      :is-dirty="isDirty"
+      :has-active-file="hasActiveFile"
+      :saving="saving"
+      :can-export="canExport"
+      :export-busy="exportBusy"
+      :show-export-menu="showExportMenu"
+      :current-file="currentFile"
+      :display-file-name="displayFileName"
+      :root-dir="rootDir"
+      :tree-loading="treeLoading"
+      :show-settings="showSettings"
+      :theme="theme"
+      :locale="locale"
+      :has-bookmark-at-current-pos="hasBookmarkAtCurrentPos"
+      :float-layout-enabled="enableFloatLayout"
+      :pandoc-info="pandocInfo"
+      :pdf-engine-path="pdfEnginePath"
+      @create-new-file="createNewFile"
+      @pick-file="pickFile"
+      @pick-folder="pickFolder"
+      @refresh-tree="handleRefresh"
+      @close-folder="closeFolder"
+      @toggle-editor-mode="toggleEditorMode"
+      @save="saveCurrentFile"
+      @save-as="saveAsCurrentFile"
+      @find="isEditing ? editorRef?.openSearch() : find.open()"
+      @toggle-export-menu="toggleExportMenu"
+      @close-export-menu="closeExportMenu"
+      @export-html="exportHtml"
+      @export-docx="exportDocx"
+      @export-pdf="exportPdf"
+      @print="doPrint"
+      @open-settings="showSettings = true"
+      @toggle-bookmark="toggleBookmark"
+      @toggle-theme="toggleTheme"
+      @toggle-locale="toggleLocale"
+      @toggle-float-layout="toggleFloatLayout"
+    />
 
     <TabBar
-      v-if="tabs.length"
+      v-if="tabs.length && !enableFloatLayout"
       :tabs="tabs"
       :active-tab-id="activeTabId"
       :auto-reload="autoReloadWhitelist"
@@ -1731,72 +1577,7 @@ watch(
     />
 
     <main class="layout">
-      <aside
-        v-if="showFileTree"
-        class="left"
-        :style="{ width: leftWidth + 'px' }"
-      >
-        <div class="panel-tabs">
-          <button
-            class="tab"
-            :class="{ active: leftMode === 'files' }"
-            @click="leftMode = 'files'"
-          >
-            {{ t("app.files") }}
-          </button>
-          <button
-            class="tab"
-            :class="{ active: leftMode === 'search' }"
-            @click="leftMode = 'search'"
-            :title="t('app.search') + shortcutSuffix('search-panel')"
-          >
-            {{ t("app.search") }}
-          </button>
-          <button
-            v-if="tocOnLeft"
-            class="tab"
-            :class="{ active: leftMode === 'outline' }"
-            @click="leftMode = 'outline'"
-          >
-            {{ t("toolbar.outline") }}
-          </button>
-        </div>
-        <div v-if="leftMode === 'files'" class="panel-body">
-          <div class="panel-header">
-            <span>{{ rootDir ? t("app.files") : t("app.noFolder") }}</span>
-            <span v-if="treeLoading" class="muted">…</span>
-          </div>
-          <div v-if="treeError" class="panel-error">{{ treeError }}</div>
-          <div class="tree-scroll" ref="treeScrollEl">
-            <FileTree
-              v-if="rootDir"
-              :nodes="tree"
-              :current-path="currentFile"
-              :scroll-container="treeScrollEl"
-              :can-go-up="canGoUp"
-              :focus-key="treeFocusKey"
-              :root-dir="rootDir"
-              :load-children="loadChildren"
-              @open="loadFile"
-              @go-up="onGoUp"
-            />
-            <div v-else class="empty-tip">{{ t("app.openFolderHint") }}</div>
-          </div>
-        </div>
-        <div v-else-if="leftMode === 'search'" class="panel-body">
-          <SearchPanel
-            :visible="true"
-            :root-dir="rootDir"
-            @close="leftMode = 'files'"
-            @open="onSearchOpen"
-          />
-        </div>
-        <div v-else-if="leftMode === 'outline'" class="panel-body">
-          <TocPanel :headings="headings" :active-id="activeId" @jump="jumpTo" />
-        </div>
-      </aside>
-
-      <div v-if="showFileTree" class="resizer" @pointerdown="resizeLeft"></div>
+      
 
       <section
         ref="viewerEl"
@@ -1866,26 +1647,160 @@ watch(
           @input-start="(m) => (annotations.toolbar.mode = m)"
           @cancel="annotations.toolbar.mode = ''"
           @copy-ai="() => void annotations.copyForAI()"
+          @copy="onAnnotationCopy"
+          @paste="onAnnotationPaste"
           @clear-all="() => void annotations.clearAll()"
           @review="openReviewPanel"
           @ai="openAiPanel"
         />
       </section>
 
-      <div
-        v-if="showToc && !tocOnLeft"
-        class="resizer"
-        @pointerdown="resizeRight"
-      ></div>
+      </main>
 
-      <aside
-        v-if="showToc && !tocOnLeft"
-        class="right"
-        :style="{ width: rightWidth + 'px' }"
+    <!-- 悬浮布局（P0），可由设置开关启用 -->
+    <!-- 左栏工具栏与悬浮 Tab 条在编辑模式下也保持显示，确保可以退出编辑状态 -->
+    <LeftRail
+      v-if="enableFloatLayout"
+      :active-panel="floatLayout.state.activeLeftPanel"
+      @open-panel="(id) => ACTION_PANEL_IDS.has(id) ? onFloatPanelAction(id) : floatLayout.openPanel(id)"
+    />
+
+    <TopTrigger
+      v-if="enableFloatLayout"
+      enabled
+      @show="topTabBarVisible = true"
+    />
+    <TabBar
+      v-if="enableFloatLayout && tabs.length"
+      :tabs="tabs"
+      :active-tab-id="activeTabId"
+      :auto-reload="autoReloadWhitelist"
+      :floating="true"
+      :visible="topTabBarVisible"
+      @activate="onFloatFloatingTabActivate"
+      @close="closeTab"
+      @close-left="closeTabLeft"
+      @close-right="closeTabRight"
+      @close-all="closeTabAll"
+      @close-others="closeTabOthers"
+      @mouse-enter="onFloatTabBarMouseEnter"
+      @mouse-leave="onFloatTabBarMouseLeave"
+    />
+
+    <template v-if="enableFloatLayout && !isEditing">
+      <MobileBottomBar
+        :active-panel="floatLayout.state.activeLeftPanel"
+        @open-panel="(id) => ACTION_PANEL_IDS.has(id) ? onFloatPanelAction(id) : floatLayout.openPanel(id)"
+      />
+
+      <FloatingPanel
+        :visible="!!floatLayout.state.activeLeftPanel"
+        :side="isMobileViewport ? 'bottom' : 'left'"
+        :width="320"
+        @close="floatLayout.closePanel"
       >
-        <TocPanel :headings="headings" :active-id="activeId" @jump="jumpTo" />
-      </aside>
-    </main>
+        <template v-if="floatLayout.state.activeLeftPanel === 'filetree'">
+          <div class="float-panel-header">{{ t("float.filetree") }}</div>
+          <div class="float-panel-body tree-scroll" ref="treeScrollEl">
+            <FileTree
+              v-if="rootDir"
+              :nodes="tree"
+              :current-path="currentFile"
+              :scroll-container="treeScrollEl"
+              :can-go-up="canGoUp"
+              :focus-key="treeFocusKey"
+              :root-dir="rootDir"
+              :load-children="loadChildren"
+              @open="onFloatPanelOpenFile"
+              @go-up="onGoUp"
+            />
+            <div v-else class="empty-tip">{{ t("app.openFolderHint") }}</div>
+          </div>
+        </template>
+        <template v-else-if="floatLayout.state.activeLeftPanel === 'history'">
+          <HistoryPanel
+            :items="recentFiltered"
+            :current-path="currentFile"
+            @open="onFloatPanelOpen"
+            @clear="refreshRecent"
+          />
+        </template>
+        <template v-else-if="floatLayout.state.activeLeftPanel === 'search'">
+          <div class="float-panel-header">{{ t("float.search") }}</div>
+          <div class="float-panel-body">
+            <SearchPanel
+              :visible="true"
+              :root-dir="rootDir"
+              @close="floatLayout.closePanel"
+              @open="onFloatPanelOpenSearch"
+            />
+          </div>
+        </template>
+        <template v-else-if="floatLayout.state.activeLeftPanel === 'annotations'">
+          <AnnotationList
+            :source="draftContent"
+            :file-name="currentFile"
+            @focus="onFloatPanelAnnotationFocus"
+            @open-review="openReviewPanel"
+            @copy-ai="() => void annotations.copyForAI()"
+          />
+        </template>
+        <template v-else-if="floatLayout.state.activeLeftPanel === 'bookmark'">
+          <BookmarkPanel
+            :current-path="currentFile"
+            :show-current-only="true"
+            @jump="onFloatPanelBookmarkJump"
+            @refresh="() => {}"
+          />
+        </template>
+        <template v-else-if="floatLayout.state.activeLeftPanel === 'ai'">
+          <AiPanelInline
+            :selection-text="aiPanel.state.selectionText"
+            :result="aiPanel.state.result"
+            :loading="aiPanel.state.loading"
+            :error="aiPanel.state.error"
+            :active-action="aiPanel.state.activeAction"
+            @run-action="(a) => void aiPanel.runAction(a)"
+            @apply-result="() => void aiPanel.applyResultToDoc()"
+            @close="aiPanel.close"
+          />
+        </template>
+        <template v-else-if="floatLayout.state.activeLeftPanel === 'settings'">
+          <QuickSettings
+            :theme="theme"
+            :font-size="isEditing ? readingSettings.editorFontSize : readingSettings.fontSize"
+            :float-layout-enabled="enableFloatLayout"
+            @toggle-theme="toggleTheme"
+            @open-settings="showSettings = true"
+            @zoom-in="zoomFont(1)"
+            @zoom-out="zoomFont(-1)"
+            @set-max-width="(v) => setMaxWidth(v)"
+            @set-line-height="(v) => setLineHeight(v)"
+            @toggle-float-layout="toggleFloatLayout"
+          />
+        </template>
+      </FloatingPanel>
+
+      <RightRail
+        :markers="sectionMarkers.markers.value"
+        :active-id="sectionMarkers.activeId.value"
+        :bookmarks="currentFileBookmarks"
+        @jump="onFloatPanelJumpTo"
+        @expand="floatLayout.toggleRightPanel"
+      />
+
+      <FloatingPanel
+        :visible="floatLayout.state.rightPanelOpen"
+        side="right"
+        :width="280"
+        @close="floatLayout.closeRightPanel"
+      >
+        <div class="float-panel-header">{{ t("toc.title") }}</div>
+        <div class="float-panel-body">
+          <TocPanel :headings="headings" :active-id="sectionMarkers.activeId.value" :search-active="tocSearchActive" @jump="onFloatPanelTocJump" @close-search="tocSearchActive = false" />
+        </div>
+      </FloatingPanel>
+    </template>
 
     <FindBar
       v-if="!isEditing"
@@ -1902,7 +1817,12 @@ watch(
       @close="find.close"
     />
 
-    <SettingsDialog :visible="showSettings" @close="showSettings = false" />
+    <SettingsDialog
+      :visible="showSettings"
+      :float-layout-enabled="enableFloatLayout"
+      @close="showSettings = false"
+      @toggle-float-layout="toggleFloatLayout"
+    />
 
     <UnsavedChangesDialog
       :visible="showUnsavedDialog"
@@ -1977,5 +1897,15 @@ watch(
       class="menu-overlay"
       @click="closeExportMenu"
     ></div>
+    <ExportMenu
+      :visible="showExportMenu"
+      :pandoc-info="pandocInfo"
+      :pdf-engine-path="pdfEnginePath"
+      @export-html="exportHtml"
+      @export-docx="exportDocx"
+      @export-pdf="exportPdf"
+      @print="doPrint"
+      @close="closeExportMenu"
+    />
   </div>
 </template>

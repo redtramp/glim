@@ -154,8 +154,14 @@ function clearPandocRefDoc() {
 
 onMounted(loadCurrentVersion);
 
-const props = defineProps<{ visible: boolean }>();
-const emit = defineEmits<{ (e: "close"): void }>();
+const props = defineProps<{
+  visible: boolean;
+  floatLayoutEnabled?: boolean;
+}>();
+const emit = defineEmits<{
+  (e: "close"): void;
+  (e: "toggle-float-layout"): void;
+}>();
 
 const showShortcuts = ref(false);
 watch(
@@ -240,7 +246,6 @@ const {
   setEditorFontSize,
   setEditorFontFamily,
   setEditorFontCustom,
-  setTocPosition,
   reset,
 } = useReadingSettings();
 
@@ -397,19 +402,14 @@ async function registerAssociations() {
       </div>
 
       <div class="row">
-        <label>{{ t("settings.tocPosition") }}</label>
-        <select
-          :value="settings.tocPosition"
-          @change="
-            (e) =>
-              setTocPosition(
-                (e.target as HTMLSelectElement).value as 'left' | 'right'
-              )
-          "
+        <label>{{ t("settings.floatLayout") }}</label>
+        <button
+          class="btn"
+          :class="{ active: floatLayoutEnabled }"
+          @click="$emit('toggle-float-layout')"
         >
-          <option value="left">{{ t("settings.tocLeft") }}</option>
-          <option value="right">{{ t("settings.tocRight") }}</option>
-        </select>
+          {{ floatLayoutEnabled ? t("float.floatLayoutOn") : t("float.floatLayoutOff") }}
+        </button>
       </div>
       </div>
 
@@ -802,7 +802,7 @@ select {
   justify-content: space-between;
   gap: 12px;
   margin-top: 10px;
-  font-size: 13px;
+  font-size: 12px;
 }
 .ai-row > span {
   flex: 0 0 auto;
@@ -813,12 +813,13 @@ select {
 .ai-row select {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 5px 8px;
+  padding: 3px 8px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 4px;
   background: var(--bg-btn);
   color: var(--fg);
-  font-size: 13px;
+  font-family: var(--ui-font);
+  font-size: 12px;
   box-sizing: border-box;
 }
 .ai-row input:focus,

@@ -1,13 +1,33 @@
 <script setup lang="ts">
+/**
+ * TabBar.vue — 文档标签栏。
+ *
+ * 支持两种模式：
+ * 1. 静态模式（默认）：flex 布局，常驻显示在工具栏下方
+ * 2. 悬浮模式（floating）：position: fixed，磨砂玻璃背景，默认隐藏，由外部触发显示
+ *
+ * 右键菜单：关闭左侧/右侧/其他/全部标签。
+ */
 import { computed, ref, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
+import { basename } from "../utils/path";
 import type { Tab } from "../composables/useTabs";
 
-const props = defineProps<{
-  tabs: Tab[];
-  activeTabId: string;
-  autoReload: string[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    tabs: Tab[];
+    activeTabId: string;
+    autoReload: string[];
+    /** 悬浮模式（桌面端顶部悬浮 Tab 条） */
+    floating?: boolean;
+    /** 悬浮模式显隐 */
+    visible?: boolean;
+  }>(),
+  {
+    floating: false,
+    visible: true,
+  }
+);
 
 const emit = defineEmits<{
   (e: "activate", id: string): void;
@@ -16,6 +36,10 @@ const emit = defineEmits<{
   (e: "closeRight", id: string): void;
   (e: "closeAll"): void;
   (e: "closeOthers", id: string): void;
+  /** 悬浮模式：鼠标进入 Tab 条区域，请求父组件保持显示 */
+  (e: "mouse-enter"): void;
+  /** 悬浮模式：鼠标离开 Tab 条区域，请求父组件开始隐藏计时 */
+  (e: "mouse-leave"): void;
 }>();
 
 const { t } = useI18n();
@@ -33,11 +57,6 @@ const menuState = ref<{
   targetId: "",
 });
 
-function basename(p: string): string {
-  if (!p) return t("app.noFile");
-  const parts = p.split(/[\\/]/);
-  return parts[parts.length - 1];
-}
 
 function onMiddle(id: string) {
   emit("close", id);
@@ -90,9 +109,16 @@ const items = computed(() =>
 <template>
   <div
     class="tab-bar"
-    :class="{ 'menu-open': menuState.visible }"
+    :class="{
+      'menu-open': menuState.visible,
+      floating: floating,
+      visible: floating && visible,
+      hidden: floating && !visible,
+    }"
     @click="closeMenu"
     @contextmenu="closeMenu"
+    @mouseenter="floating && emit('mouse-enter')"
+    @mouseleave="floating && emit('mouse-leave')"
   >
     <div
       v-for="item in items"
@@ -165,6 +191,7 @@ const items = computed(() =>
 </template>
 
 <style scoped>
+/* ===== 静态模式（默认） ===== */
 .tab-bar {
   flex: 0 0 auto;
   display: flex;
@@ -178,12 +205,50 @@ const items = computed(() =>
 .tab-bar.menu-open {
   overflow: visible;
 }
+
+/* ===== 悬浮模式 ===== */
+.tab-bar.floating {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: transform 150ms ease-out;
+  transform: translateY(-100%);
+  pointer-events: auto;
+}
+
+.tab-bar.floating.visible {
+  transform: translateY(0);
+}
+
+.tab-bar.floating.hidden {
+  transform: translateY(-100%);
+  transition: transform 200ms ease-in;
+  pointer-events: none;
+}
+
+:root[data-theme="dark"] .tab-bar.floating {
+  background: rgba(24, 24, 24, 0.78);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* ===== Tab 项（两个模式共享） ===== */
 .tab-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px 6px 12px;
-  max-width: 200px;
+  padding: 4px 8px 4px 12px;
+  max-width: 160px;
   font-size: 12px;
   color: var(--shell-tab-color);
   background: transparent;
@@ -192,19 +257,36 @@ const items = computed(() =>
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
+  flex-shrink: 0;
+  transition: color 0.12s, background-color 0.12s, border-color 0.12s;
 }
+
 .tab-item:hover {
   color: var(--shell-tab-hover-color);
 }
+
 .tab-item.active {
   color: var(--shell-tab-active-color);
   background: var(--bg);
   border-bottom-color: var(--shell-tab-active-border);
 }
+
+/* 悬浮模式下的 tab 项微调 */
+.tab-bar.floating .tab-item {
+  padding: 3px 8px 3px 10px;
+  max-width: 140px;
+  font-size: 11px;
+}
+
+.tab-bar.floating .tab-item.active {
+  background: var(--bg-active);
+}
+
 .name {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .dot {
   flex: 0 0 auto;
   width: 7px;
@@ -212,12 +294,14 @@ const items = computed(() =>
   border-radius: 50%;
   background: var(--shell-tab-active-border);
 }
+
 .stale-warning {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   color: var(--banner-warning, #f59e0b);
 }
+
 .close {
   flex: 0 0 auto;
   width: 16px;
@@ -234,6 +318,7 @@ const items = computed(() =>
   opacity: 0.6;
   transition: opacity 0.15s, background-color 0.15s;
 }
+
 .close:hover {
   opacity: 1;
   background: var(--bg-btn-hover);

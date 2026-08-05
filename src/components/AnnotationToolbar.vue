@@ -30,6 +30,8 @@ const emit = defineEmits<{
   (e: "input-start", type: CriticType): void;
   (e: "cancel"): void;
   (e: "copy-ai"): void;
+  (e: "copy"): void;
+  (e: "paste"): void;
   (e: "clear-all"): void;
   (e: "review"): void;
   (e: "ai"): void;
@@ -142,6 +144,20 @@ function cancelInput(): void {
         {{ t("annotation.comment") }}
       </button>
       <span class="at-sep" aria-hidden="true"></span>
+      <button
+        class="at-btn at-copy-plain"
+        :title="t('annotation.copyPlain')"
+        @click="emit('copy')"
+      >
+        {{ t("annotation.copyPlain") }}
+      </button>
+      <button
+        class="at-btn at-paste"
+        :title="t('annotation.paste')"
+        @click="emit('paste')"
+      >
+        {{ t("annotation.paste") }}
+      </button>
       <button
         class="at-btn at-copy"
         :title="t('annotation.copyAI')"
