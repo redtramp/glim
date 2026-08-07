@@ -71,7 +71,9 @@ const LINE_HEIGHT_PRESETS = [
             class="qs-btn"
             :class="{ active: settings.maxWidth === preset.value }"
             @click="emit('set-max-width', preset.value)"
-          >{{ t(preset.label) }}</button>
+          >
+            {{ t(preset.label) }}
+          </button>
         </div>
       </div>
 
@@ -84,7 +86,9 @@ const LINE_HEIGHT_PRESETS = [
             class="qs-btn"
             :class="{ active: Math.abs(settings.lineHeight - preset.value) < 0.01 }"
             @click="emit('set-line-height', preset.value)"
-          >{{ t(preset.label) }}</button>
+          >
+            {{ t(preset.label) }}
+          </button>
         </div>
       </div>
 

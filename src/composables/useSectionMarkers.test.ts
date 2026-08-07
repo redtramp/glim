@@ -1,155 +1,130 @@
 /**
  * useSectionMarkers 测试
  *
- * 测试目标:
- * - 初始状态: 无 headings 时 markers 为空
- * - 有 headings 时生成对应标记点
- * - 书签管理（add/remove/get/clear）
- * - 标题变化时重建标记点
+ * 覆盖:
+ * - 无 headings 时 activeId 为空
+ * - 有 headings 时 activeId 指向视口内最后一个标题
+ * - 标题变化时 activeId 跟随更新
+ * - jumpTo 滚动到目标标题并更新 activeId
+ * - jumpTo 未知 id / 无视图容器时静默忽略
+ * - 滚动事件驱动 activeId 更新
  *
- * 注意: scroll 联动测试需要 getBoundingClientRect 精确模拟，
- * 在 jsdom 环境中暂不覆盖，由浏览器集成测试补充。
+ * 注意: jsdom 中 getBoundingClientRect 恒为 0，
+ * 因此所有标题的缓存位置均为 0；真实布局由浏览器集成测试补充。
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { ref, nextTick } from "vue";
 import { useSectionMarkers } from "./useSectionMarkers";
 import type { Heading } from "./useMarkdown";
 
-// Mock localStorage for jsdom
-let store: Record<string, string> = {};
-beforeEach(() => {
-  store = {};
-  Object.defineProperty(window, "localStorage", {
-    value: {
-      getItem: (key: string) => store[key] ?? null,
-      setItem: (key: string, value: string) => { store[key] = value; },
-      removeItem: (key: string) => { delete store[key]; },
-      clear: () => { store = {}; },
-    },
-    writable: true,
-    configurable: true,
-  });
-});
+function makeBody(headings: Heading[]): HTMLElement {
+  const body = document.createElement("div");
+  for (const h of headings) {
+    const el = document.createElement("h1");
+    el.id = h.id;
+    body.appendChild(el);
+  }
+  return body;
+}
+
+function makeViewer(): { el: HTMLElement; scrollTo: ReturnType<typeof vi.fn> } {
+  const el = document.createElement("div");
+  // jsdom 可能未实现 Element.scrollTo，用自有属性注入 mock
+  const scrollTo = vi.fn();
+  Object.defineProperty(el, "scrollTo", { value: scrollTo, configurable: true });
+  return { el, scrollTo };
+}
 
 describe("useSectionMarkers", () => {
-  it("无 headings 时 markers 为空", () => {
+  it("无 headings 时 activeId 为空", () => {
     const headings = ref<Heading[]>([]);
-    const { markers, activeId } = useSectionMarkers(
-      headings,
-      ref(null),
-      ref(null)
-    );
-    expect(markers.value).toHaveLength(0);
+    const { activeId } = useSectionMarkers(headings, ref(null), ref(null));
     expect(activeId.value).toBe("");
   });
 
-  it("有 headings 时生成对应数量的标记点", () => {
+  it("有 headings 时 activeId 指向视口内最后一个标题", () => {
     const headings = ref<Heading[]>([
       { id: "h1", text: "标题1", level: 1 },
       { id: "h2", text: "标题2", level: 2 },
       { id: "h3", text: "标题3", level: 1 },
     ]);
-    const { markers } = useSectionMarkers(headings, ref(null), ref(null));
-    expect(markers.value).toHaveLength(3);
+    const body = makeBody(headings.value);
+    const { el } = makeViewer();
+    const { activeId } = useSectionMarkers(headings, ref(el), ref(body));
+    // jsdom 布局全为 0: 滚动位置 0 时最后一个标题为当前章节
+    expect(activeId.value).toBe("h3");
   });
 
-  it("标题变化时重建标记点", async () => {
-    const headings = ref<Heading[]>([]);
-    const { markers } = useSectionMarkers(headings, ref(null), ref(null));
-    expect(markers.value).toHaveLength(0);
+  it("标题元素未就绪（缓存为空）时 activeId 回退到第一个标题", () => {
+    const headings = ref<Heading[]>([
+      { id: "h1", text: "一", level: 1 },
+      { id: "h2", text: "二", level: 1 },
+    ]);
+    // body 存在但不含任何标题元素 → 缓存为空
+    const body = document.createElement("div");
+    const { activeId } = useSectionMarkers(headings, ref(null), ref(body));
+    expect(activeId.value).toBe("h1");
+  });
+
+  it("标题变化后 activeId 跟随更新", async () => {
+    const headings = ref<Heading[]>([{ id: "a", text: "A", level: 1 }]);
+    const body = ref(makeBody(headings.value));
+    const { activeId } = useSectionMarkers(headings, ref(null), ref(body));
+    expect(activeId.value).toBe("a");
 
     headings.value = [
-      { id: "h1", text: "标题1", level: 1 },
-      { id: "h2", text: "标题2", level: 2 },
+      { id: "a", text: "A", level: 1 },
+      { id: "b", text: "B", level: 1 },
     ];
     await nextTick();
-    expect(markers.value).toHaveLength(2);
-    expect(markers.value[0].id).toBe("h1");
-    expect(markers.value[1].id).toBe("h2");
+    expect(activeId.value).toBe("b");
   });
 
-  it("标记点包含正确的属性", () => {
+  it("jumpTo 滚动到目标标题并更新 activeId", () => {
     const headings = ref<Heading[]>([
-      { id: "intro", text: "引言", level: 1 },
+      { id: "h1", text: "一", level: 1 },
+      { id: "h2", text: "二", level: 1 },
     ]);
-    const { markers } = useSectionMarkers(headings, ref(null), ref(null));
-
-    expect(markers.value[0]).toMatchObject({
-      id: "intro",
-      text: "引言",
-      level: 1,
-      isBookmark: false,
+    const body = makeBody(headings.value);
+    const { el, scrollTo } = makeViewer();
+    const { activeId, jumpTo } = useSectionMarkers(
+      headings,
+      ref(el),
+      ref(body)
+    );
+    jumpTo("h2");
+    expect(activeId.value).toBe("h2");
+    expect(scrollTo).toHaveBeenCalledWith({
+      top: 0, // jsdom 布局为 0
+      behavior: "smooth",
     });
-    expect(typeof markers.value[0].scrollTop).toBe("number");
-    expect(["past", "current", "future"]).toContain(markers.value[0].state);
   });
 
-  describe("书签管理", () => {
-    it("addBookmark 添加书签后标记点增加", () => {
-      const headings = ref<Heading[]>([
-        { id: "h1", text: "标题1", level: 1 },
-      ]);
-      const { markers, addBookmark } = useSectionMarkers(
-        headings,
-        ref(null),
-        ref(null)
-      );
+  it("jumpTo 未知 id 时静默忽略", () => {
+    const headings = ref<Heading[]>([{ id: "h1", text: "一", level: 1 }]);
+    const body = makeBody(headings.value);
+    const { el, scrollTo } = makeViewer();
+    const { jumpTo } = useSectionMarkers(headings, ref(el), ref(body));
+    jumpTo("missing");
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
 
-      const before = markers.value.length;
-      addBookmark(100, "重要位置");
-      expect(markers.value.length).toBe(before + 1);
-      expect(markers.value[markers.value.length - 1].isBookmark).toBe(true);
-    });
+  it("无视图容器时 jumpTo 静默忽略", () => {
+    const headings = ref<Heading[]>([{ id: "h1", text: "一", level: 1 }]);
+    const { jumpTo } = useSectionMarkers(headings, ref(null), ref(null));
+    expect(() => jumpTo("h1")).not.toThrow();
+  });
 
-    it("removeBookmark 删除书签后标记点减少", () => {
-      const headings = ref<Heading[]>([
-        { id: "h1", text: "标题1", level: 1 },
-      ]);
-      const { markers, addBookmark, removeBookmark, getBookmarks } = useSectionMarkers(
-        headings,
-        ref(null),
-        ref(null)
-      );
-
-      const before = markers.value.filter((m) => m.isBookmark).length;
-      addBookmark(100, "测试");
-      expect(markers.value.filter((m) => m.isBookmark).length).toBe(before + 1);
-
-      const bmList = getBookmarks();
-      expect(bmList).toHaveLength(1);
-      removeBookmark(bmList[0].id);
-      expect(markers.value.filter((m) => m.isBookmark).length).toBe(before);
-    });
-
-    it("getBookmarks 返回所有书签", () => {
-      const headings = ref<Heading[]>([]);
-      const { getBookmarks, addBookmark } = useSectionMarkers(
-        headings,
-        ref(null),
-        ref(null)
-      );
-
-      addBookmark(100, "位置A");
-      addBookmark(200, "位置B");
-      const list = getBookmarks();
-      expect(list).toHaveLength(2);
-      expect(list[0].label).toBe("位置A");
-      expect(list[1].label).toBe("位置B");
-    });
-
-    it("clearBookmarks 清除所有书签", () => {
-      const headings = ref<Heading[]>([]);
-      const { getBookmarks, addBookmark, clearBookmarks } = useSectionMarkers(
-        headings,
-        ref(null),
-        ref(null)
-      );
-
-      addBookmark(100, "位置A");
-      addBookmark(200, "位置B");
-      expect(getBookmarks()).toHaveLength(2);
-      clearBookmarks();
-      expect(getBookmarks()).toHaveLength(0);
-    });
+  it("滚动事件驱动 activeId 更新", async () => {
+    const headings = ref<Heading[]>([
+      { id: "h1", text: "一", level: 1 },
+      { id: "h2", text: "二", level: 1 },
+    ]);
+    const body = makeBody(headings.value);
+    const { el } = makeViewer();
+    const { activeId } = useSectionMarkers(headings, ref(el), ref(body));
+    el.dispatchEvent(new Event("scroll"));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(activeId.value).toBe("h2");
   });
 });

@@ -81,19 +81,12 @@
 
   /* 悬浮布局 — 浮层/窄条 */
   --float-left-rail-bg: rgba(255, 255, 255, 0.5);
-  --float-right-rail-bg: rgba(255, 255, 255, 0.5);
-  --float-rail-hover-bg: rgba(255, 255, 255, 0.7);
   --float-rail-icon-color: var(--fg-muted);
   --float-rail-icon-hover-bg: rgba(0, 0, 0, 0.06);
   --float-rail-icon-active: var(--link);
   --float-rail-icon-active-bg: rgba(0, 133, 61, 0.12);
   --float-rail-separator: var(--border);
-  --float-marker-current: var(--link);
-  --float-marker-past: var(--fg-muted);
-  --float-marker-future: var(--fg-muted);
   --float-marker-bookmark: var(--mdr-accent-gold);
-  --float-marker-tooltip-bg: var(--bg-toolbar);
-  --float-marker-tooltip-fg: var(--fg);
   --float-panel-header-fg: var(--fg-muted);
   --float-panel-header-border: var(--border);
 
@@ -195,19 +188,12 @@
 
   /* 悬浮布局 — 浮层/窄条（暗色） */
   --float-left-rail-bg: rgba(15, 20, 16, 0.6);
-  --float-right-rail-bg: rgba(15, 20, 16, 0.6);
-  --float-rail-hover-bg: rgba(15, 20, 16, 0.8);
   --float-rail-icon-color: var(--fg-muted);
   --float-rail-icon-hover-bg: rgba(255, 255, 255, 0.06);
   --float-rail-icon-active: var(--link);
   --float-rail-icon-active-bg: rgba(51, 255, 102, 0.14);
   --float-rail-separator: var(--border);
-  --float-marker-current: var(--link);
-  --float-marker-past: var(--fg-muted);
-  --float-marker-future: var(--fg-muted);
   --float-marker-bookmark: var(--mdr-accent-gold);
-  --float-marker-tooltip-bg: var(--bg-toolbar);
-  --float-marker-tooltip-fg: var(--fg);
   --float-panel-header-fg: var(--fg-muted);
   --float-panel-header-border: var(--border);
 
@@ -1156,8 +1142,7 @@ textarea,
 
 /* 手机（<768px）：全屏沉浸，底部工具栏 */
 @media (max-width: 767px) {
-  .left-rail,
-  .right-rail {
+  .left-rail {
     display: none;
   }
   .floating-panel {

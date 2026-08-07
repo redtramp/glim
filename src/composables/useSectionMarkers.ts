@@ -1,184 +1,150 @@
-import { ref, computed, watch, onUnmounted, type Ref } from "vue";
+import {
+  ref,
+  computed,
+  watch,
+  onUnmounted,
+  getCurrentInstance,
+  type Ref,
+} from "vue";
 import type { Heading } from "./useMarkdown";
 
-export type MarkerState = "past" | "current" | "future";
-
-export interface SectionMarker {
-  id: string;
-  text: string;
-  level: number;
-  state: MarkerState;
-  scrollTop: number;
-  isBookmark: boolean;
-}
-
-export interface BookmarkEntry {
-  id: string;
-  scrollTop: number;
-  label?: string;
-}
-
-const STORAGE_KEY = "glim-reader-section-bookmarks";
 const SCROLL_OFFSET = 16;
 const SCROLL_TOLERANCE = 1;
-const SCROLL_END_TIMEOUT = 300;
+/** 滚动停止后延迟重建位置缓存，吸收图片/mermaid 加载带来的布局变化 */
+const LAYOUT_REBUILD_DELAY = 300;
 
-function loadBookmarks(): BookmarkEntry[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return [];
+/** CSS.escape 的降级实现：jsdom / 旧 WebView 未实现时直接返回 id */
+function escapeCssId(id: string): string {
+  return typeof CSS !== "undefined" && typeof CSS.escape === "function"
+    ? CSS.escape(id)
+    : id;
 }
 
-function saveBookmarks(entries: BookmarkEntry[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+/** 组件外调用（单元测试等）时跳过生命周期注册，避免 Vue 警告 */
+function tryOnUnmounted(fn: () => void): void {
+  if (getCurrentInstance()) onUnmounted(fn);
 }
 
+/**
+ * 章节标记：追踪当前阅读到的标题，并提供平滑跳转。
+ *
+ * - 标题的滚动位置会被缓存：滚动期间复用缓存，避免每帧触发布局读取；
+ *   标题 / 视图容器变化或滚动停止后重建。
+ * - 渲染时序安全：jumpTo 在目标位置尚未缓存时会先重建一次，
+ *   保证「打开文档 → 立即跳转到锚点」在首次渲染后也能生效。
+ */
 export function useSectionMarkers(
   headings: Ref<Heading[]>,
   viewerEl: Ref<HTMLElement | null>,
   bodyRef: Ref<HTMLElement | null>,
 ) {
-  const markers = ref<SectionMarker[]>([]);
   const activeId = ref("");
-  const bookmarks = ref<BookmarkEntry[]>(loadBookmarks());
 
-  let isScrollingProgrammatically = false;
-
-  function buildScrollTopMap(): Map<string, number> {
-    const map = new Map<string, number>();
-    const body = bodyRef.value;
-    if (!body) return map;
-
-    for (const h of headings.value) {
-      const el = body.querySelector(`#${CSS.escape(h.id)}`);
-      if (!el) continue;
-      const container = viewerEl.value;
-      const top = container
-        ? el.getBoundingClientRect().top + container.scrollTop - container.getBoundingClientRect().top
-        : el.getBoundingClientRect().top + window.scrollY;
-      map.set(h.id, Math.max(0, top - SCROLL_OFFSET));
-    }
-    return map;
-  }
-
-  function rebuildMarkers(): void {
-    const scrollMap = buildScrollTopMap();
-    const container = viewerEl.value;
-    const scrollTop = container ? container.scrollTop : 0;
-
-    let currentIdx = -1;
-    for (let i = 0; i < headings.value.length; i++) {
-      const st = scrollMap.get(headings.value[i].id) ?? 0;
-      if (st <= scrollTop + SCROLL_TOLERANCE) {
-        currentIdx = i;
-      }
-    }
-
-    if (currentIdx < 0 && headings.value.length > 0) {
-      currentIdx = 0;
-    }
-
-    const result: SectionMarker[] = headings.value.map((h, i) => {
-      const st = scrollMap.get(h.id) ?? 0;
-      const state: MarkerState = i < currentIdx ? "past" : i === currentIdx ? "current" : "future";
-      if (state === "current") activeId.value = h.id;
-      return { id: h.id, text: h.text, level: h.level, state, scrollTop: st, isBookmark: false };
-    });
-
-    if (headings.value.length === 0) {
-      activeId.value = "";
-    }
-
-    const scrollHeight = viewerEl.value?.scrollHeight ?? Infinity;
-    for (const bm of bookmarks.value) {
-      if (result.length > 0 && bm.scrollTop > scrollHeight) continue;
-      result.push({
-        id: `bm-${bm.id}`, text: bm.label ?? "🔖", level: 0,
-        state: "future", scrollTop: bm.scrollTop, isBookmark: true,
-      });
-    }
-
-    result.sort((a, b) => a.scrollTop - b.scrollTop);
-    markers.value = result;
-  }
-
-  function jumpTo(id: string): void {
-    const marker = markers.value.find((m) => m.id === id);
-    if (!marker || !viewerEl.value) return;
-    isScrollingProgrammatically = true;
-    viewerEl.value.scrollTo({ top: marker.scrollTop, behavior: "smooth" });
-    activeId.value = id;
-    const onScrollEnd = () => {
-      isScrollingProgrammatically = false;
-      viewerEl.value?.removeEventListener("scroll", onScrollEnd);
-    };
-    viewerEl.value.addEventListener("scroll", onScrollEnd, { once: true });
-    setTimeout(() => { isScrollingProgrammatically = false; }, SCROLL_END_TIMEOUT);
-  }
-
-  function addBookmark(scrollTop: number, label?: string): void {
-    const id = `bm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    bookmarks.value = [...bookmarks.value, { id, scrollTop, label }];
-    saveBookmarks(bookmarks.value);
-    rebuildMarkers();
-  }
-
-  function removeBookmark(id: string): void {
-    bookmarks.value = bookmarks.value.filter((b) => b.id !== id);
-    saveBookmarks(bookmarks.value);
-    rebuildMarkers();
-  }
-
-  function getBookmarks(): BookmarkEntry[] {
-    return bookmarks.value;
-  }
-
-  function clearBookmarks(): void {
-    bookmarks.value = [];
-    saveBookmarks([]);
-    rebuildMarkers();
-  }
+  /** 标题 id → 滚动位置（缓存）；scrollMapDirty 时在下次读取前重建 */
+  const scrollMap = new Map<string, number>();
+  let scrollMapDirty = true;
 
   let rafId: number | null = null;
+  let layoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function rebuildScrollMap(): void {
+    scrollMap.clear();
+    const body = bodyRef.value;
+    if (!body) return;
+    const container = viewerEl.value;
+    for (const h of headings.value) {
+      const el = body.querySelector(`#${escapeCssId(h.id)}`);
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      const top = container
+        ? rect.top + container.scrollTop - container.getBoundingClientRect().top
+        : rect.top + window.scrollY;
+      scrollMap.set(h.id, Math.max(0, top - SCROLL_OFFSET));
+    }
+    scrollMapDirty = false;
+  }
+
+  function updateActiveId(): void {
+    if (scrollMapDirty) rebuildScrollMap();
+    const container = viewerEl.value;
+    const scrollTop = container ? container.scrollTop : 0;
+    let current: Heading | null = null;
+    // 缓存为空（文档刚渲染、标题元素未就绪）时默认第一个标题：
+    // 若用 ?? 0 遍历，空缓存会让所有标题都算作当前章节，错误指向最后一个标题
+    if (scrollMap.size > 0) {
+      // 最后一个顶部位置不超过视口顶部的标题即为当前章节
+      for (const h of headings.value) {
+        const st = scrollMap.get(h.id) ?? 0;
+        if (st <= scrollTop + SCROLL_TOLERANCE) current = h;
+      }
+    }
+    if (!current && headings.value.length > 0) current = headings.value[0];
+    activeId.value = current?.id ?? "";
+  }
+
   function onScroll(): void {
-    if (isScrollingProgrammatically) return;
     if (rafId !== null) cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(() => {
       rafId = null;
-      rebuildMarkers();
+      updateActiveId();
+      // 滚动停止后重建一次位置缓存：图片/图表异步加载会改变标题位置
+      if (layoutTimer !== null) clearTimeout(layoutTimer);
+      layoutTimer = setTimeout(() => {
+        layoutTimer = null;
+        rebuildScrollMap();
+      }, LAYOUT_REBUILD_DELAY);
     });
+  }
+
+  function jumpTo(id: string): void {
+    if (scrollMapDirty) rebuildScrollMap();
+    let top = scrollMap.get(id);
+    if (top === undefined) {
+      // 首次渲染后缓存尚未建立（标题元素刚出现），重建一次再尝试
+      rebuildScrollMap();
+      top = scrollMap.get(id);
+    }
+    const container = viewerEl.value;
+    if (top === undefined || !container) return;
+    activeId.value = id;
+    container.scrollTo({ top, behavior: "smooth" });
   }
 
   let scrollTarget: HTMLElement | null = null;
   watch(
-    () => headings.value,
-    () => rebuildMarkers(),
-    { deep: true }
-  );
-
-  watch(
-    () => viewerEl.value,
-    (el, oldEl) => {
-      if (oldEl) oldEl.removeEventListener("scroll", onScroll);
-      if (el) {
+    () => [viewerEl.value, bodyRef.value],
+    (next, prev) => {
+      // 注意：immediate 首次回调时 prev 为 undefined
+      const [el] = next;
+      const [prevEl] = prev ?? [null];
+      if (prevEl && prevEl !== el) prevEl.removeEventListener("scroll", onScroll);
+      if (el && el !== scrollTarget) {
         el.addEventListener("scroll", onScroll, { passive: true });
         scrollTarget = el;
       }
-      rebuildMarkers();
+      scrollMapDirty = true;
+      updateActiveId();
     },
     { immediate: true }
   );
 
-  onUnmounted(() => {
+  watch(
+    () => headings.value,
+    () => {
+      scrollMapDirty = true;
+      updateActiveId();
+    },
+    { deep: true }
+  );
+
+  tryOnUnmounted(() => {
     if (scrollTarget) scrollTarget.removeEventListener("scroll", onScroll);
     if (rafId !== null) cancelAnimationFrame(rafId);
+    if (layoutTimer !== null) clearTimeout(layoutTimer);
   });
 
   return {
-    markers: computed(() => markers.value),
     activeId: computed(() => activeId.value),
-    jumpTo, addBookmark, removeBookmark, getBookmarks, clearBookmarks, rebuildMarkers,
+    jumpTo,
   };
 }

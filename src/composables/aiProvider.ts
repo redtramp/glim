@@ -146,7 +146,7 @@ function truncate(msg: string, max = 200): string {
 
 /** 从响应体提取 error.message(兼容 openai 与 ollama 的差异格式);raw 为响应文本,内部解析 */
 function extractServerError(raw: string): string {
-  let body: unknown = null;
+  let body: unknown;
   try {
     body = JSON.parse(raw);
   } catch {
@@ -269,7 +269,7 @@ export async function chatComplete(
     externalSignal?.removeEventListener("abort", onExternalAbort);
   }
 
-  let raw = "";
+  let raw: string;
   try {
     raw = await res.text();
   } catch (e) {

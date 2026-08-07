@@ -174,9 +174,14 @@ const enUS = {
   toc: {
     title: "Outline",
     empty: "(No headings)",
-    expandAll: "Expand All",
-    collapseAll: "Collapse All",
-    searchPlaceholder: "Search headings…",
+  },
+  image: {
+    zoom: "Zoom",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
+    reset: "Reset",
+    close: "Close",
+    hint: "Wheel to zoom · Drag to pan · Double-click 1x/3x · ESC to close",
   },
   tabs: {
     close: "Close tab",
@@ -289,7 +294,6 @@ const enUS = {
     lineHeightNormal: "Normal",
     lineHeightRelaxed: "Relaxed",
     fullSettings: "Full Settings",
-    noHeadings: "No headings",
     noAnnotations: "No annotations",
     noBookmarks: "No bookmarks",
     clearBookmarks: "Clear all bookmarks",

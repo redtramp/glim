@@ -81,7 +81,7 @@ function shortcutSuffix(id: string): string {
     <div class="filename" :title="currentFile">{{ displayFileName }}</div>
     <div class="toolbar-right">
       <button class="btn" @click="emit('toggle-editor-mode')" :disabled="!hasActiveFile"
-        :title="(isEditing ? t('editor.preview') : t('editor.edit')) + shortcutSuffix('toggle-mode')">
+              :title="(isEditing ? t('editor.preview') : t('editor.edit')) + shortcutSuffix('toggle-mode')">
         {{ isEditing ? t("editor.preview") : t("editor.edit") }}
         <svg v-if="isEditing" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-left: 2px">
           <path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" />
@@ -110,7 +110,7 @@ function shortcutSuffix(id: string): string {
       </button>
       <div class="export-wrap">
         <button class="btn" @click="emit('toggle-export-menu')" :disabled="!canExport || exportBusy"
-          :title="exportBusy ? t('export.exportBusy') : t('export.exportShortcut')">
+                :title="exportBusy ? t('export.exportBusy') : t('export.exportShortcut')">
           {{ t("toolbar.export") + " " }}
           <svg v-if="exportBusy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px">
             <line x1="12" y1="2" x2="12" y2="6" /><line x1="12" y1="18" x2="12" y2="22" />
@@ -130,7 +130,7 @@ function shortcutSuffix(id: string): string {
         </svg>
       </button>
       <button class="btn icon" :class="{ active: hasBookmarkAtCurrentPos }" :disabled="!hasActiveFile || isEditing"
-        :title="t('float.toggleBookmark') + shortcutSuffix('toggle-bookmark')" @click="emit('toggle-bookmark')">
+              :title="t('float.toggleBookmark') + shortcutSuffix('toggle-bookmark')" @click="emit('toggle-bookmark')">
         <svg v-if="hasBookmarkAtCurrentPos" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px">
           <polygon points="19 21 12 17 5 21 5 3 19 3 19 21" />
         </svg>

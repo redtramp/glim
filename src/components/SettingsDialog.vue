@@ -4,6 +4,9 @@ import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
+// 版本检查走 Tauri http 插件而非 webview fetch:打包版 CSP connect-src
+// 为 default-src 'self',webview fetch 会被拦截导致更新检查恒失败。
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { useI18n } from "vue-i18n";
 import { useReadingSettings } from "../composables/useReadingSettings";
 import {
@@ -86,7 +89,7 @@ async function fetchLatestRelease(): Promise<LatestRelease> {
   const controller = new globalThis.AbortController();
   const timer = window.setTimeout(() => controller.abort(), 8000);
   try {
-    const res = await fetch(RELEASE_API, {
+    const res = await tauriFetch(RELEASE_API, {
       headers: { Accept: "application/vnd.github+json" },
       signal: controller.signal,
     });
@@ -277,140 +280,140 @@ async function registerAssociations() {
       <div class="settings-grid">
         <div class="row">
           <label>{{ t("settings.fontSize") }}</label>
-        <input
-          type="range"
-          :value="settings.fontSize"
-          min="10"
-          max="28"
-          step="1"
-          @input="
-            (e) => setFontSize(Number((e.target as HTMLInputElement).value))
-          "
-        />
-        <span class="value">{{ settings.fontSize }}px</span>
-      </div>
-
-      <div class="row">
-        <label>{{ t("settings.editorFontSize") }}</label>
-        <input
-          type="range"
-          :value="settings.editorFontSize"
-          min="12"
-          max="24"
-          step="1"
-          @input="
-            (e) =>
-              setEditorFontSize(Number((e.target as HTMLInputElement).value))
-          "
-        />
-        <span class="value">{{ settings.editorFontSize }}px</span>
-      </div>
-
-      <div class="row">
-        <label>{{ t("settings.lineHeight") }}</label>
-        <input
-          type="range"
-          :value="settings.lineHeight"
-          min="1.3"
-          max="2.2"
-          step="0.05"
-          @input="
-            (e) => setLineHeight(Number((e.target as HTMLInputElement).value))
-          "
-        />
-        <span class="value">{{ settings.lineHeight.toFixed(2) }}</span>
-      </div>
-
-      <div class="row">
-        <label>{{ t("settings.maxWidth") }}</label>
-        <input
-          type="range"
-          :value="settings.maxWidth"
-          min="640"
-          max="1320"
-          step="20"
-          @input="
-            (e) => setMaxWidth(Number((e.target as HTMLInputElement).value))
-          "
-        />
-        <span class="value">{{ settings.maxWidth }}px</span>
-      </div>
-
-      <div class="row">
-        <label>{{ t("settings.fontFamily") }}</label>
-        <div class="font-select-wrapper">
-          <select
-            :value="settings.fontFamily"
-            @change="(e) => setFontFamily((e.target as HTMLSelectElement).value)"
-          >
-            <option
-              v-for="opt in allFontOptions"
-              :key="opt.value"
-              :value="opt.value"
-            >
-              {{ opt.label }}
-            </option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row" v-if="settings.fontFamily === 'custom'">
-        <label>{{ t("settings.fontCustom") }}</label>
-        <input
-          type="text"
-          :value="settings.fontCustom"
-          @input="
-            (e) => setFontCustom((e.target as HTMLInputElement).value)
-          "
-          :placeholder="t('settings.fontCustomPlaceholder')"
-          class="text-input"
-        />
-      </div>
-
-      <div class="row">
-        <label>{{ t("settings.editorFontFamily") }}</label>
-        <div class="font-select-wrapper">
-          <select
-            :value="settings.editorFontFamily"
-            @change="
-              (e) =>
-                setEditorFontFamily((e.target as HTMLSelectElement).value)
+          <input
+            type="range"
+            :value="settings.fontSize"
+            min="10"
+            max="28"
+            step="1"
+            @input="
+              (e) => setFontSize(Number((e.target as HTMLInputElement).value))
             "
-          >
-            <option
-              v-for="opt in allEditorFontOptions"
-              :key="opt.value"
-              :value="opt.value"
-            >
-              {{ opt.label }}
-            </option>
-          </select>
+          />
+          <span class="value">{{ settings.fontSize }}px</span>
         </div>
-      </div>
 
-      <div class="row" v-if="settings.editorFontFamily === 'custom'">
-        <label>{{ t("settings.editorFontCustom") }}</label>
-        <input
-          type="text"
-          :value="settings.editorFontCustom"
-          @input="
-            (e) => setEditorFontCustom((e.target as HTMLInputElement).value)
-          "
-          :placeholder="t('settings.fontCustomPlaceholder')"
-          class="text-input"
-        />
-      </div>
+        <div class="row">
+          <label>{{ t("settings.editorFontSize") }}</label>
+          <input
+            type="range"
+            :value="settings.editorFontSize"
+            min="12"
+            max="24"
+            step="1"
+            @input="
+              (e) =>
+                setEditorFontSize(Number((e.target as HTMLInputElement).value))
+            "
+          />
+          <span class="value">{{ settings.editorFontSize }}px</span>
+        </div>
 
-      <div class="row">
-        <label>{{ t("settings.floatLayout") }}</label>
-        <button
-          class="btn"
-          :class="{ active: floatLayoutEnabled }"
-          @click="$emit('toggle-float-layout')"
-        >
-          {{ floatLayoutEnabled ? t("float.floatLayoutOn") : t("float.floatLayoutOff") }}
-        </button>
-      </div>
+        <div class="row">
+          <label>{{ t("settings.lineHeight") }}</label>
+          <input
+            type="range"
+            :value="settings.lineHeight"
+            min="1.3"
+            max="2.2"
+            step="0.05"
+            @input="
+              (e) => setLineHeight(Number((e.target as HTMLInputElement).value))
+            "
+          />
+          <span class="value">{{ settings.lineHeight.toFixed(2) }}</span>
+        </div>
+
+        <div class="row">
+          <label>{{ t("settings.maxWidth") }}</label>
+          <input
+            type="range"
+            :value="settings.maxWidth"
+            min="640"
+            max="1320"
+            step="20"
+            @input="
+              (e) => setMaxWidth(Number((e.target as HTMLInputElement).value))
+            "
+          />
+          <span class="value">{{ settings.maxWidth }}px</span>
+        </div>
+
+        <div class="row">
+          <label>{{ t("settings.fontFamily") }}</label>
+          <div class="font-select-wrapper">
+            <select
+              :value="settings.fontFamily"
+              @change="(e) => setFontFamily((e.target as HTMLSelectElement).value)"
+            >
+              <option
+                v-for="opt in allFontOptions"
+                :key="opt.value"
+                :value="opt.value"
+              >
+                {{ opt.label }}
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row" v-if="settings.fontFamily === 'custom'">
+          <label>{{ t("settings.fontCustom") }}</label>
+          <input
+            type="text"
+            :value="settings.fontCustom"
+            @input="
+              (e) => setFontCustom((e.target as HTMLInputElement).value)
+            "
+            :placeholder="t('settings.fontCustomPlaceholder')"
+            class="text-input"
+          />
+        </div>
+
+        <div class="row">
+          <label>{{ t("settings.editorFontFamily") }}</label>
+          <div class="font-select-wrapper">
+            <select
+              :value="settings.editorFontFamily"
+              @change="
+                (e) =>
+                  setEditorFontFamily((e.target as HTMLSelectElement).value)
+              "
+            >
+              <option
+                v-for="opt in allEditorFontOptions"
+                :key="opt.value"
+                :value="opt.value"
+              >
+                {{ opt.label }}
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row" v-if="settings.editorFontFamily === 'custom'">
+          <label>{{ t("settings.editorFontCustom") }}</label>
+          <input
+            type="text"
+            :value="settings.editorFontCustom"
+            @input="
+              (e) => setEditorFontCustom((e.target as HTMLInputElement).value)
+            "
+            :placeholder="t('settings.fontCustomPlaceholder')"
+            class="text-input"
+          />
+        </div>
+
+        <div class="row">
+          <label>{{ t("settings.floatLayout") }}</label>
+          <button
+            class="btn"
+            :class="{ active: floatLayoutEnabled }"
+            @click="$emit('toggle-float-layout')"
+          >
+            {{ floatLayoutEnabled ? t("float.floatLayoutOn") : t("float.floatLayoutOff") }}
+          </button>
+        </div>
       </div>
 
       <div class="association">

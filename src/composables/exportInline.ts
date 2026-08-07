@@ -1,4 +1,8 @@
 import { readFile } from "@tauri-apps/plugin-fs";
+// 外部图片抓取必须走 Tauri http 插件(原生 reqwest):webview fetch 受 CSP
+// connect-src(默认回退 default-src 'self')限制,会被打包版应用拦截,与
+// aiProvider 的既有约定一致。
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 const TAURI_ASSET_PATTERNS = [
   /^https?:\/\/asset\.localhost\//i,
@@ -54,6 +58,11 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
+/**
+ * 私网/回环地址防护:图片抓取现经 Tauri http 插件(原生 reqwest)发出,不再受
+ * CSP connect-src 限制,本函数是防止文档中的图片 URL 被用于 SSRF 的主要防线
+ * (capability 仅放行 https://** 与回环地址,不覆盖 10.x/172.16-31.x 等私网段)。
+ */
 function isPrivateUrl(url: string): boolean {
   let u: InstanceType<typeof globalThis.URL>;
   try {
@@ -106,7 +115,7 @@ async function fetchAsDataUrl(url: string): Promise<string | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const r = await fetch(url, { signal: controller.signal });
+    const r = await tauriFetch(url, { signal: controller.signal });
     if (!r.ok) return null;
     const length = Number(r.headers.get("content-length") || 0);
     if (length > MAX_FETCH_BYTES) return null;

@@ -54,7 +54,6 @@ import {
 
 // 悬浮布局（P0）
 import LeftRail from "./components/LeftRail.vue";
-import RightRail from "./components/RightRail.vue";
 import FloatingPanel from "./components/FloatingPanel.vue";
 import HistoryPanel from "./components/HistoryPanel.vue";
 import QuickSettings from "./components/QuickSettings.vue";
@@ -62,7 +61,7 @@ import { useFloatLayout, ACTION_PANEL_IDS } from "./composables/useFloatLayout";
 import { useSectionMarkers } from "./composables/useSectionMarkers";
 import { useBookmarks } from "./composables/useBookmarks";
 import { basename, dirOf } from "./utils/path";
-import TocPanel from "./components/TocPanel.vue";
+import TocCapsule from "./components/TocCapsule.vue";
 import AnnotationList from "./components/AnnotationList.vue";
 import BookmarkPanel from "./components/BookmarkPanel.vue";
 import AiPanelInline from "./components/AiPanelInline.vue";
@@ -78,16 +77,6 @@ const floatLayout = useFloatLayout();
 
 /** 书签管理 */
 const bookmarks = useBookmarks();
-
-/** 当前文件的书签（用于 RightRail 显示） */
-const currentFileBookmarks = computed(() => {
-  if (!currentFile.value) return [];
-  return bookmarks.forFile(currentFile.value).map((b) => ({
-    id: b.id,
-    scrollTop: b.scrollTop,
-    label: b.label,
-  }));
-});
 
 /** 当前滚动位置是否有书签（用于工具栏按钮高亮） */
 const hasBookmarkAtCurrentPos = computed(() => {
@@ -132,8 +121,6 @@ const enableFloatLayout = ref(
   localStorage.getItem("glim-reader-float-layout") !== "0"
 );
 
-/** 右侧大纲浮层搜索激活状态 */
-const tocSearchActive = ref(false);
 function toggleFloatLayout(): void {
   enableFloatLayout.value = !enableFloatLayout.value;
   localStorage.setItem(
@@ -224,7 +211,8 @@ async function onAnnotationCopy(): Promise<void> {
 
 /** 选区工具栏「粘贴」：读取剪贴板文本，以新增批注写入选区 */
 async function onAnnotationPaste(): Promise<void> {
-  let text = "";
+  // catch 分支必然 return，因此 try 成功后 text 必已赋值（TS 控制流分析可确认）
+  let text: string;
   try {
     text = await navigator.clipboard.readText();
   } catch {
@@ -1217,15 +1205,9 @@ function onFloatPanelOpenSearch(path: string, _line: number): void {
   void loadFile(path);
 }
 
-/** 悬浮布局：章节标记点跳转 */
-function onFloatPanelJumpTo(id: string): void {
-  sectionMarkers.jumpTo(id);
-}
-
-/** 悬浮布局：右侧大纲浮层跳转 */
+/** 悬浮布局：胶囊迷你目录跳转 */
 function onFloatPanelTocJump(id: string): void {
   sectionMarkers.jumpTo(id);
-  floatLayout.closeRightPanel();
 }
 
 /** 悬浮布局：批注列表聚焦到指定批注行 */
@@ -1523,44 +1505,44 @@ watch(hasActiveFile, (v) => {
 <template>
   <div class="app">
     <Toolbar v-if="!enableFloatLayout"
-      :is-editing="isEditing"
-      :is-dirty="isDirty"
-      :has-active-file="hasActiveFile"
-      :saving="saving"
-      :can-export="canExport"
-      :export-busy="exportBusy"
-      :show-export-menu="showExportMenu"
-      :current-file="currentFile"
-      :display-file-name="displayFileName"
-      :root-dir="rootDir"
-      :tree-loading="treeLoading"
-      :show-settings="showSettings"
-      :theme="theme"
-      :locale="locale"
-      :has-bookmark-at-current-pos="hasBookmarkAtCurrentPos"
-      :float-layout-enabled="enableFloatLayout"
-      :pandoc-info="pandocInfo"
-      :pdf-engine-path="pdfEnginePath"
-      @create-new-file="createNewFile"
-      @pick-file="pickFile"
-      @pick-folder="pickFolder"
-      @refresh-tree="handleRefresh"
-      @close-folder="closeFolder"
-      @toggle-editor-mode="toggleEditorMode"
-      @save="saveCurrentFile"
-      @save-as="saveAsCurrentFile"
-      @find="isEditing ? editorRef?.openSearch() : find.open()"
-      @toggle-export-menu="toggleExportMenu"
-      @close-export-menu="closeExportMenu"
-      @export-html="exportHtml"
-      @export-docx="exportDocx"
-      @export-pdf="exportPdf"
-      @print="doPrint"
-      @open-settings="showSettings = true"
-      @toggle-bookmark="toggleBookmark"
-      @toggle-theme="toggleTheme"
-      @toggle-locale="toggleLocale"
-      @toggle-float-layout="toggleFloatLayout"
+             :is-editing="isEditing"
+             :is-dirty="isDirty"
+             :has-active-file="hasActiveFile"
+             :saving="saving"
+             :can-export="canExport"
+             :export-busy="exportBusy"
+             :show-export-menu="showExportMenu"
+             :current-file="currentFile"
+             :display-file-name="displayFileName"
+             :root-dir="rootDir"
+             :tree-loading="treeLoading"
+             :show-settings="showSettings"
+             :theme="theme"
+             :locale="locale"
+             :has-bookmark-at-current-pos="hasBookmarkAtCurrentPos"
+             :float-layout-enabled="enableFloatLayout"
+             :pandoc-info="pandocInfo"
+             :pdf-engine-path="pdfEnginePath"
+             @create-new-file="createNewFile"
+             @pick-file="pickFile"
+             @pick-folder="pickFolder"
+             @refresh-tree="handleRefresh"
+             @close-folder="closeFolder"
+             @toggle-editor-mode="toggleEditorMode"
+             @save="saveCurrentFile"
+             @save-as="saveAsCurrentFile"
+             @find="isEditing ? editorRef?.openSearch() : find.open()"
+             @toggle-export-menu="toggleExportMenu"
+             @close-export-menu="closeExportMenu"
+             @export-html="exportHtml"
+             @export-docx="exportDocx"
+             @export-pdf="exportPdf"
+             @print="doPrint"
+             @open-settings="showSettings = true"
+             @toggle-bookmark="toggleBookmark"
+             @toggle-theme="toggleTheme"
+             @toggle-locale="toggleLocale"
+             @toggle-float-layout="toggleFloatLayout"
     />
 
     <TabBar
@@ -1577,8 +1559,6 @@ watch(hasActiveFile, (v) => {
     />
 
     <main class="layout">
-      
-
       <section
         ref="viewerEl"
         class="viewer"
@@ -1654,8 +1634,7 @@ watch(hasActiveFile, (v) => {
           @ai="openAiPanel"
         />
       </section>
-
-      </main>
+    </main>
 
     <!-- 悬浮布局（P0），可由设置开关启用 -->
     <!-- 左栏工具栏与悬浮 Tab 条在编辑模式下也保持显示，确保可以退出编辑状态 -->
@@ -1781,25 +1760,11 @@ watch(hasActiveFile, (v) => {
         </template>
       </FloatingPanel>
 
-      <RightRail
-        :markers="sectionMarkers.markers.value"
+      <TocCapsule
+        :headings="headings"
         :active-id="sectionMarkers.activeId.value"
-        :bookmarks="currentFileBookmarks"
-        @jump="onFloatPanelJumpTo"
-        @expand="floatLayout.toggleRightPanel"
+        @jump="onFloatPanelTocJump"
       />
-
-      <FloatingPanel
-        :visible="floatLayout.state.rightPanelOpen"
-        side="right"
-        :width="280"
-        @close="floatLayout.closeRightPanel"
-      >
-        <div class="float-panel-header">{{ t("toc.title") }}</div>
-        <div class="float-panel-body">
-          <TocPanel :headings="headings" :active-id="sectionMarkers.activeId.value" :search-active="tocSearchActive" @jump="onFloatPanelTocJump" @close-search="tocSearchActive = false" />
-        </div>
-      </FloatingPanel>
     </template>
 
     <FindBar

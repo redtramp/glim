@@ -4,7 +4,7 @@ import { ref, computed, watch, onUnmounted } from "vue";
 const props = withDefaults(
   defineProps<{
     visible: boolean;
-    side?: "left" | "right" | "bottom";
+    side?: "left" | "bottom";
     width?: number;
     autoHideDelay?: number;
     zIndex?: number;
@@ -18,7 +18,7 @@ const showContent = ref(props.visible);
 
 const sideClass = computed(() => props.side);
 const panelStyle = computed(() =>
-  props.side === "left" || props.side === "right"
+  props.side === "left"
     ? { width: `${props.width}px`, zIndex: props.zIndex }
     : { zIndex: props.zIndex }
 );
@@ -75,7 +75,7 @@ onUnmounted(() => {
     :style="panelStyle"
     role="dialog"
     :aria-modal="visible"
-    :aria-label="side === 'right' ? '大纲面板' : '功能面板'"
+    aria-label="功能面板"
     @mouseenter="clearAutoHide"
     @mouseleave="scheduleAutoHide"
     @click="stopPropagation"
@@ -112,13 +112,6 @@ onUnmounted(() => {
   transform: translateX(-100%);
 }
 
-.floating-panel.right {
-  right: 0;
-  transform: translateX(100%);
-  border-right: none;
-  border-left: 0.5px solid rgba(0, 0, 0, 0.06);
-}
-
 .floating-panel.entering {
   transform: translateX(0);
   opacity: 1;
@@ -129,10 +122,6 @@ onUnmounted(() => {
   transform: translateX(-100%);
   opacity: 0;
   transition: transform 200ms ease-in, opacity 150ms ease;
-}
-
-.floating-panel.right.leaving {
-  transform: translateX(100%);
 }
 
 .floating-panel.bottom {
@@ -185,8 +174,7 @@ onUnmounted(() => {
 }
 
 @media (max-width: 767px) {
-  .floating-panel.left,
-  .floating-panel.right {
+  .floating-panel.left {
     width: 100vw !important;
     max-width: 100vw !important;
   }
@@ -198,11 +186,6 @@ onUnmounted(() => {
   -webkit-backdrop-filter: blur(16px) saturate(1.1);
   border-right-color: rgba(255, 255, 255, 0.06);
   box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
-}
-
-:root[data-theme="dark"] .floating-panel.right {
-  border-right: none;
-  border-left: 0.5px solid rgba(255, 255, 255, 0.06);
 }
 
 :root[data-theme="dark"] .floating-panel.bottom {

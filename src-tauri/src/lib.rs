@@ -4,6 +4,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
+// sccache 缓存键只追踪 crate 源码与 dep-info 中的文件, 而 `generate_context!`
+// 宏在编译期直接读取 tauri.conf.json —— 该文件不在 dep-info 中, 导致修改配置
+// (如 CSP) 后 sccache 仍返回旧宏展开的陈旧产物(旧 CSP 被固化进二进制)。
+// 通过 include_str! 将配置文件纳入 dep-info, 配置一变, 缓存键随之失效。
+const _TAURI_CONFIG_SENTINEL: &str = include_str!("../tauri.conf.json");
+
 use notify_debouncer_mini::notify::RecursiveMode;
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use serde::Serialize;

@@ -2,15 +2,14 @@
  * useFloatLayout 测试
  *
  * 测试目标:
- * - 初始状态: activeLeftPanel = null, rightPanelOpen = false
+ * - 初始状态: activeLeftPanel = null
  * - openPanel: 打开/切换面板
  * - closePanel: 关闭面板
- * - toggleRightPanel: 切换右侧面板
  * - leftPanelLoaded: 记录已加载面板
  * - bindGlobalClick / unbindGlobalClick: 全局点击监听
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { useFloatLayout, LEFT_PANEL_META } from "./useFloatLayout";
 
 describe("useFloatLayout", () => {
@@ -23,10 +22,6 @@ describe("useFloatLayout", () => {
   describe("初始状态", () => {
     it("activeLeftPanel 初始为 null", () => {
       expect(floatLayout.state.activeLeftPanel).toBeNull();
-    });
-
-    it("rightPanelOpen 初始为 false", () => {
-      expect(floatLayout.state.rightPanelOpen).toBe(false);
     });
 
     it("leftPanelLoaded 初始为空 Set", () => {
@@ -100,71 +95,37 @@ describe("useFloatLayout", () => {
     });
   });
 
-  describe("toggleRightPanel", () => {
-    it("切换右侧面板为 true", () => {
-      floatLayout.toggleRightPanel();
-      expect(floatLayout.state.rightPanelOpen).toBe(true);
-    });
-
-    it("再次切换回 false", () => {
-      floatLayout.toggleRightPanel();
-      floatLayout.toggleRightPanel();
-      expect(floatLayout.state.rightPanelOpen).toBe(false);
-    });
-  });
-
-  describe("closeRightPanel", () => {
-    it("关闭右侧面板", () => {
-      floatLayout.toggleRightPanel();
-      floatLayout.closeRightPanel();
-      expect(floatLayout.state.rightPanelOpen).toBe(false);
-    });
-  });
-
-  describe("closeAll", () => {
-    it("关闭所有面板", () => {
-      floatLayout.openPanel("search");
-      floatLayout.toggleRightPanel();
-      floatLayout.closeAll();
-      expect(floatLayout.state.activeLeftPanel).toBeNull();
-      expect(floatLayout.state.rightPanelOpen).toBe(false);
-    });
-  });
-
   describe("bindGlobalClick / unbindGlobalClick", () => {
-    let clickHandler: (e: Event) => void;
-
-    beforeEach(() => {
-      clickHandler = vi.fn();
-      document.addEventListener("click", clickHandler as EventListener);
-    });
-
     afterEach(() => {
-      document.removeEventListener("click", clickHandler);
       floatLayout.unbindGlobalClick();
     });
 
-    it("bindGlobalClick 注册点击监听", () => {
+    it("bindGlobalClick 后点击外部区域关闭面板", () => {
+      floatLayout.openPanel("filetree");
       floatLayout.bindGlobalClick();
-      // 点击 body 外部区域
       document.body.click();
-      // 外部点击监听器应被调用（通过事件冒泡）
-      expect(clickHandler).toHaveBeenCalled();
+      expect(floatLayout.state.activeLeftPanel).toBeNull();
     });
 
-    it("unbindGlobalClick 移除点击监听", () => {
+    it("unbindGlobalClick 后点击外部区域不再关闭面板", () => {
+      floatLayout.openPanel("filetree");
       floatLayout.bindGlobalClick();
       floatLayout.unbindGlobalClick();
       document.body.click();
-      // 点击监听已移除，但 clickHandler 仍然会被调用（它是独立注册的）
-      // 这个测试验证 unbindGlobalClick 不会抛异常
-      expect(true).toBe(true);
+      expect(floatLayout.state.activeLeftPanel).toBe("filetree");
     });
 
-    it("连续 bind 两次不重复注册", () => {
+    it("连续 bind 两次只注册一个监听", () => {
+      floatLayout.openPanel("filetree");
       floatLayout.bindGlobalClick();
-      floatLayout.bindGlobalClick(); // 第二次调用应无效果
-      expect(true).toBe(true); // 不抛异常即通过
+      floatLayout.bindGlobalClick();
+      document.body.click();
+      // 一次点击即关闭，说明监听有效；unbind 一次后点击不再生效，说明只注册了一个
+      expect(floatLayout.state.activeLeftPanel).toBeNull();
+      floatLayout.unbindGlobalClick();
+      floatLayout.openPanel("search");
+      document.body.click();
+      expect(floatLayout.state.activeLeftPanel).toBe("search");
     });
   });
 });

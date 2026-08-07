@@ -170,9 +170,14 @@ const zhCN = {
   toc: {
     title: "大纲",
     empty: "（无标题）",
-    expandAll: "全部展开",
-    collapseAll: "全部折叠",
-    searchPlaceholder: "搜索标题…",
+  },
+  image: {
+    zoom: "放大查看",
+    zoomIn: "放大",
+    zoomOut: "缩小",
+    reset: "重置",
+    close: "关闭",
+    hint: "滚轮缩放 · 拖拽平移 · 双击切换 1x/3x · ESC 关闭",
   },
   tabs: {
     close: "关闭标签",
@@ -283,7 +288,6 @@ const zhCN = {
     lineHeightNormal: "标准",
     lineHeightRelaxed: "宽松",
     fullSettings: "完整设置",
-    noHeadings: "文档无标题",
     noAnnotations: "暂无批注",
     noBookmarks: "暂无书签",
     clearBookmarks: "清除所有书签",

@@ -46,12 +46,11 @@ export const ACTION_PANEL_IDS: ReadonlySet<LeftPanelID> = new Set([
 ]);
 
 const CLOSE_EXEMPT_SELECTORS =
-  ".floating-panel, .left-rail, .right-rail, .menu-overlay, .context-menu, .context-menu-overlay";
+  ".floating-panel, .left-rail, .menu-overlay, .context-menu, .context-menu-overlay";
 
 export function useFloatLayout() {
   const state = reactive({
     activeLeftPanel: null as LeftPanelID | null,
-    rightPanelOpen: false,
     leftPanelLoaded: new Set<LeftPanelID>(),
   });
 
@@ -66,23 +65,10 @@ export function useFloatLayout() {
     state.activeLeftPanel = null;
   }
 
-  function toggleRightPanel(): void {
-    state.rightPanelOpen = !state.rightPanelOpen;
-  }
-
-  function closeRightPanel(): void {
-    state.rightPanelOpen = false;
-  }
-
-  function closeAll(): void {
-    closePanel();
-    closeRightPanel();
-  }
-
   function onOutsideClick(e: MouseEvent): void {
     const target = e.target as HTMLElement;
     if (target.closest(CLOSE_EXEMPT_SELECTORS)) return;
-    closeAll();
+    closePanel();
   }
 
   function bindGlobalClick(): void {
@@ -101,9 +87,6 @@ export function useFloatLayout() {
     state,
     openPanel,
     closePanel,
-    toggleRightPanel,
-    closeRightPanel,
-    closeAll,
     bindGlobalClick,
     unbindGlobalClick,
   };

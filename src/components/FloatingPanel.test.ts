@@ -40,15 +40,6 @@ describe("FloatingPanel", () => {
     expect(panel.classes()).toContain("entering");
   });
 
-  it("side='right' 时浮层从右侧滑入", async () => {
-    const wrapper = mount(FloatingPanel, {
-      props: { visible: true, side: "right" },
-    });
-    await new Promise((r) => setTimeout(r, 50));
-    const panel = wrapper.find(".floating-panel");
-    expect(panel.classes()).toContain("right");
-  });
-
   it("side='bottom' 时浮层从底部滑入", async () => {
     const wrapper = mount(FloatingPanel, {
       props: { visible: true, side: "bottom" },
@@ -66,7 +57,7 @@ describe("FloatingPanel", () => {
     expect(wrapper.find(".fp-handle").exists()).toBe(true);
   });
 
-  it("左侧/右侧浮层不显示拖拽手柄", async () => {
+  it("左侧浮层不显示拖拽手柄", async () => {
     const wrapper = mount(FloatingPanel, {
       props: { visible: true, side: "left" },
     });
