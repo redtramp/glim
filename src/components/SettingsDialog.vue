@@ -167,6 +167,9 @@ const emit = defineEmits<{
 }>();
 
 const showShortcuts = ref(false);
+/** 设置面板 Tab:阅读 / AI / 其他 */
+type SettingsTab = "reading" | "ai" | "other";
+const activeTab = ref<SettingsTab>("reading");
 watch(
   () => props.visible,
   async (v) => {
@@ -208,8 +211,9 @@ watch(
   }
 );
 function patchAiSettings(patch: Partial<typeof aiSettings.value>) {
-  aiSettings.value = { ...aiSettings.value, ...patch };
+  // 写入后回读:编辑配置会触发 setAiSettings 的自动启用,回读保证复选框同步
   setAiSettings(patch);
+  aiSettings.value = getAiSettings();
 }
 function onAiProviderChange(e: Event) {
   patchAiSettings({ provider: (e.target as HTMLSelectElement).value as AiProvider });
@@ -218,6 +222,52 @@ function restoreAiSettings() {
   resetAiSettings();
   aiSettings.value = getAiSettings();
 }
+
+/** baseUrl 输入占位:按所选服务类型给出常见地址示例 */
+const baseUrlPlaceholder = computed(() => {
+  switch (aiSettings.value.provider) {
+    case "anthropic":
+      return "https://api.anthropic.com";
+    case "azure":
+      return "https://your-resource.openai.azure.com";
+    case "gemini":
+      return "https://generativelanguage.googleapis.com";
+    case "openai":
+      return "https://api.openai.com/v1";
+    default:
+      return "http://localhost:11434";
+  }
+});
+
+/** model 输入占位:按所选服务类型给出常见模型示例 */
+const modelPlaceholder = computed(() => {
+  switch (aiSettings.value.provider) {
+    case "anthropic":
+      return "claude-3-5-sonnet-latest";
+    case "gemini":
+      return "gemini-2.5-flash";
+    case "openai":
+      return "gpt-4o-mini";
+    default:
+      return "qwen2.5";
+  }
+});
+
+/** 端点(服务地址)填写说明:紧贴输入框,按所选服务类型给出示例与拼接规则 */
+const baseUrlHint = computed(() => {
+  switch (aiSettings.value.provider) {
+    case "anthropic":
+      return t("settings.aiBaseUrlAnthropicHint");
+    case "azure":
+      return t("settings.aiBaseUrlAzureHint");
+    case "gemini":
+      return t("settings.aiBaseUrlGeminiHint");
+    case "openai":
+      return t("settings.aiBaseUrlOpenaiHint");
+    default:
+      return t("settings.aiBaseUrlOllamaHint");
+  }
+});
 
 const systemFonts = ref<{ name: string }[]>([]);
 
@@ -277,317 +327,370 @@ async function registerAssociations() {
         <button class="close" @click="emit('close')">✕</button>
       </div>
 
-      <div class="settings-grid">
-        <div class="row">
-          <label>{{ t("settings.fontSize") }}</label>
-          <input
-            type="range"
-            :value="settings.fontSize"
-            min="10"
-            max="28"
-            step="1"
-            @input="
-              (e) => setFontSize(Number((e.target as HTMLInputElement).value))
-            "
-          />
-          <span class="value">{{ settings.fontSize }}px</span>
-        </div>
+      <!-- 设置分类 Tab:阅读 / AI / 其他 -->
+      <div class="settings-tabs">
+        <button
+          class="settings-tab"
+          :class="{ active: activeTab === 'reading' }"
+          @click="activeTab = 'reading'"
+        >
+          {{ t("settings.tabReading") }}
+        </button>
+        <button
+          class="settings-tab"
+          :class="{ active: activeTab === 'ai' }"
+          @click="activeTab = 'ai'"
+        >
+          {{ t("settings.tabAI") }}
+        </button>
+        <button
+          class="settings-tab"
+          :class="{ active: activeTab === 'other' }"
+          @click="activeTab = 'other'"
+        >
+          {{ t("settings.tabOther") }}
+        </button>
+      </div>
 
-        <div class="row">
-          <label>{{ t("settings.editorFontSize") }}</label>
-          <input
-            type="range"
-            :value="settings.editorFontSize"
-            min="12"
-            max="24"
-            step="1"
-            @input="
-              (e) =>
-                setEditorFontSize(Number((e.target as HTMLInputElement).value))
-            "
-          />
-          <span class="value">{{ settings.editorFontSize }}px</span>
-        </div>
-
-        <div class="row">
-          <label>{{ t("settings.lineHeight") }}</label>
-          <input
-            type="range"
-            :value="settings.lineHeight"
-            min="1.3"
-            max="2.2"
-            step="0.05"
-            @input="
-              (e) => setLineHeight(Number((e.target as HTMLInputElement).value))
-            "
-          />
-          <span class="value">{{ settings.lineHeight.toFixed(2) }}</span>
-        </div>
-
-        <div class="row">
-          <label>{{ t("settings.maxWidth") }}</label>
-          <input
-            type="range"
-            :value="settings.maxWidth"
-            min="640"
-            max="1320"
-            step="20"
-            @input="
-              (e) => setMaxWidth(Number((e.target as HTMLInputElement).value))
-            "
-          />
-          <span class="value">{{ settings.maxWidth }}px</span>
-        </div>
-
-        <div class="row">
-          <label>{{ t("settings.fontFamily") }}</label>
-          <div class="font-select-wrapper">
-            <select
-              :value="settings.fontFamily"
-              @change="(e) => setFontFamily((e.target as HTMLSelectElement).value)"
-            >
-              <option
-                v-for="opt in allFontOptions"
-                :key="opt.value"
-                :value="opt.value"
-              >
-                {{ opt.label }}
-              </option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row" v-if="settings.fontFamily === 'custom'">
-          <label>{{ t("settings.fontCustom") }}</label>
-          <input
-            type="text"
-            :value="settings.fontCustom"
-            @input="
-              (e) => setFontCustom((e.target as HTMLInputElement).value)
-            "
-            :placeholder="t('settings.fontCustomPlaceholder')"
-            class="text-input"
-          />
-        </div>
-
-        <div class="row">
-          <label>{{ t("settings.editorFontFamily") }}</label>
-          <div class="font-select-wrapper">
-            <select
-              :value="settings.editorFontFamily"
-              @change="
-                (e) =>
-                  setEditorFontFamily((e.target as HTMLSelectElement).value)
+      <!-- ════ 阅读设置 ════ -->
+      <div v-show="activeTab === 'reading'" class="settings-tab-panel">
+        <div class="settings-grid">
+          <div class="row">
+            <label>{{ t("settings.fontSize") }}</label>
+            <input
+              type="range"
+              :value="settings.fontSize"
+              min="10"
+              max="28"
+              step="1"
+              @input="
+                (e) => setFontSize(Number((e.target as HTMLInputElement).value))
               "
-            >
-              <option
-                v-for="opt in allEditorFontOptions"
-                :key="opt.value"
-                :value="opt.value"
+            />
+            <span class="value">{{ settings.fontSize }}px</span>
+          </div>
+
+          <div class="row">
+            <label>{{ t("settings.editorFontSize") }}</label>
+            <input
+              type="range"
+              :value="settings.editorFontSize"
+              min="12"
+              max="24"
+              step="1"
+              @input="
+                (e) =>
+                  setEditorFontSize(Number((e.target as HTMLInputElement).value))
+              "
+            />
+            <span class="value">{{ settings.editorFontSize }}px</span>
+          </div>
+
+          <div class="row">
+            <label>{{ t("settings.lineHeight") }}</label>
+            <input
+              type="range"
+              :value="settings.lineHeight"
+              min="1.3"
+              max="2.2"
+              step="0.05"
+              @input="
+                (e) => setLineHeight(Number((e.target as HTMLInputElement).value))
+              "
+            />
+            <span class="value">{{ settings.lineHeight.toFixed(2) }}</span>
+          </div>
+
+          <div class="row">
+            <label>{{ t("settings.maxWidth") }}</label>
+            <input
+              type="range"
+              :value="settings.maxWidth"
+              min="640"
+              max="1320"
+              step="20"
+              @input="
+                (e) => setMaxWidth(Number((e.target as HTMLInputElement).value))
+              "
+            />
+            <span class="value">{{ settings.maxWidth }}px</span>
+          </div>
+
+          <div class="row">
+            <label>{{ t("settings.fontFamily") }}</label>
+            <div class="font-select-wrapper">
+              <select
+                :value="settings.fontFamily"
+                @change="(e) => setFontFamily((e.target as HTMLSelectElement).value)"
               >
-                {{ opt.label }}
-              </option>
-            </select>
+                <option
+                  v-for="opt in allFontOptions"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
+                  {{ opt.label }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row" v-if="settings.fontFamily === 'custom'">
+            <label>{{ t("settings.fontCustom") }}</label>
+            <input
+              type="text"
+              :value="settings.fontCustom"
+              @input="
+                (e) => setFontCustom((e.target as HTMLInputElement).value)
+              "
+              :placeholder="t('settings.fontCustomPlaceholder')"
+              class="text-input"
+            />
+          </div>
+
+          <div class="row">
+            <label>{{ t("settings.editorFontFamily") }}</label>
+            <div class="font-select-wrapper">
+              <select
+                :value="settings.editorFontFamily"
+                @change="
+                  (e) =>
+                    setEditorFontFamily((e.target as HTMLSelectElement).value)
+                "
+              >
+                <option
+                  v-for="opt in allEditorFontOptions"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
+                  {{ opt.label }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row" v-if="settings.editorFontFamily === 'custom'">
+            <label>{{ t("settings.editorFontCustom") }}</label>
+            <input
+              type="text"
+              :value="settings.editorFontCustom"
+              @input="
+                (e) => setEditorFontCustom((e.target as HTMLInputElement).value)
+              "
+              :placeholder="t('settings.fontCustomPlaceholder')"
+              class="text-input"
+            />
+          </div>
+
+          <div class="row">
+            <label>{{ t("settings.floatLayout") }}</label>
+            <button
+              class="btn"
+              :class="{ active: floatLayoutEnabled }"
+              @click="$emit('toggle-float-layout')"
+            >
+              {{ floatLayoutEnabled ? t("float.floatLayoutOn") : t("float.floatLayoutOff") }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ 其他设置 ════ -->
+      <div v-show="activeTab === 'other'" class="settings-tab-panel">
+        <div class="association">
+          <div>
+            <div class="association-title">{{ t("settings.updateCheck") }}</div>
+            <div class="association-hint">
+              {{
+                t("settings.currentVersion", { version: currentVersion || "-" })
+              }}
+            </div>
+            <div
+              v-if="updateMessage"
+              class="association-status"
+              :class="updateStatusClass"
+            >
+              {{ updateMessage }}
+            </div>
+          </div>
+          <div class="update-actions">
+            <button class="btn" :disabled="updateBusy" @click="checkForUpdates">
+              {{
+                updateBusy
+                  ? t("settings.checkingUpdate")
+                  : t("settings.checkUpdate")
+              }}
+            </button>
+            <button
+              v-if="updateStatus === 'available' || updateStatus === 'error'"
+              class="btn primary"
+              @click="openReleasePage"
+            >
+              {{ t("settings.openReleasePage") }}
+            </button>
           </div>
         </div>
 
-        <div class="row" v-if="settings.editorFontFamily === 'custom'">
-          <label>{{ t("settings.editorFontCustom") }}</label>
-          <input
-            type="text"
-            :value="settings.editorFontCustom"
-            @input="
-              (e) => setEditorFontCustom((e.target as HTMLInputElement).value)
-            "
-            :placeholder="t('settings.fontCustomPlaceholder')"
-            class="text-input"
-          />
+        <div class="association">
+          <div>
+            <div class="association-title">
+              {{ t("settings.pandocTemplate") }}
+            </div>
+            <div class="association-hint">
+              <span
+                v-if="pandocRefDoc"
+                class="ref-doc-path"
+                :title="pandocRefDoc"
+              >
+                {{ pandocRefDoc }}
+              </span>
+              <span v-else>{{ t("settings.pandocTemplateHint") }}</span>
+            </div>
+          </div>
+          <div class="update-actions">
+            <button class="btn" @click="pickPandocRefDoc">
+              {{ t("settings.chooseTemplate") }}
+            </button>
+            <button v-if="pandocRefDoc" class="btn" @click="clearPandocRefDoc">
+              {{ t("settings.clearTemplate") }}
+            </button>
+          </div>
         </div>
 
-        <div class="row">
-          <label>{{ t("settings.floatLayout") }}</label>
+        <div class="association">
+          <div>
+            <div class="association-title">
+              {{ t("settings.fileAssociation") }}
+            </div>
+            <div class="association-hint">
+              {{ t("settings.fileAssociationHint") }}
+            </div>
+            <div
+              v-if="associationMessage"
+              class="association-status"
+              :class="associationStatus"
+            >
+              {{ associationMessage }}
+            </div>
+          </div>
           <button
             class="btn"
-            :class="{ active: floatLayoutEnabled }"
-            @click="$emit('toggle-float-layout')"
+            :disabled="associationBusy"
+            @click="registerAssociations"
           >
-            {{ floatLayoutEnabled ? t("float.floatLayoutOn") : t("float.floatLayoutOff") }}
-          </button>
-        </div>
-      </div>
-
-      <div class="association">
-        <div>
-          <div class="association-title">{{ t("settings.updateCheck") }}</div>
-          <div class="association-hint">
             {{
-              t("settings.currentVersion", { version: currentVersion || "-" })
-            }}
-          </div>
-          <div
-            v-if="updateMessage"
-            class="association-status"
-            :class="updateStatusClass"
-          >
-            {{ updateMessage }}
-          </div>
-        </div>
-        <div class="update-actions">
-          <button class="btn" :disabled="updateBusy" @click="checkForUpdates">
-            {{
-              updateBusy
-                ? t("settings.checkingUpdate")
-                : t("settings.checkUpdate")
+              associationBusy
+                ? t("settings.registering")
+                : t("settings.registerAssociation")
             }}
           </button>
-          <button
-            v-if="updateStatus === 'available' || updateStatus === 'error'"
-            class="btn primary"
-            @click="openReleasePage"
-          >
-            {{ t("settings.openReleasePage") }}
+        </div>
+
+        <div class="association">
+          <div>
+            <div class="association-title">{{ t("shortcuts.title") }}</div>
+            <div class="association-hint">{{ t("shortcuts.hint") }}</div>
+          </div>
+          <button class="btn" @click="showShortcuts = true">
+            {{ t("shortcuts.view") }}
           </button>
         </div>
       </div>
 
-      <div class="association">
-        <div>
-          <div class="association-title">
-            {{ t("settings.pandocTemplate") }}
+      <!-- ════ AI 设置 ════ -->
+      <div v-show="activeTab === 'ai'" class="settings-tab-panel">
+        <div class="association column">
+          <div>
+            <div class="association-title">{{ t("settings.aiTemplate") }}</div>
+            <div class="association-hint">{{ t("settings.aiTemplateHint") }}</div>
           </div>
-          <div class="association-hint">
-            <span
-              v-if="pandocRefDoc"
-              class="ref-doc-path"
-              :title="pandocRefDoc"
-            >
-              {{ pandocRefDoc }}
-            </span>
-            <span v-else>{{ t("settings.pandocTemplateHint") }}</span>
-          </div>
-        </div>
-        <div class="update-actions">
-          <button class="btn" @click="pickPandocRefDoc">
-            {{ t("settings.chooseTemplate") }}
-          </button>
-          <button v-if="pandocRefDoc" class="btn" @click="clearPandocRefDoc">
-            {{ t("settings.clearTemplate") }}
-          </button>
-        </div>
-      </div>
-
-      <div class="association">
-        <div>
-          <div class="association-title">
-            {{ t("settings.fileAssociation") }}
-          </div>
-          <div class="association-hint">
-            {{ t("settings.fileAssociationHint") }}
-          </div>
-          <div
-            v-if="associationMessage"
-            class="association-status"
-            :class="associationStatus"
-          >
-            {{ associationMessage }}
+          <textarea
+            class="ai-template-input"
+            :value="aiTemplate"
+            rows="6"
+            @input="onAiTemplateInput"
+          ></textarea>
+          <div class="update-actions">
+            <button class="btn" @click="restoreAiTemplate">
+              {{ t("settings.restoreDefaultTemplate") }}
+            </button>
           </div>
         </div>
-        <button
-          class="btn"
-          :disabled="associationBusy"
-          @click="registerAssociations"
-        >
-          {{
-            associationBusy
-              ? t("settings.registering")
-              : t("settings.registerAssociation")
-          }}
-        </button>
-      </div>
 
-      <div class="association">
-        <div>
-          <div class="association-title">{{ t("shortcuts.title") }}</div>
-          <div class="association-hint">{{ t("shortcuts.hint") }}</div>
-        </div>
-        <button class="btn" @click="showShortcuts = true">
-          {{ t("shortcuts.view") }}
-        </button>
-      </div>
+        <div class="association column ai-settings">
+          <div>
+            <div class="association-title">{{ t("settings.aiPanel") }}</div>
+            <div class="association-hint">{{ t("settings.aiPanelHint") }}</div>
+          </div>
 
-      <div class="association column">
-        <div>
-          <div class="association-title">{{ t("settings.aiTemplate") }}</div>
-          <div class="association-hint">{{ t("settings.aiTemplateHint") }}</div>
-        </div>
-        <textarea
-          class="ai-template-input"
-          :value="aiTemplate"
-          rows="6"
-          @input="onAiTemplateInput"
-        ></textarea>
-        <div class="update-actions">
-          <button class="btn" @click="restoreAiTemplate">
-            {{ t("settings.restoreDefaultTemplate") }}
-          </button>
-        </div>
-      </div>
+          <!-- AI 配置:方案 A —— 统一列宽表单(左标签固定列右对齐,输入框等宽等高,提示收底部) -->
+          <div class="ai-grid">
+            <label class="ai-row ai-row-full">
+              <input
+                type="checkbox"
+                :checked="aiSettings.enabled"
+                @change="patchAiSettings({ enabled: (($event.target as HTMLInputElement).checked) })"
+              />
+              <span>{{ t("settings.aiEnabled") }}</span>
+            </label>
 
-      <div class="association column ai-settings">
-        <div>
-          <div class="association-title">{{ t("settings.aiPanel") }}</div>
-          <div class="association-hint">{{ t("settings.aiPanelHint") }}</div>
-        </div>
+            <label class="ai-row">
+              <span>{{ t("settings.aiProvider") }}</span>
+              <select :value="aiSettings.provider" @change="onAiProviderChange">
+                <option value="ollama">{{ t("settings.aiProviderOllama") }}</option>
+                <option value="openai">{{ t("settings.aiProviderOpenai") }}</option>
+                <option value="anthropic">{{ t("settings.aiProviderAnthropic") }}</option>
+                <option value="azure">{{ t("settings.aiProviderAzure") }}</option>
+                <option value="gemini">{{ t("settings.aiProviderGemini") }}</option>
+              </select>
+            </label>
 
-        <label class="ai-row">
-          <span>{{ t("settings.aiEnabled") }}</span>
-          <input
-            type="checkbox"
-            :checked="aiSettings.enabled"
-            @change="patchAiSettings({ enabled: (($event.target as HTMLInputElement).checked) })"
-          />
-        </label>
+            <label class="ai-row">
+              <span>{{ t("settings.aiBaseUrl") }}</span>
+              <input
+                :value="aiSettings.baseUrl"
+                :placeholder="baseUrlPlaceholder"
+                @input="patchAiSettings({ baseUrl: ($event.target as HTMLInputElement).value })"
+              />
+            </label>
 
-        <label class="ai-row">
-          <span>{{ t("settings.aiProvider") }}</span>
-          <select :value="aiSettings.provider" @change="onAiProviderChange">
-            <option value="ollama">{{ t("settings.aiProviderOllama") }}</option>
-            <option value="openai">{{ t("settings.aiProviderOpenai") }}</option>
-          </select>
-        </label>
+            <label v-if="aiSettings.provider !== 'ollama'" class="ai-row">
+              <span>{{ t("settings.aiApiKey") }}</span>
+              <input
+                type="password"
+                :value="aiSettings.apiKey"
+                :placeholder="t('settings.aiApiKeyPlaceholder')"
+                @input="patchAiSettings({ apiKey: ($event.target as HTMLInputElement).value })"
+              />
+            </label>
 
-        <label class="ai-row">
-          <span>{{ t("settings.aiBaseUrl") }}</span>
-          <input
-            :value="aiSettings.baseUrl"
-            placeholder="http://localhost:11434"
-            @input="patchAiSettings({ baseUrl: ($event.target as HTMLInputElement).value })"
-          />
-        </label>
+            <!-- Azure 需部署名称(拼入 URL 路径);Ollama 无需 model,Azure 用 deployment 标识模型 -->
+            <label v-if="aiSettings.provider === 'azure'" class="ai-row">
+              <span>{{ t("settings.aiDeployment") }}</span>
+              <input
+                :value="aiSettings.deployment"
+                :placeholder="t('settings.aiDeploymentPlaceholder')"
+                @input="patchAiSettings({ deployment: ($event.target as HTMLInputElement).value })"
+              />
+            </label>
 
-        <label v-if="aiSettings.provider === 'openai'" class="ai-row">
-          <span>{{ t("settings.aiApiKey") }}</span>
-          <input
-            type="password"
-            :value="aiSettings.apiKey"
-            :placeholder="t('settings.aiApiKeyPlaceholder')"
-            @input="patchAiSettings({ apiKey: ($event.target as HTMLInputElement).value })"
-          />
-        </label>
+            <label v-if="aiSettings.provider !== 'ollama' && aiSettings.provider !== 'azure'" class="ai-row">
+              <span>{{ t("settings.aiModel") }}</span>
+              <input
+                :value="aiSettings.model"
+                :placeholder="modelPlaceholder"
+                @input="patchAiSettings({ model: ($event.target as HTMLInputElement).value })"
+              />
+            </label>
 
-        <label class="ai-row">
-          <span>{{ t("settings.aiModel") }}</span>
-          <input
-            :value="aiSettings.model"
-            :placeholder="aiSettings.provider === 'ollama' ? 'qwen2.5' : 'gpt-4o-mini'"
-            @input="patchAiSettings({ model: ($event.target as HTMLInputElement).value })"
-          />
-        </label>
+            <!-- 端点填写说明:统一收在字段底部,占满两列,按所选服务类型给出示例与拼接规则 -->
+            <div class="ai-hint">{{ baseUrlHint }}</div>
+          </div>
 
-        <div class="update-actions">
-          <button class="btn" @click="restoreAiSettings">
-            {{ t("settings.restoreAiSettings") }}
-          </button>
+          <div class="update-actions">
+            <button class="btn" @click="restoreAiSettings">
+              {{ t("settings.restoreAiSettings") }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -629,7 +732,7 @@ async function registerAssociations() {
 .title {
   font-size: 15px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   display: flex;
   justify-content: space-between;
 }
@@ -640,13 +743,52 @@ async function registerAssociations() {
   cursor: pointer;
   font-size: 14px;
 }
+/* 设置分类 Tab */
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.settings-tab {
+  padding: 7px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.settings-tab:hover {
+  color: var(--fg);
+}
+.settings-tab.active {
+  color: var(--link);
+  font-weight: 600;
+  border-bottom-color: var(--link);
+}
+.settings-tab-panel {
+  animation: panel-in 0.16s ease;
+}
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 .row {
   display: grid;
   grid-template-columns: 80px 1fr 60px;
   align-items: center;
   gap: 12px;
   margin: 10px 0;
-  font-size: 13px;
+  font-size: 12px;
 }
 /* 阅读/编辑器设置两列排布，降低对话框总高度（窄视口回退单列） */
 .settings-grid {
@@ -674,7 +816,7 @@ select {
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 12px;
   outline: none;
   max-height: 200px;
 }
@@ -690,7 +832,7 @@ select {
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 12px;
   outline: none;
   appearance: none;
   -webkit-appearance: none;
@@ -705,7 +847,7 @@ select {
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 12px;
   outline: none;
 }
 .text-input:focus {
@@ -731,7 +873,7 @@ select {
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-family: var(--editor-font-family, monospace);
   line-height: 1.6;
   outline: none;
@@ -799,35 +941,73 @@ select {
   color: #fff;
   border-color: var(--link);
 }
+.ai-grid {
+  margin-top: 4px;
+}
+/* 每个字段独立一行:label 自身为两列 grid(标签固定列右对齐,控件占满剩余宽度),
+   不使用 display:contents 以避免 webview 兼容问题;显式 grid-column:2
+   覆盖全局 select 规则的 grid-column:2/span 2,防止错位。 */
 .ai-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 108px 1fr;
+  column-gap: 14px;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 10px;
   font-size: 12px;
+  margin-bottom: 12px;
+}
+.ai-row:last-child {
+  margin-bottom: 0;
 }
 .ai-row > span {
-  flex: 0 0 auto;
-  color: var(--fg);
+  grid-column: 1;
+  text-align: right;
+  color: var(--fg-muted);
 }
+/* 控件统一样式:输入框(文本/密码)与下拉框完全一致 */
 .ai-row input[type="text"],
 .ai-row input[type="password"],
 .ai-row select {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 3px 8px;
+  grid-column: 2;
+  width: 100%;
+  padding: 5px 9px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--bg-btn);
   color: var(--fg);
   font-family: var(--ui-font);
-  font-size: 12px;
+  font-size: 11.5px;
   box-sizing: border-box;
+  outline: none;
 }
 .ai-row input:focus,
 .ai-row select:focus {
-  outline: none;
   border-color: var(--link);
+}
+/* 启用行:开关在左,标签在右(占满整行) */
+.ai-row-full {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.ai-row-full > span {
+  grid-column: auto;
+  text-align: left;
+  color: var(--fg);
+}
+.ai-row-full input[type="checkbox"] {
+  grid-column: auto;
+  justify-self: auto;
+  margin: 0;
+}
+/* 端点填写说明:整行收在字段区底部 */
+.ai-hint {
+  padding: 8px 11px;
+  border-radius: 8px;
+  background: var(--bg-btn);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1.6;
+  margin-top: 2px;
 }
 </style>

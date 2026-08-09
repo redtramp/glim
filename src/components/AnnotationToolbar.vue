@@ -6,7 +6,10 @@
  * - 删除 / 高亮即时执行:点击直接 emit("apply", type)
  * - 新增 / 替换 / 评论需要输入:点击 emit("input-start", type),
  *   父组件把 mode 切到对应类型后,本组件展开输入弹层(输入框 + 确定/取消)
- * - 复制给 AI / 清除全部:分别 emit("copy-ai") / emit("clear-all")
+ * - 复制给 AI / 清除全部 / 审阅 / AI 面板:分别 emit 对应事件
+ *
+ * 布局(方案 B):三带横排左标签 —— 剪贴板 / AI / 批注 三类分三行,
+ * 左侧组名竖排小标签,右侧按钮横向排布自动换行;AI 组强调色突出。
  *
  * 定位:基于父组件传入的选区坐标 (x, y)(x=选区中心、y=选区底部),
  * 组件自测尺寸后做视口夹紧与下方放不下时翻转到上方。
@@ -108,84 +111,104 @@ function cancelInput(): void {
     @mousedown.prevent
   >
     <template v-if="!isInputMode">
-      <button
-        class="at-btn at-del"
-        :title="t('annotation.del')"
-        @click="onAction('del')"
-      >
-        {{ t("annotation.del") }}
-      </button>
-      <button
-        class="at-btn at-ins"
-        :title="t('annotation.ins')"
-        @click="onAction('ins')"
-      >
-        {{ t("annotation.ins") }}
-      </button>
-      <button
-        class="at-btn at-sub"
-        :title="t('annotation.sub')"
-        @click="onAction('sub')"
-      >
-        {{ t("annotation.sub") }}
-      </button>
-      <button
-        class="at-btn at-hl"
-        :title="t('annotation.hl')"
-        @click="onAction('hl')"
-      >
-        {{ t("annotation.hl") }}
-      </button>
-      <button
-        class="at-btn at-comment"
-        :title="t('annotation.comment')"
-        @click="onAction('comment')"
-      >
-        {{ t("annotation.comment") }}
-      </button>
-      <span class="at-sep" aria-hidden="true"></span>
-      <button
-        class="at-btn at-copy-plain"
-        :title="t('annotation.copyPlain')"
-        @click="emit('copy')"
-      >
-        {{ t("annotation.copyPlain") }}
-      </button>
-      <button
-        class="at-btn at-paste"
-        :title="t('annotation.paste')"
-        @click="emit('paste')"
-      >
-        {{ t("annotation.paste") }}
-      </button>
-      <button
-        class="at-btn at-copy"
-        :title="t('annotation.copyAI')"
-        @click="emit('copy-ai')"
-      >
-        {{ t("annotation.copyAI") }}
-      </button>
-      <button
-        class="at-btn at-clear"
-        :title="t('annotation.clearAll')"
-        @click="emit('clear-all')"
-      >
-        {{ t("annotation.clearAll") }}
-      </button>
-      <button
-        class="at-btn at-review"
-        :title="t('annotation.review')"
-        @click="emit('review')"
-      >
-        {{ t("annotation.review") }}
-      </button>
-      <button
-        class="at-btn at-ai"
-        :title="t('annotation.ai')"
-        @click="emit('ai')"
-      >
-        {{ t("annotation.ai") }}
-      </button>
+      <!-- 第一带：剪贴板 -->
+      <div class="at-band">
+        <span class="at-band-label">{{ t("annotation.groupClipboard") }}</span>
+        <div class="at-band-items">
+          <button
+            class="at-btn at-copy-plain"
+            :title="t('annotation.copyPlain')"
+            @click="emit('copy')"
+          >
+            {{ t("annotation.copyPlain") }}
+          </button>
+          <button
+            class="at-btn at-paste"
+            :title="t('annotation.paste')"
+            @click="emit('paste')"
+          >
+            {{ t("annotation.paste") }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 第二带：AI（强调色） -->
+      <div class="at-band at-band-ai">
+        <span class="at-band-label">{{ t("annotation.groupAI") }}</span>
+        <div class="at-band-items">
+          <button
+            class="at-btn at-ai"
+            :title="t('ai.title')"
+            @click="emit('ai')"
+          >
+            ✦ {{ t("ai.title") }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 第三带：批注（其余） -->
+      <div class="at-band">
+        <span class="at-band-label">{{ t("annotation.groupAnnotations") }}</span>
+        <div class="at-band-items">
+          <button
+            class="at-btn at-del"
+            :title="t('annotation.del')"
+            @click="onAction('del')"
+          >
+            {{ t("annotation.del") }}
+          </button>
+          <button
+            class="at-btn at-ins"
+            :title="t('annotation.ins')"
+            @click="onAction('ins')"
+          >
+            {{ t("annotation.ins") }}
+          </button>
+          <button
+            class="at-btn at-sub"
+            :title="t('annotation.sub')"
+            @click="onAction('sub')"
+          >
+            {{ t("annotation.sub") }}
+          </button>
+          <button
+            class="at-btn at-hl"
+            :title="t('annotation.hl')"
+            @click="onAction('hl')"
+          >
+            {{ t("annotation.hl") }}
+          </button>
+          <button
+            class="at-btn at-comment"
+            :title="t('annotation.comment')"
+            @click="onAction('comment')"
+          >
+            {{ t("annotation.comment") }}
+          </button>
+          <span class="at-sep" aria-hidden="true"></span>
+          <button
+            class="at-btn at-copy"
+            :title="t('annotation.copyAI')"
+            @click="emit('copy-ai')"
+          >
+            {{ t("annotation.copyAI") }}
+          </button>
+          <button
+            class="at-btn at-clear"
+            :title="t('annotation.clearAll')"
+            @click="emit('clear-all')"
+          >
+            {{ t("annotation.clearAll") }}
+          </button>
+          <button
+            class="at-btn at-review"
+            :title="t('annotation.review')"
+            @click="emit('review')"
+          >
+            {{ t("annotation.review") }}
+          </button>
+        </div>
+      </div>
     </template>
 
     <template v-else>
@@ -204,44 +227,115 @@ function cancelInput(): void {
         @keydown.enter="confirmInput"
         @keydown.esc="cancelInput"
       />
-      <button
-        class="at-btn at-confirm"
-        :disabled="!inputText.trim()"
-        @click="confirmInput"
-      >
-        {{ t("annotation.confirm") }}
-      </button>
-      <button class="at-btn" @click="cancelInput">
-        {{ t("annotation.cancel") }}
-      </button>
+      <div class="at-input-actions">
+        <button
+          class="at-btn at-confirm"
+          :disabled="!inputText.trim()"
+          @click="confirmInput"
+        >
+          {{ t("annotation.confirm") }}
+        </button>
+        <button class="at-btn" @click="cancelInput">
+          {{ t("annotation.cancel") }}
+        </button>
+      </div>
     </template>
   </div>
 </template>
 
 <style scoped>
 .annotation-toolbar {
+  --at-ai-color: #6d28d9;
   position: fixed;
-  z-index: 40;
+  /* 高于左栏/目录胶囊/底部栏(45),避免选中文字在屏幕边缘时被浮层盖住 */
+  z-index: 46;
+  /* 三带横排:横向排布,高度紧凑 */
   display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
-  background: var(--bg-panel, var(--bg-toolbar));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  font-size: 12px;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px;
+  min-width: 272px;
   max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  /* 悬浮设计:毛玻璃浮层 */
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(30, 40, 30, 0.12),
+    0 2px 8px rgba(30, 40, 30, 0.06);
+  font-size: 13px;
+  animation: at-pop 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
+@keyframes at-pop {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+:root[data-theme="dark"] .annotation-toolbar {
+  --at-ai-color: #a78bfa;
+  background: rgba(30, 34, 30, 0.78);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ---- 三带结构 ---- */
+.at-band {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 4px 2px;
+}
+.at-band + .at-band {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+:root[data-theme="dark"] .at-band + .at-band {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+.at-band-label {
+  flex: 0 0 44px;
+  padding-top: 7px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  opacity: 0.85;
+  user-select: none;
+}
+
+.at-band-items {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* ---- 按钮 ---- */
 .at-btn {
-  padding: 3px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 8px;
   background: transparent;
   color: var(--fg);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease,
+    border-color 0.12s ease, box-shadow 0.12s ease;
 }
 .at-btn:hover {
   background: var(--bg-btn-hover);
@@ -250,6 +344,23 @@ function cancelInput(): void {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* AI 组:强调色突出 */
+.at-band-ai .at-band-label {
+  color: var(--at-ai-color);
+  opacity: 1;
+}
+.at-band-ai .at-ai {
+  color: var(--at-ai-color);
+  background: color-mix(in srgb, var(--at-ai-color) 8%, transparent);
+  border-color: color-mix(in srgb, var(--at-ai-color) 35%, transparent);
+}
+.at-band-ai .at-ai:hover {
+  background: color-mix(in srgb, var(--at-ai-color) 14%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--at-ai-color) 12%, transparent);
+}
+
+/* 批注项悬停配色(沿用既有语义色) */
 .at-del:hover {
   color: var(--critic-del-color);
   background: var(--critic-del-bg);
@@ -257,6 +368,10 @@ function cancelInput(): void {
 .at-ins:hover {
   color: var(--critic-ins-color);
   background: var(--critic-ins-bg);
+}
+.at-sub:hover {
+  color: var(--critic-comment-color);
+  background: var(--critic-comment-bg);
 }
 .at-hl:hover {
   color: var(--critic-hl-fg);
@@ -266,31 +381,54 @@ function cancelInput(): void {
   color: var(--critic-comment-color);
   background: var(--critic-comment-bg);
 }
+/* 复制给 AI:批注组内,悬停呈 AI 色 */
+.at-copy {
+  color: var(--fg-muted);
+}
 .at-copy:hover {
-  color: var(--link);
-  background: var(--bg-active);
+  color: var(--at-ai-color);
+  background: color-mix(in srgb, var(--at-ai-color) 8%, transparent);
 }
 .at-clear:hover {
   color: var(--critic-del-color);
   background: var(--critic-del-bg);
 }
+.at-review:hover {
+  color: var(--link);
+  background: var(--bg-active);
+}
+
+/* 批注组内竖向分隔线 */
 .at-sep {
+  flex: 0 0 auto;
   width: 1px;
-  height: 16px;
-  margin: 0 4px;
+  height: 18px;
+  align-self: center;
+  margin: 0 2px;
   background: var(--border);
+  opacity: 0.6;
+}
+
+/* ---- 输入弹层 ---- */
+.at-input-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+.at-input-actions .at-btn {
+  flex: 1 1 0;
 }
 .at-input {
   width: 220px;
-  padding: 4px 8px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 8px;
   background: var(--bg-btn);
   color: var(--fg);
-  font-size: 12px;
+  font-size: 13px;
   outline: none;
 }
 .at-input:focus {
-  border-color: var(--link);
+  border-color: var(--at-ai-color);
 }
 </style>

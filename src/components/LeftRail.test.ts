@@ -2,14 +2,16 @@
  * LeftRail 组件测试
  *
  * 测试目标:
- * - 渲染 7 个图标按钮
- * - 渲染 2 条分隔线
+ * - 渲染 12 个图标按钮与 3 条分组分隔线（位置正确）
  * - 点击图标 emit open-panel
- * - 当前激活面板高亮
- * - 导航栏 aria-label
+ * - 当前激活面板高亮（active 类 + aria-pressed）
+ * - 按钮 title 使用 i18n 文案
+ * - 滚动时淡出（dimmed），1.5s 后恢复，连续滚动重置计时器
+ * - 卸载时移除滚动监听并清理计时器
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
+import { nextTick } from "vue";
 import LeftRail from "./LeftRail.vue";
 
 // Mock vue-i18n
@@ -47,6 +49,22 @@ describe("LeftRail", () => {
     const wrapper = createWrapper({ activePanel: null });
     const separators = wrapper.findAll(".left-rail-sep");
     expect(separators).toHaveLength(3);
+  });
+
+  it("分隔线位于分组边界（navigation|content|tools|actions）", () => {
+    const wrapper = createWrapper({ activePanel: null });
+    const children = wrapper.findAll(".left-rail-inner > *");
+    // 12 按钮 + 3 分隔线
+    expect(children).toHaveLength(15);
+    // 分组变化后紧跟分隔线：idx 1→2、4→5、6→7 之间（含插入偏移后位于 2/6/9）
+    const sepIndexes = new Set([2, 6, 9]);
+    children.forEach((node, idx) => {
+      if (sepIndexes.has(idx)) {
+        expect(node.classes()).toContain("left-rail-sep");
+      } else {
+        expect(node.classes()).toContain("left-rail-btn");
+      }
+    });
   });
 
   it("点击图标 emit open-panel", () => {
@@ -99,9 +117,89 @@ describe("LeftRail", () => {
     });
   });
 
+  it("active 按钮 aria-pressed=true，其余 false", () => {
+    const wrapper = createWrapper({ activePanel: "ai" });
+    const buttons = wrapper.findAll(".left-rail-btn");
+    expect(buttons[5].attributes("aria-pressed")).toBe("true");
+    buttons.forEach((btn, idx) => {
+      if (idx !== 5) expect(btn.attributes("aria-pressed")).toBe("false");
+    });
+  });
+
+  it("按钮 title 使用 i18n 文案（未映射的 key 原样返回）", () => {
+    const wrapper = createWrapper({ activePanel: null });
+    const buttons = wrapper.findAll(".left-rail-btn");
+    expect(buttons[0].attributes("title")).toBe("文件树");
+    expect(buttons[5].attributes("title")).toBe("AI 助手");
+    // mock 未提供的新建/打开/导出/编辑文案 → 回退为 key 本身
+    expect(buttons[7].attributes("title")).toBe("float.newFile");
+    expect(buttons[11].attributes("title")).toBe("float.editToggle");
+  });
+
   it("导航栏含有 aria-label 属性", () => {
     const wrapper = createWrapper({ activePanel: null });
     const nav = wrapper.find("nav");
     expect(nav.attributes("aria-label")).toBe("toolbar");
+  });
+});
+
+describe("LeftRail 滚动淡化", () => {
+  let scrollRoot: HTMLElement;
+
+  beforeEach(() => {
+    scrollRoot = document.createElement("div");
+    scrollRoot.dataset.scrollRoot = "";
+    document.body.appendChild(scrollRoot);
+  });
+
+  afterEach(() => {
+    scrollRoot.remove();
+    vi.useRealTimers();
+  });
+
+  function dispatchScroll(): void {
+    scrollRoot.dispatchEvent(new Event("scroll"));
+  }
+
+  it("滚动时添加 dimmed 类", async () => {
+    const wrapper = createWrapper({ activePanel: null });
+    dispatchScroll();
+    await nextTick();
+    expect(wrapper.find("nav").classes()).toContain("dimmed");
+  });
+
+  it("滚动后 1.5s 自动恢复不淡化", async () => {
+    vi.useFakeTimers();
+    const wrapper = createWrapper({ activePanel: null });
+    dispatchScroll();
+    await nextTick();
+    expect(wrapper.find("nav").classes()).toContain("dimmed");
+
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(wrapper.find("nav").classes()).not.toContain("dimmed");
+  });
+
+  it("连续滚动重置计时器", async () => {
+    vi.useFakeTimers();
+    const wrapper = createWrapper({ activePanel: null });
+    dispatchScroll();
+    await vi.advanceTimersByTimeAsync(1000);
+    dispatchScroll(); // 第二次滚动重置 1.5s 窗口
+    await vi.advanceTimersByTimeAsync(1000);
+    // 距第二次滚动仅 1s，仍在淡化
+    expect(wrapper.find("nav").classes()).toContain("dimmed");
+    await vi.advanceTimersByTimeAsync(500);
+    expect(wrapper.find("nav").classes()).not.toContain("dimmed");
+  });
+
+  it("卸载时移除滚动监听并清理计时器", async () => {
+    vi.useFakeTimers();
+    const spy = vi.spyOn(scrollRoot, "removeEventListener");
+    const wrapper = createWrapper({ activePanel: null });
+    dispatchScroll();
+    wrapper.unmount();
+    expect(spy).toHaveBeenCalledWith("scroll", expect.any(Function));
+    // 计时器已清理：推进时间不抛错、无残留状态变化
+    expect(() => vi.advanceTimersByTime(2000)).not.toThrow();
   });
 });

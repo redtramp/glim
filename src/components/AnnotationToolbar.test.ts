@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mount, type VueWrapper } from "@vue/test-utils";
+import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { createI18n } from "vue-i18n";
 import AnnotationToolbar, {
@@ -20,12 +20,17 @@ const i18n = createI18n({
   messages: {
     "zh-CN": {
       annotation: {
+        groupClipboard: "剪贴板",
+        groupAI: "AI",
+        groupAnnotations: "批注",
         del: "删除",
         ins: "新增",
         sub: "替换",
         hl: "高亮",
         comment: "评论",
         copyAI: "复制给 AI",
+        copyPlain: "复制",
+        paste: "粘贴",
         clearAll: "清除全部",
         review: "审阅",
         ai: "AI",
@@ -34,6 +39,9 @@ const i18n = createI18n({
         commentPlaceholder: "评论内容…",
         confirm: "确定",
         cancel: "取消",
+      },
+      ai: {
+        title: "AI 助手",
       },
     },
   },
@@ -78,6 +86,21 @@ describe("AnnotationToolbar - 渲染", () => {
     const wrapper = mountToolbar({ visible: false });
     expect(wrapper.find(".annotation-toolbar").exists()).toBe(false);
   });
+
+  it("三带结构:剪贴板/AI/批注各一行,组名标签存在", () => {
+    const wrapper = mountToolbar();
+    const bands = wrapper.findAll(".at-band");
+    expect(bands.length).toBe(3);
+    const labels = wrapper.findAll(".at-band-label").map((n) => n.text());
+    expect(labels).toEqual(["剪贴板", "AI", "批注"]);
+    // 第一带:复制/粘贴;第二带:AI;第三带:批注全量
+    expect(bands[0].find(".at-copy-plain").exists()).toBe(true);
+    expect(bands[0].find(".at-paste").exists()).toBe(true);
+    expect(bands[1].find(".at-ai").exists()).toBe(true);
+    expect(bands[2].find(".at-del").exists()).toBe(true);
+    expect(bands[2].find(".at-copy").exists()).toBe(true);
+    expect(bands[2].find(".at-review").exists()).toBe(true);
+  });
 });
 
 describe("AnnotationToolbar - 按钮 emit", () => {
@@ -106,6 +129,26 @@ describe("AnnotationToolbar - 按钮 emit", () => {
     await wrapper.find(".at-ins").trigger("click");
     expect(wrapper.emitted("input-start")?.[0]).toEqual(["ins"]);
     expect(wrapper.emitted("apply")).toBeUndefined();
+  });
+
+  it("点击复制纯文本 emit copy", async () => {
+    await wrapper.find(".at-copy-plain").trigger("click");
+    expect(wrapper.emitted("copy")).toBeTruthy();
+  });
+
+  it("点击粘贴 emit paste", async () => {
+    await wrapper.find(".at-paste").trigger("click");
+    expect(wrapper.emitted("paste")).toBeTruthy();
+  });
+
+  it("点击替换 emit input-start('sub')", async () => {
+    await wrapper.find(".at-sub").trigger("click");
+    expect(wrapper.emitted("input-start")?.[0]).toEqual(["sub"]);
+  });
+
+  it("点击评论 emit input-start('comment')", async () => {
+    await wrapper.find(".at-comment").trigger("click");
+    expect(wrapper.emitted("input-start")?.[0]).toEqual(["comment"]);
   });
 
   it("点击复制给 AI emit copy-ai", async () => {
@@ -188,6 +231,45 @@ describe("AnnotationToolbar - 输入弹层", () => {
     const w = mountInput("sub");
     await nextTick();
     expect(w.find(".at-input").attributes("placeholder")).toBe("替换为…");
+  });
+
+  it("评论使用评论专用占位符", async () => {
+    const w = mountInput("comment");
+    await nextTick();
+    expect(w.find(".at-input").attributes("placeholder")).toBe("评论内容…");
+  });
+
+  it("输入为空白时 Enter 确认不发 apply", async () => {
+    const w = mountInput("ins");
+    await nextTick();
+    await w.find(".at-input").trigger("keydown.enter");
+    expect(w.emitted("apply")).toBeUndefined();
+  });
+
+  it("输入弹层模式下输入框获得焦点", async () => {
+    const focusSpy = vi
+      .spyOn(HTMLInputElement.prototype, "focus")
+      .mockImplementation(() => {});
+    try {
+      const w = mountToolbar({ mode: "" });
+      await w.setProps({ mode: "ins" });
+      await nextTick();
+      await nextTick();
+      expect(focusSpy).toHaveBeenCalled();
+    } finally {
+      focusSpy.mockRestore();
+    }
+  });
+
+  it("坐标变化时重新定位工具栏", async () => {
+    const w = mountToolbar({ x: 100, y: 200 });
+    await w.setProps({ x: 300, y: 250 });
+    // reposition 在异步 watch 回调中执行,需 flush 完 microtask/nextTick 链
+    await flushPromises();
+    const style = w.find(".annotation-toolbar").attributes("style");
+    // jsdom 中工具栏 getBoundingClientRect 为 0:left=x,top=y+10
+    expect(style).toContain("left: 300px");
+    expect(style).toContain("top: 260px");
   });
 });
 

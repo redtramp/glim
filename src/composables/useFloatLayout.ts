@@ -46,7 +46,7 @@ export const ACTION_PANEL_IDS: ReadonlySet<LeftPanelID> = new Set([
 ]);
 
 const CLOSE_EXEMPT_SELECTORS =
-  ".floating-panel, .left-rail, .menu-overlay, .context-menu, .context-menu-overlay";
+  ".floating-panel, .left-rail, .menu-overlay, .context-menu, .context-menu-overlay, .annotation-toolbar";
 
 export function useFloatLayout() {
   const state = reactive({

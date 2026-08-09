@@ -44,5 +44,16 @@ export default defineConfig(async () => ({
     environment: "jsdom",
     exclude: [...configDefaults.exclude, "src-tauri/**"],
     include: ["src/**/*.test.ts", "src/**/*.spec.ts"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html"],
+      // 低于阈值时测试失败,防止新改动显著拉低覆盖率
+      thresholds: {
+        lines: 85,
+        functions: 80,
+        statements: 80,
+        branches: 75,
+      },
+    },
   },
 }));

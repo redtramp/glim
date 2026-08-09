@@ -33,7 +33,11 @@ const i18n = createI18n({
 });
 
 // 测试用的 Tab 工厂
-function makeTab(id = "tab-1", path = "/root/test.md", staleSince = null): Tab {
+function makeTab(
+  id = "tab-1",
+  path = "/root/test.md",
+  staleSince: number | null = null
+): Tab {
   return {
     id,
     path,
@@ -90,6 +94,21 @@ describe("Banner", () => {
       expect(wrapper.find(".banner").exists()).toBe(false);
     });
 
+    it("tab 为 null 时不渲染 banner 容器", () => {
+      wrapper = mount(Banner, {
+        global: { plugins: [i18n] },
+        props: {
+          tab: null,
+          visible: true,
+          onReload: mockFn,
+          onViewDiff: mockFn,
+          onIgnore: mockFn,
+          onAutoReload: mockFn,
+        },
+      });
+      expect(wrapper.find(".banner").exists()).toBe(false);
+    });
+
     it("渲染文件名", () => {
       renderBanner(makeTab("tab-1", "/root/test.md"));
       expect(wrapper.find(".banner-filename").text()).toContain("test.md");
@@ -120,6 +139,40 @@ describe("Banner", () => {
     it("渲染启用自动重载按钮", () => {
       renderBanner(makeTab());
       expect(wrapper.find("[data-action='auto-reload']").exists()).toBe(true);
+    });
+  });
+
+  describe("文件名", () => {
+    it("深路径显示文件名", () => {
+      renderBanner(makeTab("tab-1", "/root/deep/dir/doc.md"));
+      expect(wrapper.find(".banner-filename").text()).toBe("doc.md");
+    });
+
+    it("Windows 反斜杠路径显示文件名", () => {
+      renderBanner(makeTab("tab-1", "C:\\docs\\dir\\file.md"));
+      expect(wrapper.find(".banner-filename").text()).toBe("file.md");
+    });
+  });
+
+  describe("timeText 时间文本", () => {
+    it("无 staleSince 时时间为空", () => {
+      renderBanner(makeTab());
+      expect(wrapper.find(".banner-time").text()).toBe("（）");
+    });
+
+    it("60 秒内显示秒数", () => {
+      renderBanner(makeTab("tab-1", "/root/test.md", Date.now() - 30_000));
+      expect(wrapper.find(".banner-time").text()).toContain("30秒前");
+    });
+
+    it("1 小时内显示分钟数", () => {
+      renderBanner(makeTab("tab-1", "/root/test.md", Date.now() - 5 * 60_000));
+      expect(wrapper.find(".banner-time").text()).toContain("5分钟前");
+    });
+
+    it("超过 1 小时显示小时数", () => {
+      renderBanner(makeTab("tab-1", "/root/test.md", Date.now() - 2 * 3_600_000));
+      expect(wrapper.find(".banner-time").text()).toContain("2小时前");
     });
   });
 

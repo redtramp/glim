@@ -1,5 +1,26 @@
 # 更新日志
 
+## [0.7.0] - 2026-08-09
+
+### 新增
+- AI 提供商扩展至 5 类：Ollama（本地默认，无需 API Key）、OpenAI 兼容（含 DeepSeek / 智谱 / 火山方舟 / OpenRouter 等）、Anthropic Claude、Azure OpenAI、Google Gemini（后四类需 API Key）。
+- 各服务类型内置常见服务地址示例与填写提示（如 Ollama 默认 `http://localhost:11434`、Azure 资源域名、Gemini / Anthropic 原生接口），服务地址自动补全 `/chat/completions`、`/v1/messages`、`/v1beta/models/{model}:generateContent` 等接口路径。
+- Azure OpenAI 新增「部署名称」字段，用于拼 `/openai/deployments/{deployment}/chat/completions` 路径。
+- 设置弹窗划分为「阅读 / AI / 其他」三个标签页，AI 配置集中在 AI 标签页。
+- 配置即启用：编辑任一服务配置项（服务类型 / 地址 / Key / 模型 / 部署）自动打开 AI 面板，避免「填好配置仍提示未启用」。
+- 选区浮动工具栏重构为三带横排布局（剪贴板 / AI / 批注），磨砂玻璃浮层，z-index 提升至 46，避免屏幕边缘被其他浮层遮挡；AI 组以强调色突出。
+
+### 变更
+- AI 校验放宽：仅 baseUrl 为必填；Azure 以部署名称替代模型字段；除 Ollama 外均要求 API Key。
+- i18n 新增设置标签页、各 AI 服务商与部署名称文案（zh-CN / en-US）。
+
+### 优化
+- 数学公式解析修复：`$$x$$` 类同行成对 `$$` 不再误配对产生游离 `$`；正确处理转义 `\$`，保证其后合法的 `$x$` 数学仍生效。
+- Markdown 渲染引擎重构：抽取 `markdownEngine` / `markdownWorkerClient` / `useMarkdown` / `clipboard` 等组合式函数，渲染流程与主题切换进一步解耦。
+
+### 工程
+- 接入 `@vitest/coverage-v8`，补充单元测试：AnnotationToolbar、Banner、LeftRail、TabBar、aiProvider、useTabs、clipboard、markdownEngine、mathPlugin、useMarkdown、MarkdownView 等，覆盖面板与 AI 配置逻辑。
+
 ## [0.6.0] - 2026-08-05
 
 ### 新增

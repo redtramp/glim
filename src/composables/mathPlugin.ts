@@ -13,6 +13,17 @@ export default function mathPlugin(mdInstance: MarkdownIt): void {
     const start = state.pos;
     if (state.src.charCodeAt(start) !== 0x24) return false;
     if (state.src.charCodeAt(start + 1) === 0x24) return false;
+    // 前一个字符同为 $（如 $$x$$ 中的第二个 $）时拒绝：
+    // 首字符因后继是 $ 已被拒绝,若这里放行会产生游离的 $ 配对（$ + math(x) + $）。
+    // 仅当前驱 $ 本身不是 \$ 转义对的一部分时才拒绝（escape 规则会整体消费 \$,
+    // 因此 \$$x$ 中第二个 $ 的前驱是转义对的 $,不应误拒其后合法的 $x$ 数学）。
+    if (
+      start > 0 &&
+      state.src.charCodeAt(start - 1) === 0x24 &&
+      state.src.charCodeAt(start - 2) !== 0x5c
+    ) {
+      return false;
+    }
     const max = state.posMax;
     let pos = start + 1;
     while (pos < max) {

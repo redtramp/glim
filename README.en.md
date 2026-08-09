@@ -50,6 +50,7 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - 40px floating left toolbar + right section-marker rail, full-width immersive reading without sidebars compressing content
 - 12 SVG line icons grouped by navigation / content / tools / actions: file tree, recent, search, annotations, bookmarks, AI, settings, new file, open file, open folder, export, edit/preview toggle
 - Right section markers: current / read / unread status dots plus bookmark squares, click to jump, hover shows title tooltip, scroll-synced highlight
+- Outline display reworked: the former right-side outline panel (TocPanel / RightRail) was removed in favor of a bottom-right capsule mini-TOC (TocCapsule) plus the right section markers; the heading list expands on demand as a floating overlay without consuming reading width
 - Floating top tab bar always visible, still allows document switching in edit mode
 - 7 frosted-glass floating panels: file tree, recent, full-text search, annotations, bookmarks, AI assistant, quick settings
 - Outline panel supports title search, Ctrl+click collapse, parent-heading level highlight
@@ -82,20 +83,22 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - Unsaved changes protection
 
 ### Annotations & Review
-- **CriticMarkup annotations**: select text to reveal a floating toolbar, supporting deletion, insertion, substitution, highlighting, and comments — instantly applied as CriticMarkup syntax
+- **CriticMarkup annotations**: select text to reveal a floating toolbar (grouped into Clipboard / AI / Annotations bands, a frosted-glass overlay), supporting deletion, insertion, substitution, highlighting, and comments — instantly applied as CriticMarkup syntax
 - **Review panel**: parses annotations in the document, displaying each by type, line number, and content; supports accept/reject individually or accept/reject all; click an entry to focus the corresponding line
 - **One-click copy to AI**: fills the full document (with annotations) into a template, writes to the clipboard for pasting into an AI chat
 
 ### AI Panel
 - Execute **summarize, translate, explain** on selected text, or **rewrite** the full document based on annotations
 - Results rendered in Markdown, with copy-result and apply-to-document support
-- Supports **Ollama** (local default, no API Key required) and **OpenAI-compatible** services (API Key required)
+- Supports 5 providers: **Ollama** (local default, no API Key), **OpenAI-compatible** (including DeepSeek / Zhipu / Volcengine / OpenRouter), **Anthropic Claude**, **Azure OpenAI**, and **Google Gemini** (the latter four require an API Key)
+- Provider-specific example URLs and fill-in hints; editing any config field auto-enables the panel
+- Azure requires a deployment name; endpoint URLs auto-complete paths like `/chat/completions`
 - Configuration persisted, requests routed through the Tauri http plugin to bypass CSP/CORS restrictions
 
 ### Navigation
 - Floating file tree (🗂): **lazy-loading, non-recursive** — only lists direct children of the current directory, directories collapsed by default, clicking the caret loads the next level on demand; the `..` entry at the top goes up one level
 - Floating panels: file tree / recent / full-text search / annotations / bookmarks / AI assistant / quick settings
-- Right section markers + outline panel: scroll-synchronized highlighting, collapsible, supports title search
+- Right section markers + bottom-right capsule mini-TOC (TocCapsule): scroll-synchronized highlighting, collapsible, supports title search; the outline stays as a small capsule that expands into a floating heading list
 - Internal link navigation and relative path resolution for images
 - With a history document, the file tree is rooted at the document's directory; without one, it shows the user's home directory
 
@@ -158,7 +161,7 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 
 - Reading & editor font size, line height, max width, and font family (built-in + system + custom fonts)
 - Floating layout toggle (classic / floating dual layouts)
-- AI provider configuration: Ollama address / OpenAI-compatible API Key and endpoint
+- Settings dialog split into "Reading / AI / Other" tabs; the AI tab configures Ollama / OpenAI-compatible / Anthropic / Azure / Gemini service URL, API Key, and model or deployment name
 - Word export reference template (.docx)
 - File association registration (`.md / .markdown / .mdx`)
 - View / customize keyboard shortcuts

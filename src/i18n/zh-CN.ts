@@ -48,6 +48,9 @@ const zhCN = {
   },
   settings: {
     title: "阅读设置",
+    tabReading: "阅读",
+    tabAI: "AI",
+    tabOther: "其他",
     fontSize: "字号",
     editorFontSize: "编辑器字号",
     lineHeight: "行高",
@@ -93,14 +96,29 @@ const zhCN = {
     restoreDefaultTemplate: "恢复默认",
     aiPanel: "AI 面板",
     aiPanelHint:
-      "内置 AI 助手：选中文字可摘要/翻译/解释，或按批注改写全文。默认关闭；API key 仅保存在本机。",
+      "内置 AI 助手：选中文字可摘要/翻译/解释，或按批注改写全文。填好下方服务配置即可使用；API key 仅保存在本机。",
     aiEnabled: "启用 AI 面板",
     aiProvider: "服务类型",
     aiProviderOllama: "Ollama（本地）",
     aiProviderOpenai: "OpenAI 兼容",
+    aiProviderAnthropic: "Anthropic Claude",
+    aiProviderAzure: "Azure OpenAI",
+    aiProviderGemini: "Google Gemini",
     aiBaseUrl: "服务地址",
+    aiBaseUrlOllamaHint:
+      "本地推理地址：Ollama 默认 http://localhost:11434（也可用 LM Studio 的 http://localhost:1234/v1、vLLM 的 http://localhost:8000/v1）。无需 API key。",
+    aiBaseUrlOpenaiHint:
+      "OpenAI 兼容服务地址：以 /v1、/v3、/v4 或 /openai 结尾时自动补全 /chat/completions，也可直接粘贴完整接口地址。示例：OpenAI https://api.openai.com/v1、DeepSeek https://api.deepseek.com/v1、智谱 https://open.bigmodel.cn/api/paas/v4、火山方舟 https://ark.cn-beijing.volces.com/api/v3、Gemini https://generativelanguage.googleapis.com/v1beta/openai、OpenRouter https://openrouter.ai/api/v1。",
+    aiBaseUrlAnthropicHint:
+      "Anthropic 原生接口：默认 https://api.anthropic.com（自动补全 /v1/messages）。模型如 claude-3-5-sonnet-latest；API key 在 Anthropic Console 获取（sk-ant-...）。",
+    aiBaseUrlAzureHint:
+      "Azure OpenAI：填写资源域名（如 https://your-resource.openai.azure.com），自动补全 /openai/deployments/{部署名称}/chat/completions?api-version=2024-06-01。鉴权用 api-key 请求头。",
+    aiBaseUrlGeminiHint:
+      "Gemini 原生接口：默认 https://generativelanguage.googleapis.com（自动补全 /v1beta/models/{模型}:generateContent）。鉴权用 x-goog-api-key 请求头；API key 在 Google AI Studio 获取。",
     aiApiKey: "API Key",
     aiApiKeyPlaceholder: "填写 API key（仅保存在本机）",
+    aiDeployment: "部署名称",
+    aiDeploymentPlaceholder: "如 gpt-4o（Azure 中创建的部署名）",
     aiModel: "模型名称",
     restoreAiSettings: "恢复默认",
     done: "完成",
@@ -191,6 +209,9 @@ const zhCN = {
     fileExists: "文件已存在，请换个文件名",
   },
   annotation: {
+    groupClipboard: "剪贴板",
+    groupAI: "AI",
+    groupAnnotations: "批注",
     del: "删除",
     ins: "新增",
     sub: "替换",
@@ -248,7 +269,7 @@ const zhCN = {
     applyConfirm: "将 AI 改写结果应用到当前文档（替换全部内容），是否继续？",
     retry: "重试",
     error: {
-      configMissing: "请先在设置中启用并配置 AI 面板",
+      configMissing: "请先在设置中启用 AI 面板并填写服务配置（服务地址与模型）",
       authFailed: "API key 无效或没有权限，请检查设置",
       timeout: "AI 请求超时，请稍后重试或调大超时设置",
       network: "无法连接 AI 服务，请检查服务地址或确认本地服务已启动",

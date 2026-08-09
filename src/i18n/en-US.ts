@@ -51,6 +51,9 @@ const enUS = {
   },
   settings: {
     title: "Reading Settings",
+    tabReading: "Reading",
+    tabAI: "AI",
+    tabOther: "Other",
     fontSize: "Font Size",
     editorFontSize: "Editor Font Size",
     lineHeight: "Line Height",
@@ -96,14 +99,29 @@ const enUS = {
     restoreDefaultTemplate: "Restore default",
     aiPanel: "AI Panel",
     aiPanelHint:
-      "Built-in AI assistant: summarize / translate / explain selected text, or rewrite the document per annotations. Off by default; API key is stored locally only.",
+      "Built-in AI assistant: summarize / translate / explain selected text, or rewrite the document per annotations. Fill in the service settings below to use it; API key is stored locally only.",
     aiEnabled: "Enable AI panel",
     aiProvider: "Provider",
     aiProviderOllama: "Ollama (local)",
     aiProviderOpenai: "OpenAI-compatible",
+    aiProviderAnthropic: "Anthropic Claude",
+    aiProviderAzure: "Azure OpenAI",
+    aiProviderGemini: "Google Gemini",
     aiBaseUrl: "Base URL",
+    aiBaseUrlOllamaHint:
+      "Local inference URL: Ollama default http://localhost:11434 (or LM Studio http://localhost:1234/v1, vLLM http://localhost:8000/v1). No API key needed.",
+    aiBaseUrlOpenaiHint:
+      "OpenAI-compatible URL: if it ends in /v1, /v3, /v4 or /openai, /chat/completions is appended automatically; you can also paste the full endpoint URL. Examples: OpenAI https://api.openai.com/v1, DeepSeek https://api.deepseek.com/v1, Zhipu https://open.bigmodel.cn/api/paas/v4, Volcengine https://ark.cn-beijing.volces.com/api/v3, Gemini https://generativelanguage.googleapis.com/v1beta/openai, OpenRouter https://openrouter.ai/api/v1.",
+    aiBaseUrlAnthropicHint:
+      "Anthropic native API: default https://api.anthropic.com (/v1/messages is appended automatically). Models like claude-3-5-sonnet-latest; get an API key (sk-ant-...) from the Anthropic Console.",
+    aiBaseUrlAzureHint:
+      "Azure OpenAI: enter your resource host (e.g. https://your-resource.openai.azure.com); /openai/deployments/{deployment}/chat/completions?api-version=2024-06-01 is appended automatically. Authenticates via the api-key header.",
+    aiBaseUrlGeminiHint:
+      "Gemini native API: default https://generativelanguage.googleapis.com (/v1beta/models/{model}:generateContent is appended automatically). Authenticates via the x-goog-api-key header; get an API key from Google AI Studio.",
     aiApiKey: "API Key",
     aiApiKeyPlaceholder: "Enter API key (stored locally only)",
+    aiDeployment: "Deployment",
+    aiDeploymentPlaceholder: "e.g. gpt-4o (deployment created in Azure)",
     aiModel: "Model",
     restoreAiSettings: "Restore default",
     done: "Done",
@@ -195,6 +213,9 @@ const enUS = {
     fileExists: "File already exists. Choose another name.",
   },
   annotation: {
+    groupClipboard: "Clipboard",
+    groupAI: "AI",
+    groupAnnotations: "Annotations",
     del: "Delete",
     ins: "Insert",
     sub: "Replace",
@@ -253,7 +274,7 @@ const enUS = {
       "Replace the whole current document with the AI-rewritten result. Continue?",
     retry: "Retry",
     error: {
-      configMissing: "Enable and configure the AI panel in Settings first",
+      configMissing: "Enable the AI panel and fill in the service settings (base URL and model) in Settings first",
       authFailed: "Invalid API key or insufficient permission. Check Settings",
       timeout: "AI request timed out. Retry later or increase the timeout",
       network:

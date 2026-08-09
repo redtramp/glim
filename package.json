@@ -1,7 +1,7 @@
 {
   "name": "glim-reader",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "packageManager": "pnpm@11.17.0",
   "description": "A lightweight, fast, WYSIWYG Markdown desktop reader built with Tauri 2 + Vue 3. Supports KaTeX, Mermaid, full-text search, and PDF/DOCX export.",
@@ -77,6 +77,7 @@
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",
     "@vitejs/plugin-vue": "^5.2.4",
+    "@vitest/coverage-v8": "^4.1.10",
     "@vue/test-utils": "^2.4.11",
     "eslint": "^10.8.0",
     "eslint-plugin-vue": "^10.10.0",
