@@ -100,6 +100,8 @@ export default [
         DOMException: "readonly",
         Selection: "readonly",
         DOMRect: "readonly",
+        TextEncoder: "readonly",
+        TextDecoder: "readonly",
       },
     },
     rules: {

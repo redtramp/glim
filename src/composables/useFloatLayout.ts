@@ -6,13 +6,16 @@ export type LeftPanelID =
   | "search"
   | "annotations"
   | "bookmark"
-  | "ai"
-  | "settings"
   | "edit"
   | "new-file"
   | "open-file"
   | "open-folder"
-  | "export";
+  | "export"
+  | "ai"
+  | "settings"
+  | "help"
+  | "locale-toggle"
+  | "theme-toggle";
 
 export interface LeftPanelMeta {
   id: LeftPanelID;
@@ -27,17 +30,22 @@ export const LEFT_PANEL_META: LeftPanelMeta[] = [
   { id: "search", icon: "🔍", labelKey: "float.search", group: "content" },
   { id: "annotations", icon: "✏️", labelKey: "float.annotations", group: "content" },
   { id: "bookmark", icon: "🔖", labelKey: "float.bookmark", group: "content" },
-  { id: "ai", icon: "🤖", labelKey: "float.ai", group: "tools" },
-  { id: "settings", icon: "⚙️", labelKey: "float.settings", group: "tools" },
   { id: "new-file", icon: "📄", labelKey: "float.newFile", group: "actions" },
   { id: "open-file", icon: "📂", labelKey: "float.openFile", group: "actions" },
   { id: "open-folder", icon: "🗀", labelKey: "float.openFolder", group: "actions" },
   { id: "export", icon: "⇩", labelKey: "float.export", group: "actions" },
   { id: "edit", icon: "✎", labelKey: "float.editToggle", group: "actions" },
+  { id: "ai", icon: "🤖", labelKey: "float.ai", group: "tools" },
+  { id: "settings", icon: "⚙️", labelKey: "float.settings", group: "tools" },
+  { id: "help", icon: "❓", labelKey: "float.help", group: "tools" },
+  { id: "locale-toggle", icon: "🌐", labelKey: "float.localeToggle", group: "tools" },
+  { id: "theme-toggle", icon: "🌓", labelKey: "float.themeToggle", group: "tools" },
 ];
 
 /** 动作类面板 ID（不展开浮层，直接执行动作） */
 export const ACTION_PANEL_IDS: ReadonlySet<LeftPanelID> = new Set([
+  "locale-toggle",
+  "theme-toggle",
   "new-file",
   "open-file",
   "open-folder",

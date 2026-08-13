@@ -3,8 +3,8 @@
 import Banner from "./components/Banner.vue";
 import DiffView from "./components/DiffView.vue";
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from "vue";
-import { open, save } from "@tauri-apps/plugin-dialog";
-import { readTextFile, writeTextFile, exists } from "@tauri-apps/plugin-fs";
+import { open } from "@tauri-apps/plugin-dialog";
+import { readTextFile, exists } from "@tauri-apps/plugin-fs";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { invoke } from "@tauri-apps/api/core";
 import { useI18n } from "vue-i18n";
@@ -27,11 +27,8 @@ import { useScrollSpy } from "./composables/useScrollSpy";
 import { useFindInPage } from "./composables/useFindInPage";
 import { useHistory, type RecentItem } from "./composables/useHistory";
 import { useReadingSettings } from "./composables/useReadingSettings";
-import { useShortcuts } from "./composables/useShortcuts";
 import { useAnnotations } from "./composables/useAnnotations";
-import {
-  resolveSelectionRange,
-} from "./composables/useAnnotations";
+import { resolveSelectionRange } from "./composables/useAnnotations";
 import { useAiPanel } from "./composables/useAiPanel";
 import type { CriticType } from "./composables/criticMarkup";
 import {
@@ -52,6 +49,14 @@ import {
   type PandocInfo,
 } from "./composables/useExport";
 
+// Pinia stores
+import { useAppStore } from "./stores/useAppStore";
+
+// Extracted composables
+import { useFileManager } from "./composables/useFileManager";
+import { useKeyboardHandlers } from "./composables/useKeyboardHandlers";
+import { useUnsavedDialog } from "./composables/useUnsavedDialog";
+
 // 悬浮布局（P0）
 import LeftRail from "./components/LeftRail.vue";
 import FloatingPanel from "./components/FloatingPanel.vue";
@@ -65,12 +70,19 @@ import TocCapsule from "./components/TocCapsule.vue";
 import AnnotationList from "./components/AnnotationList.vue";
 import BookmarkPanel from "./components/BookmarkPanel.vue";
 import AiPanelInline from "./components/AiPanelInline.vue";
+import HelpPanel from "./components/HelpPanel.vue";
 import Toolbar from "./components/Toolbar.vue";
 import ExportMenu from "./components/ExportMenu.vue";
 import MobileBottomBar from "./components/MobileBottomBar.vue";
 import TopTrigger from "./components/TopTrigger.vue";
 
 const { t, locale } = useI18n();
+
+/** 提取的文件管理器：接管文件打开/保存/关闭/新建全流程 */
+const fileManager = useFileManager();
+
+/** 未保存变更对话框：接管 askUnsaved / resolveDialog */
+const unsavedDialog = useUnsavedDialog();
 
 /** 悬浮布局（P0）—— 浮层状态管理 */
 const floatLayout = useFloatLayout();
@@ -159,7 +171,6 @@ const {
   setMaxWidth,
   setLineHeight,
 } = useReadingSettings();
-const { normalizeEvent } = useShortcuts();
 
 /** 批注闭环(选区写回 / 复制给 AI / 清除全部) */
 const annotations = useAnnotations();
@@ -293,54 +304,25 @@ const {
   findTabByPath,
   createTab,
   activateTab,
-  removeTab,
-  closeTabsLeft,
-  closeTabsRight,
-  closeTabsOthers,
-  closeAllTabs,
   persist,
   loadPersisted,
 } = useTabs();
 
-const errorMsg = ref<string>("");
-const saving = ref(false);
-const editorRef = ref<{
-  focus: () => void;
-  openSearch: () => void;
-  openReplace: () => void;
-  goToLine: () => void;
-  getTopVisibleLine: () => number;
-  scrollToLine: (line: number) => void;
-} | null>(null);
+const app = useAppStore();
+const errorMsg = computed(() => app.errorMsg);
+const saving = computed(() => app.saving);
+const exportToast = computed(() => app.exportToast);
+const theme = computed(() => app.theme);
+const editorRef = fileManager.editorRef;
 
-type UnsavedChoice = "save" | "discard" | "cancel";
-type UnsavedDialogMode = "unsaved" | "external";
-const showUnsavedDialog = ref(false);
-const unsavedDialogMode = ref<UnsavedDialogMode>("unsaved");
-const dialogTab = ref<Tab | null>(null);
-let unsavedResolve: ((choice: UnsavedChoice) => void) | null = null;
+/** 动态图标：语言切换按钮显示当前语言，编辑按钮根据状态切换 */
+const dynamicIcons = computed(() => ({
+  "locale-toggle": locale.value === "zh-CN" ? "中" : "En",
+  "edit": isEditing.value ? "👁" : "✎",
+}));
 
-const suppressed = new Set<string>();
-function addSuppress(p: string) {
-  suppressed.add(p.replace(/\\/g, "/").toLowerCase());
-}
-function isSuppressed(p: string): boolean {
-  return suppressed.has(p.replace(/\\/g, "/").toLowerCase());
-}
-function clearSuppress(p: string) {
-  suppressed.delete(p.replace(/\\/g, "/").toLowerCase());
-}
-function scheduleSuppressClear(p: string) {
-  window.setTimeout(() => clearSuppress(p), 1000);
-}
-
-const theme = ref<"light" | "dark">(
-  (localStorage.getItem("glim-reader-theme") as "light" | "dark") || "light"
-);
-const showSettings = ref(false);
 const showExportMenu = ref(false);
 const exportBusy = ref(false);
-const exportToast = ref("");
 const pandocInfo = ref<PandocInfo | null>(null);
 const pdfEnginePath = ref<string | null>(null);
 const renderTick = ref(0);
@@ -361,8 +343,6 @@ const showDiffView = ref(false);
 const diffOldContent = ref("");
 const diffNewContent = ref("");
 const diffFileName = ref("");
-/** 审阅面板（Accept/Reject）:只在预览模式可用,面板打开时遮罩遮挡无法编辑 */
-const showReviewPanel = ref(false);
 
 const autoReloadWhitelist = ref<string[]>(
   JSON.parse(localStorage.getItem("glim-reader-auto-reload-whitelist") || "[]")
@@ -375,6 +355,32 @@ const bodyRef = computed(() => markdownRef.value?.root ?? null);
 
 const { onScroll } = useScrollSpy(viewerEl, bodyRef);
 const find = useFindInPage(bodyRef);
+
+/** 键盘事件处理器：接管快捷键匹配与分发 */
+const keyboardHandlers = useKeyboardHandlers({
+  fileManager: {
+    openFile: fileManager.openFile,
+    saveCurrentFile: fileManager.saveCurrentFile,
+    saveAs: fileManager.saveAs,
+    closeCurrentTab: fileManager.closeCurrentTab,
+    closeAllTabs: fileManager.closeAllTabs,
+    createNewFile: fileManager.createNewFile,
+  },
+  floatLayout,
+  find,
+  unsavedDialog,
+});
+
+// 未保存对话框状态别名，供模板使用
+const showUnsavedDialog = unsavedDialog.showUnsavedDialog;
+const unsavedDialogMode = unsavedDialog.unsavedDialogMode;
+const dialogTab = unsavedDialog.dialogTab;
+const showSettings = keyboardHandlers.showSettings;
+const showReviewPanel = keyboardHandlers.showReviewPanel;
+const addSuppress = fileManager.addSuppress;
+const isSuppressed = fileManager.isSuppressed;
+const clearSuppress = fileManager.clearSuppress;
+const scheduleSuppressClear = fileManager.scheduleSuppressClear;
 
 const currentFile = computed(() => activeTab.value?.path ?? "");
 const draftContent = computed(() => activeTab.value?.draftContent ?? "");
@@ -421,20 +427,6 @@ const unsavedDialogMessage = computed(() =>
 
 let headingTimer: number | null = null;
 let appWindow: import("@tauri-apps/api/window").Window | null = null;
-
-function askUnsaved(tab: Tab, mode: UnsavedDialogMode): Promise<UnsavedChoice> {
-  if (unsavedResolve) {
-    // A dialog is already in flight; don't clobber its resolver.
-    return Promise.resolve("cancel");
-  }
-
-  return new Promise((resolve) => {
-    dialogTab.value = tab;
-    unsavedDialogMode.value = mode;
-    unsavedResolve = resolve;
-    showUnsavedDialog.value = true;
-  });
-}
 
 function toggleAutoReload(path: string) {
   const normalized = path.replace(/\\/g, "/").toLowerCase();
@@ -497,14 +489,6 @@ function showBannerForStaleTab(tab: Tab) {
   showBanner.value = true;
 }
 
-function resolveDialog(choice: UnsavedChoice) {
-  showUnsavedDialog.value = false;
-  const resolve = unsavedResolve;
-  unsavedResolve = null;
-  dialogTab.value = null;
-  resolve?.(choice);
-}
-
  async function readFileIntoTab(tab: Tab, path: string, hash = "") {
    addSuppress(path);
    try {
@@ -522,7 +506,7 @@ function resolveDialog(choice: UnsavedChoice) {
      pushRecent(path);
      // 追加监听该文件所在目录，以便外部修改时提示 stale（避免整树深度遍历）
      void watcher.watchFile(dirOf(path));
-     errorMsg.value = "";
+     app.errorMsg = "";
      scheduleSuppressClear(path);
    } catch (e: any) {
      clearSuppress(path);
@@ -552,7 +536,7 @@ async function loadFile(path: string, hash = "") {
   try {
     await readFileIntoTab(tab, path, hash);
   } catch (e: any) {
-    errorMsg.value = `${t("errors.readFailed")}: ${e?.message || e}`;
+    app.errorMsg = `${t("errors.readFailed")}: ${e?.message || e}`;
     return;
   }
   tabs.value.push(tab);
@@ -577,7 +561,7 @@ async function loadFile(path: string, hash = "") {
      scheduleSuppressClear(tab.path);
    } catch (e: any) {
      clearSuppress(tab.path);
-     errorMsg.value = `${t("errors.readFailed")}: ${e?.message || e}`;
+     app.errorMsg = `${t("errors.readFailed")}: ${e?.message || e}`;
    }
  }
 
@@ -612,160 +596,29 @@ async function handleRefresh() {
   }
 }
 
-async function saveTab(tab: Tab): Promise<boolean> {
-  if (!tab.path || saving.value) return false;
-  saving.value = true;
-  try {
-    addSuppress(tab.path);
-    await writeTextFile(tab.path, tab.draftContent);
-    tab.content = tab.draftContent;
-    tab.isDirty = false;
-    tab.headings = extractHeadings(tab.draftContent);
-    exportToast.value = t("editor.saved");
-    await refreshTree();
-    scheduleSuppressClear(tab.path);
-    return true;
-  } catch (e: any) {
-    clearSuppress(tab.path);
-    errorMsg.value = `${t("editor.saveFailed")}: ${e?.message ?? e}`;
-    return false;
-  } finally {
-    saving.value = false;
-  }
-}
-
-async function saveCurrentFile(): Promise<boolean> {
-  const tab = activeTab.value;
-  if (!tab) return false;
-  return saveTab(tab);
-}
-
-async function saveAsCurrentFile(): Promise<boolean> {
-  const tab = activeTab.value;
-  if (!tab || saving.value) return false;
-  const dest = await save({
-    title: t("editor.saveAs"),
-    defaultPath: fileName.value.replace(/\.[^.]+$/, "") + ".md",
-    filters: [
-      { name: "Markdown", extensions: ["md", "markdown", "mdx", "txt"] },
-    ],
-  });
-  if (!dest) return false;
-  saving.value = true;
-  try {
-    addSuppress(dest);
-    await writeTextFile(dest, tab.draftContent);
-    tab.content = tab.draftContent;
-    tab.path = dest;
-    tab.isDirty = false;
-    tab.headings = extractHeadings(tab.draftContent);
-    pushRecent(dest);
-    exportToast.value = `${t("editor.saved")}: ${dest}`;
-    await refreshTree();
-    scheduleSuppressClear(dest);
-    persist();
-    return true;
-  } catch (e: any) {
-    clearSuppress(dest);
-    errorMsg.value = `${t("editor.saveFailed")}: ${e?.message ?? e}`;
-    return false;
-  } finally {
-    saving.value = false;
-  }
-}
-
 async function closeTab(id: string) {
-  const tab = tabs.value.find((x) => x.id === id);
-  if (!tab) return;
-  if (tab.isDirty) {
-    if (id !== activeTabId.value) await switchToTab(id);
-    const choice = await askUnsaved(tab, "unsaved");
-    if (choice === "cancel") return;
-    if (choice === "save") {
-      const ok = await saveTab(tab);
-      if (!ok) return;
-    }
-  }
-  removeTab(id);
+  await fileManager.requestCloseTab(id);
 }
 
 async function confirmCloseAll(): Promise<boolean> {
-  for (const tab of tabs.value.filter((x) => x.isDirty)) {
-    activateTab(tab.id);
-    const choice = await askUnsaved(tab, "unsaved");
-    if (choice === "cancel") return false;
-    if (choice === "save") {
-      const ok = await saveTab(tab);
-      if (!ok) return false;
-    } else {
-      tab.isDirty = false;
-    }
-  }
+  await fileManager.closeAllTabs();
   return true;
 }
 
-/** 关闭 targetId 右侧的所有 tab（保留 target 自身及左侧 tab） */
 async function closeTabRight(targetId: string): Promise<void> {
-  const idx = tabs.value.findIndex((t) => t.id === targetId);
-  if (idx < 0 || idx >= tabs.value.length - 1) return;
-  const toClose = tabs.value.slice(idx + 1);
-  for (const tab of toClose) {
-    activateTab(tab.id);
-    if (tab.isDirty) {
-      const choice = await askUnsaved(tab, "unsaved");
-      if (choice === "cancel") return;
-      if (choice === "save") {
-        const ok = await saveTab(tab);
-        if (!ok) return;
-      } else {
-        tab.isDirty = false;
-      }
-    }
-  }
-  closeTabsRight(targetId);
+  await fileManager.closeTabRight(targetId);
 }
 
-/** 关闭 targetId 左侧的所有 tab（保留 target 自身及右侧 tab） */
 async function closeTabLeft(targetId: string): Promise<void> {
-  const idx = tabs.value.findIndex((t) => t.id === targetId);
-  if (idx <= 0) return;
-  const toClose = tabs.value.slice(0, idx).reverse();
-  for (const tab of toClose) {
-    activateTab(tab.id);
-    if (tab.isDirty) {
-      const choice = await askUnsaved(tab, "unsaved");
-      if (choice === "cancel") return;
-      if (choice === "save") {
-        const ok = await saveTab(tab);
-        if (!ok) return;
-      } else {
-        tab.isDirty = false;
-      }
-    }
-  }
-  closeTabsLeft(targetId);
+  await fileManager.closeTabLeft(targetId);
 }
 
-/** 关闭所有 tab */
 async function closeTabAll() {
-  const result = await confirmCloseAll();
-  if (result) closeAllTabs();
+  await fileManager.closeAllTabs();
 }
 
-/** 关闭除 targetId 以外的所有 tab */
 async function closeTabOthers(targetId: string) {
-  const result = await confirmCloseAll();
-  if (result) closeTabsOthers(targetId);
-}
-
-function onDialogSave() {
-  resolveDialog("save");
-}
-function onDialogDiscard() {
-  resolveDialog("discard");
-}
-function onDialogCancel() {
-  resolveDialog("cancel");
+  await fileManager.closeTabOthers(targetId);
 }
 
 function getPreviewTopSourceLine(): number {
@@ -863,67 +716,6 @@ function saveCurrentScroll() {
     tab.scrollTop = viewerEl.value.scrollTop;
     saveScroll(tab.path, viewerEl.value.scrollTop);
   }
-}
-
-function withMarkdownExtension(path: string): string {
-  return /\.(md|markdown|mdx|txt)$/i.test(path) ? path : `${path}.md`;
-}
-
-async function createNewFile() {
-  const dest = await save({
-    title: t("editor.newFile"),
-    defaultPath: "untitled.md",
-    filters: [
-      { name: "Markdown", extensions: ["md", "markdown", "mdx", "txt"] },
-    ],
-  });
-  if (!dest) return;
-  const path = withMarkdownExtension(dest);
-  saving.value = true;
-  try {
-    addSuppress(path);
-    await writeTextFile(path, "");
-    saveCurrentScroll();
-    let tab = findTabByPath(path);
-    if (!tab) {
-      tab = createTab(path);
-      tabs.value.push(tab);
-    }
-    tab.path = path;
-    tab.content = "";
-    tab.draftContent = "";
-    tab.isDirty = false;
-    tab.isEditing = true;
-    tab.headings = [];
-    tab.pendingHash = "";
-    tab.pendingScrollTop = 0;
-    tab.pendingSourceLine = 0;
-    tab.scrollTop = 0;
-    pushRecent(path);
-    activateTab(tab.id);
-    errorMsg.value = "";
-    exportToast.value = `${t("editor.created")}: ${path}`;
-    await refreshTree();
-    scheduleSuppressClear(path);
-    persist();
-    await nextTick();
-    editorRef.value?.focus();
-  } catch (e: any) {
-    clearSuppress(path);
-    errorMsg.value = `${t("editor.createFailed")}: ${e?.message ?? e}`;
-  } finally {
-    saving.value = false;
-  }
-}
-
-async function pickFile() {
-  const selected = await open({
-    multiple: false,
-    filters: [
-      { name: "Markdown", extensions: ["md", "markdown", "mdx", "txt"] },
-    ],
-  });
-  if (typeof selected === "string") await loadFile(selected);
 }
 
 async function pickFolder() {
@@ -1041,24 +833,19 @@ async function restoreTabs(initialPath = "") {
 }
 
 function toggleTheme() {
-  theme.value = theme.value === "light" ? "dark" : "light";
-  localStorage.setItem("glim-reader-theme", theme.value);
-  applyTheme();
+  app.toggleTheme();
   // Force Mermaid/KaTeX re-render so charts follow the new theme.
   renderTick.value++;
 }
 
 function applyTheme() {
-  document.documentElement.dataset.theme = theme.value;
-  void invoke("set_app_theme", { theme: theme.value }).catch(() => {
-    /* ignore in non-Tauri environments */
-  });
+  app.applyTheme();
 }
 
 async function exportHtml() {
   if (isEditing.value) {
     closeExportMenu();
-    errorMsg.value = t("editor.previewBeforeExport");
+    app.errorMsg = t("editor.previewBeforeExport");
     return;
   }
   if (!bodyRef.value || !draftContent.value) {
@@ -1075,14 +862,14 @@ async function exportHtml() {
     if (!dest) return;
   } catch (e: any) {
     showExportMenu.value = false;
-    errorMsg.value = `${t("export.exportFailed")}: ${e?.message ?? e}`;
+    app.errorMsg = `${t("export.exportFailed")}: ${e?.message ?? e}`;
   }
 }
 
 async function exportDocx() {
   if (isEditing.value) {
     showExportMenu.value = false;
-    errorMsg.value = t("editor.previewBeforeExport");
+    app.errorMsg = t("editor.previewBeforeExport");
     return;
   }
   if (!bodyRef.value || !draftContent.value) {
@@ -1090,7 +877,7 @@ async function exportDocx() {
     return;
   }
   exportBusy.value = true;
-  exportToast.value = t("export.generatingDocx");
+  app.exportToast = t("export.generatingDocx");
   try {
     const out = await exportToDocx(
       bodyRef.value,
@@ -1098,11 +885,11 @@ async function exportDocx() {
       displayFileName.value,
       currentFile.value || undefined
     );
-    if (out) exportToast.value = `${t("export.exportedDocx")}: ${out}`;
-    else exportToast.value = "";
+    if (out) app.exportToast = `${t("export.exportedDocx")}: ${out}`;
+    else app.exportToast = "";
   } catch (e: any) {
-    errorMsg.value = `${t("export.docxFailed")}: ${e?.message ?? e}`;
-    exportToast.value = "";
+    app.errorMsg = `${t("export.docxFailed")}: ${e?.message ?? e}`;
+    app.exportToast = "";
   } finally {
     exportBusy.value = false;
     showExportMenu.value = false;
@@ -1112,7 +899,7 @@ async function exportDocx() {
 async function exportPdf() {
   if (isEditing.value) {
     showExportMenu.value = false;
-    errorMsg.value = t("editor.previewBeforeExport");
+    app.errorMsg = t("editor.previewBeforeExport");
     return;
   }
   if (!bodyRef.value || !draftContent.value) {
@@ -1120,7 +907,7 @@ async function exportPdf() {
     return;
   }
   exportBusy.value = true;
-  exportToast.value = t("export.generatingPdf");
+  app.exportToast = t("export.generatingPdf");
   try {
     const result = await exportToPdf(
       bodyRef.value,
@@ -1142,14 +929,14 @@ async function exportPdf() {
     if (result) {
       pdfEnginePath.value = result.edge_path;
       const sec = (result.elapsed_ms / 1000).toFixed(1);
-      exportToast.value = `${t("export.exportedPdf")} (${sec}s): ${result.out_path}`;
+      app.exportToast = `${t("export.exportedPdf")} (${sec}s): ${result.out_path}`;
     } else {
-      exportToast.value = "";
+      app.exportToast = "";
     }
   } catch (e: any) {
     const msg = e?.message || (typeof e === "string" ? e : JSON.stringify(e));
-    errorMsg.value = `${t("export.pdfFailed")}: ${msg}`;
-    exportToast.value = "";
+    app.errorMsg = `${t("export.pdfFailed")}: ${msg}`;
+    app.exportToast = "";
   } finally {
     exportBusy.value = false;
     showExportMenu.value = false;
@@ -1159,7 +946,7 @@ async function exportPdf() {
 function doPrint() {
   if (isEditing.value) {
     closeExportMenu();
-    errorMsg.value = t("editor.previewBeforeExport");
+    app.errorMsg = t("editor.previewBeforeExport");
     return;
   }
   if (bodyRef.value) printDocument(bodyRef.value, fileName.value);
@@ -1179,16 +966,22 @@ function onFloatPanelAction(id: string): void {
       toggleEditorMode();
       break;
     case "new-file":
-      void createNewFile();
+      void fileManager.createNewFile();
       break;
     case "open-file":
-      void pickFile();
+      void fileManager.openFile();
       break;
     case "open-folder":
       void pickFolder();
       break;
     case "export":
       toggleExportMenu();
+      break;
+    case "locale-toggle":
+      toggleLocale();
+      break;
+    case "theme-toggle":
+      toggleTheme();
       break;
   }
 }
@@ -1295,76 +1088,6 @@ function zoomFont(delta: number) {
   else setFontSize(readingSettings.value.fontSize + delta);
 }
 
-function resetFont() {
-  if (isEditing.value) setEditorFontSize(14);
-  else setFontSize(16);
-}
-
-function onWheel(e: WheelEvent) {
-  if (!e.ctrlKey) return;
-  e.preventDefault();
-  zoomFont(e.deltaY < 0 ? 1 : -1);
-}
-
-function onKeydown(e: KeyboardEvent) {
-  const mod = e.ctrlKey || e.metaKey;
-  if (showUnsavedDialog.value) {
-    if (e.key === "Escape") onDialogCancel();
-    return;
-  }
-  if (e.defaultPrevented) return;
-
-  if (e.key === "Escape") {
-    if (find.visible.value) find.close();
-    else if (showSettings.value) showSettings.value = false;
-    return;
-  }
-
-  if (!mod) return;
-  const combo = normalizeEvent(e);
-  const isEdit = isEditing.value;
-
-  const handlers: Record<string, () => void> = {
-    "toggle-mode": () => { e.preventDefault(); toggleEditorMode(); },
-    "new-file": () => { e.preventDefault(); void createNewFile(); },
-    "open-file": () => { e.preventDefault(); void pickFile(); },
-    "search-panel": () => {
-      e.preventDefault();
-      if (!isEditing.value) floatLayout.openPanel("search");
-    },
-    "save-as": () => { e.preventDefault(); void saveAsCurrentFile(); },
-    settings: () => { e.preventDefault(); showSettings.value = true; },
-    print: () => { e.preventDefault(); doPrint(); },
-    save: () => { e.preventDefault(); void saveCurrentFile(); },
-    "zoom-in": () => { e.preventDefault(); zoomFont(1); },
-    "zoom-out": () => { e.preventDefault(); zoomFont(-1); },
-    "zoom-reset": () => { e.preventDefault(); resetFont(); },
-    "toggle-bookmark": () => { e.preventDefault(); toggleBookmark(); },
-    "open-filetree": () => {
-      e.preventDefault();
-      if (!isEditing.value) floatLayout.openPanel("filetree");
-    },
-    "open-annotations": () => {
-      e.preventDefault();
-      if (!isEditing.value) floatLayout.openPanel("annotations");
-    },
-  };
-
-  // Editor-only shortcuts
-  if (isEdit) {
-    handlers.find = () => { e.preventDefault(); editorRef.value?.openSearch(); };
-    handlers.replace = () => { e.preventDefault(); editorRef.value?.openReplace(); };
-    handlers["go-to-line"] = () => { e.preventDefault(); editorRef.value?.goToLine(); };
-  } else {
-    handlers.find = () => { e.preventDefault(); find.open(); };
-    handlers["copy-ai"] = () => { e.preventDefault(); void annotations.copyForAI(); };
-    handlers["review-annotations"] = () => { e.preventDefault(); openReviewPanel(); };
-  }
-
-  const handler = handlers[combo];
-  if (handler) handler();
-}
-
 let scrollSaveTimer: number | null = null;
 function onViewerScroll() {
   if (isEditing.value) return;
@@ -1384,7 +1107,7 @@ watch(isEditing, (editing) => {
 });
 
 watch(activeTabId, () => {
-  errorMsg.value = "";
+  app.errorMsg = "";
   find.close();
   find.clearHighlights();
   // 切换文档时清理批注状态,避免旧文档的工具栏残留
@@ -1458,8 +1181,6 @@ onMounted(async () => {
   } catch (e) {
     console.warn("drag-drop unavailable", e);
   }
-  window.addEventListener("keydown", onKeydown);
-  window.addEventListener("wheel", onWheel, { passive: false });
   void refreshRecent();
   floatLayout.bindGlobalClick();
 });
@@ -1472,8 +1193,6 @@ onUnmounted(() => {
   void watcher.stop();
   annotations.dispose();
   floatLayout.unbindGlobalClick();
-  window.removeEventListener("keydown", onKeydown);
-  window.removeEventListener("wheel", onWheel);
 });
 
 watch(
@@ -1484,7 +1203,7 @@ watch(
 watch(exportToast, (v) => {
   if (v) {
     window.setTimeout(() => {
-      exportToast.value = "";
+      app.exportToast = "";
     }, 3500);
   }
 });
@@ -1492,7 +1211,7 @@ watch(exportToast, (v) => {
 watch(errorMsg, (v) => {
   if (v) {
     window.setTimeout(() => {
-      errorMsg.value = "";
+      app.errorMsg = "";
     }, 5000);
   }
 });
@@ -1523,14 +1242,14 @@ watch(hasActiveFile, (v) => {
              :float-layout-enabled="enableFloatLayout"
              :pandoc-info="pandocInfo"
              :pdf-engine-path="pdfEnginePath"
-             @create-new-file="createNewFile"
-             @pick-file="pickFile"
+             @create-new-file="fileManager.createNewFile"
+             @pick-file="fileManager.openFile"
              @pick-folder="pickFolder"
              @refresh-tree="handleRefresh"
              @close-folder="closeFolder"
              @toggle-editor-mode="toggleEditorMode"
-             @save="saveCurrentFile"
-             @save-as="saveAsCurrentFile"
+             @save="fileManager.saveCurrentFile"
+             @save-as="fileManager.saveAs"
              @find="isEditing ? editorRef?.openSearch() : find.open()"
              @toggle-export-menu="toggleExportMenu"
              @close-export-menu="closeExportMenu"
@@ -1567,7 +1286,7 @@ watch(hasActiveFile, (v) => {
         tabindex="0"
         @scroll.passive="onViewerScroll"
       >
-        <div v-if="errorMsg" class="error" @click="errorMsg = ''">
+        <div v-if="errorMsg" class="error" @click="app.errorMsg = ''">
           {{ errorMsg }}
         </div>
         <div v-if="!hasActiveFile" class="empty">
@@ -1641,6 +1360,7 @@ watch(hasActiveFile, (v) => {
     <LeftRail
       v-if="enableFloatLayout"
       :active-panel="floatLayout.state.activeLeftPanel"
+      :dynamic-icons="dynamicIcons"
       @open-panel="(id) => ACTION_PANEL_IDS.has(id) ? onFloatPanelAction(id) : floatLayout.openPanel(id)"
     />
 
@@ -1758,6 +1478,9 @@ watch(hasActiveFile, (v) => {
             @toggle-float-layout="toggleFloatLayout"
           />
         </template>
+        <template v-else-if="floatLayout.state.activeLeftPanel === 'help'">
+          <HelpPanel />
+        </template>
       </FloatingPanel>
 
       <TocCapsule
@@ -1804,11 +1527,13 @@ watch(hasActiveFile, (v) => {
           ? t('editor.keepEditing')
           : t('editor.discardAndContinue')
       "
-      @save="onDialogSave"
+      @save="unsavedDialog.resolveDialog('save')"
       @discard="
-        unsavedDialogMode === 'external' ? onDialogCancel() : onDialogDiscard()
+        unsavedDialogMode === 'external'
+          ? unsavedDialog.resolveDialog('cancel')
+          : unsavedDialog.resolveDialog('discard')
       "
-      @cancel="onDialogCancel"
+      @cancel="unsavedDialog.resolveDialog('cancel')"
     />
 
     <Banner
@@ -1820,7 +1545,7 @@ watch(hasActiveFile, (v) => {
       :on-auto-reload="onBannerAutoReload"
     />
 
-    <div v-if="exportToast" class="toast" @click="exportToast = ''">
+    <div v-if="exportToast" class="toast" @click="app.exportToast = ''">
       ✓ {{ exportToast }}
     </div>
     <div

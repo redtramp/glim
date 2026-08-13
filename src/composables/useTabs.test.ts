@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
 import { useTabs, normalizePath, samePath, type Tab } from "./useTabs";
 
 // vitest4 + jsdom 环境无 localStorage,提供内存实现保证持久化可测
@@ -34,6 +35,8 @@ Object.defineProperty(globalThis, "localStorage", {
   },
 });
 
+// 模块加载前激活 Pinia,保证 useTabs() 在模块顶层可调用
+setActivePinia(createPinia());
 const api = useTabs();
 
 function pushTabs(paths: string[]): string[] {
@@ -45,6 +48,7 @@ function pushTabs(paths: string[]): string[] {
 }
 
 beforeEach(() => {
+  setActivePinia(createPinia());
   api.closeAllTabs();
 });
 

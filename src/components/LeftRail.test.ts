@@ -26,6 +26,9 @@ vi.mock("vue-i18n", () => ({
         "float.bookmark": "书签",
         "float.ai": "AI 助手",
         "float.settings": "设置",
+        "float.help": "帮助",
+        "float.localeToggle": "切换语言",
+        "float.themeToggle": "切换主题",
       };
       return map[key] || key;
     },
@@ -39,10 +42,10 @@ function createWrapper(props: { activePanel: import("../composables/useFloatLayo
 }
 
 describe("LeftRail", () => {
-  it("渲染 12 个图标按钮", () => {
+  it("渲染 15 个图标按钮", () => {
     const wrapper = createWrapper({ activePanel: null });
     const buttons = wrapper.findAll(".left-rail-btn");
-    expect(buttons).toHaveLength(12);
+    expect(buttons).toHaveLength(15);
   });
 
   it("渲染 3 条分隔线", () => {
@@ -54,10 +57,12 @@ describe("LeftRail", () => {
   it("分隔线位于分组边界（navigation|content|tools|actions）", () => {
     const wrapper = createWrapper({ activePanel: null });
     const children = wrapper.findAll(".left-rail-inner > *");
-    // 12 按钮 + 3 分隔线
-    expect(children).toHaveLength(15);
-    // 分组变化后紧跟分隔线：idx 1→2、4→5、6→7 之间（含插入偏移后位于 2/6/9）
-    const sepIndexes = new Set([2, 6, 9]);
+    // 15 按钮 + 3 分隔线
+    expect(children).toHaveLength(18);
+    // 新顺序：navigation(2) → content(3) → actions(5) → tools(5)
+    // DOM 结构：btn,btn,sep,btn,btn,btn,sep,btn,btn,btn,btn,btn,sep,btn...
+    // 分隔线位于 DOM 索引 2, 6, 12
+    const sepIndexes = new Set([2, 6, 12]);
     children.forEach((node, idx) => {
       if (sepIndexes.has(idx)) {
         expect(node.classes()).toContain("left-rail-sep");
@@ -84,13 +89,16 @@ describe("LeftRail", () => {
       "search",
       "annotations",
       "bookmark",
-      "ai",
-      "settings",
       "new-file",
       "open-file",
       "open-folder",
       "export",
       "edit",
+      "ai",
+      "settings",
+      "help",
+      "locale-toggle",
+      "theme-toggle",
     ];
     buttons.forEach((btn, idx) => {
       btn.trigger("click");
@@ -120,9 +128,9 @@ describe("LeftRail", () => {
   it("active 按钮 aria-pressed=true，其余 false", () => {
     const wrapper = createWrapper({ activePanel: "ai" });
     const buttons = wrapper.findAll(".left-rail-btn");
-    expect(buttons[5].attributes("aria-pressed")).toBe("true");
+    expect(buttons[10].attributes("aria-pressed")).toBe("true");
     buttons.forEach((btn, idx) => {
-      if (idx !== 5) expect(btn.attributes("aria-pressed")).toBe("false");
+      if (idx !== 10) expect(btn.attributes("aria-pressed")).toBe("false");
     });
   });
 
@@ -130,10 +138,12 @@ describe("LeftRail", () => {
     const wrapper = createWrapper({ activePanel: null });
     const buttons = wrapper.findAll(".left-rail-btn");
     expect(buttons[0].attributes("title")).toBe("文件树");
-    expect(buttons[5].attributes("title")).toBe("AI 助手");
-    // mock 未提供的新建/打开/导出/编辑文案 → 回退为 key 本身
-    expect(buttons[7].attributes("title")).toBe("float.newFile");
-    expect(buttons[11].attributes("title")).toBe("float.editToggle");
+    expect(buttons[4].attributes("title")).toBe("书签");
+    expect(buttons[5].attributes("title")).toBe("float.newFile");
+    expect(buttons[9].attributes("title")).toBe("float.editToggle");
+    expect(buttons[10].attributes("title")).toBe("AI 助手");
+    expect(buttons[13].attributes("title")).toBe("切换语言");
+    expect(buttons[14].attributes("title")).toBe("切换主题");
   });
 
   it("导航栏含有 aria-label 属性", () => {

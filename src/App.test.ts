@@ -7,9 +7,10 @@
  * - auto-reload 白名单中的 tab 直接 reload
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
 
-// Mock localStorage for useTabs
+// Mock localStorage for Pinia stores
 const mockStorage: Record<string, string> = {};
 Object.defineProperty(globalThis, "localStorage", {
   value: {
@@ -23,7 +24,6 @@ Object.defineProperty(globalThis, "localStorage", {
 });
 import { useTabs } from "./composables/useTabs";
 
-
 // Mock Tauri readTextFile
 vi.mock("@tauri-apps/plugin-fs", () => ({
   readTextFile: vi.fn(),
@@ -32,6 +32,10 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 }));
 
 describe("App.vue 外部文件变化处理", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
   describe("onFilesChanged 标记 stale", () => {
     it("onFilesChanged 标记 tab.staleSince 而非直接 forceReload", async () => {
       const { tabs, createTab, activeTabId } = useTabs();

@@ -48,11 +48,15 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 
 ### Floating Layout (default)
 - 40px floating left toolbar + right section-marker rail, full-width immersive reading without sidebars compressing content
-- 12 SVG line icons grouped by navigation / content / tools / actions: file tree, recent, search, annotations, bookmarks, AI, settings, new file, open file, open folder, export, edit/preview toggle
+- 15 icon buttons grouped by navigation / content / actions / tools: file tree, recent, search, annotations, bookmarks, new file, open file, open folder, export, edit/preview toggle, AI, settings, help, language toggle, theme toggle
+- Language toggle button (🌐) dynamically shows current language ("中"/"En"), click to switch between Chinese and English UI
+- Theme toggle button (🌓) one-click switch between light and dark themes
+- Edit/preview toggle button (✎/👁) dynamically changes icon based on current mode
 - Right section markers: current / read / unread status dots plus bookmark squares, click to jump, hover shows title tooltip, scroll-synced highlight
 - Outline display reworked: the former right-side outline panel (TocPanel / RightRail) was removed in favor of a bottom-right capsule mini-TOC (TocCapsule) plus the right section markers; the heading list expands on demand as a floating overlay without consuming reading width
 - Floating top tab bar always visible, still allows document switching in edit mode
-- 7 frosted-glass floating panels: file tree, recent, full-text search, annotations, bookmarks, AI assistant, quick settings
+- 8 frosted-glass floating panels: file tree, recent, full-text search, annotations, bookmarks, AI assistant, quick settings, help documentation
+- Help panel: usage guide, shortcut list, tab operations, annotation features, search features
 - Outline panel supports title search, Ctrl+click collapse, parent-heading level highlight
 - Responsive breakpoints for desktop / tablet / phone; mobile bottom toolbar with bottom-sheet panels
 - Classic / floating dual layouts switchable, preference persisted
@@ -120,7 +124,7 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - Recent files and scroll position persistence
 - File association: double-click `.md / .markdown / .mdx` to open directly, re-registrable in Settings
 - Single-instance operation, open files from command line / drag-and-drop
-- Simplified Chinese / English UI switching
+- Simplified Chinese / English UI switching (🌐 button in left floating menu, current language dynamically shown)
 - Update checking with one-click navigation to the download page
 
 ---

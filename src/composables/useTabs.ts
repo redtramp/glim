@@ -1,169 +1,78 @@
-import { ref, computed } from "vue";
-import type { Heading } from "./useMarkdown";
+/**
+ * useTabs — 向后兼容薄包装层，核心状态已迁移到 useTabsStore
+ *
+ * 所有导入 useTabs 的组件无需修改即可继续工作。
+ * 新代码应直接使用 useTabsStore。
+ */
+import { computed } from "vue";
+import { storeToRefs } from "pinia";
+import {
+  useTabsStore,
+  normalizePath,
+  samePath,
+  type Tab,
+} from "../stores/useTabsStore";
 
-const STORAGE_TABS = "glim-reader-tabs";
-
-export interface Tab {
-  id: string;
-  path: string;
-  content: string;
-  draftContent: string;
-  isDirty: boolean;
-  isEditing: boolean;
-  headings: Heading[];
-  scrollTop: number;
-  pendingHash: string;
-  pendingScrollTop: number;
-  pendingSourceLine: number;
-  staleSince: number | null;
-}
-
-interface PersistedTabs {
-  paths: string[];
-  activePath: string;
-}
-
-const tabs = ref<Tab[]>([]);
-const activeTabId = ref<string>("");
-
-let idSeq = 0;
-function nextId(): string {
-  idSeq += 1;
-  return `tab-${Date.now()}-${idSeq}`;
-}
-
-export function normalizePath(path: string): string {
-  return path.replace(/\\/g, "/").toLowerCase();
-}
-
-export function samePath(a: string, b: string): boolean {
-  return normalizePath(a) === normalizePath(b);
-}
-
-const activeTab = computed<Tab | null>(
-  () => tabs.value.find((t) => t.id === activeTabId.value) ?? null
-);
-
-function findTabByPath(path: string): Tab | undefined {
-  return tabs.value.find((t) => samePath(t.path, path));
-}
-
-function createTab(path: string): Tab {
-  return {
-    id: nextId(),
-    path,
-    content: "",
-    draftContent: "",
-    isDirty: false,
-    isEditing: false,
-    headings: [],
-    scrollTop: 0,
-    pendingHash: "",
-    pendingScrollTop: 0,
-    pendingSourceLine: 0,
-    staleSince: null,
-  };
-}
-
-function activateTab(id: string) {
-  if (tabs.value.some((t) => t.id === id)) {
-    activeTabId.value = id;
-    persist();
-  }
-}
-
-function removeTab(id: string) {
-  const idx = tabs.value.findIndex((t) => t.id === id);
-  if (idx === -1) return;
-  const wasActive = activeTabId.value === id;
-  tabs.value.splice(idx, 1);
-  if (wasActive) {
-    const next = tabs.value[idx] ?? tabs.value[idx - 1] ?? null;
-    activeTabId.value = next ? next.id : "";
-  }
-  persist();
-}
-
-/** 关闭 targetId 左侧的所有 tab（保留 target 自身及右侧） */
-function closeTabsLeft(targetId: string) {
-  const targetIdx = tabs.value.findIndex((t) => t.id === targetId);
-  if (targetIdx <= 0) return;
-  const targetTab = tabs.value[targetIdx];
-  // 移除 target 左侧的所有 tab（从后往前移除以保持索引稳定）
-  for (let i = targetIdx - 1; i >= 0; i--) {
-    tabs.value.splice(i, 1);
-  }
-  // 若当前 active 是已被移除的 tab，回退到 target
-  if (!tabs.value.find((t) => t.id === activeTabId.value)) {
-    activeTabId.value = targetTab.id;
-  }
-  persist();
-}
-
-/** 关闭 targetId 右侧的所有 tab（保留 target 自身及左侧） */
-function closeTabsRight(targetId: string) {
-  const targetIdx = tabs.value.findIndex((t) => t.id === targetId);
-  if (targetIdx === -1 || targetIdx >= tabs.value.length - 1) return;
-  const targetTab = tabs.value[targetIdx];
-  // 移除 target 右侧的所有 tab
-  tabs.value.splice(targetIdx + 1);
-  // 若当前 active 是已被移除的 tab，回退到 target
-  if (!tabs.value.find((t) => t.id === activeTabId.value)) {
-    activeTabId.value = targetTab.id;
-  }
-  persist();
-}
-
-/** 关闭 targetId 两侧的所有 tab（只保留 target 自身） */
-function closeTabsOthers(targetId: string) {
-  const targetIdx = tabs.value.findIndex((t) => t.id === targetId);
-  if (targetIdx === -1 || tabs.value.length <= 1) return;
-  const targetTab = tabs.value[targetIdx];
-  // 先保留 target，清空所有 tab，再放回去
-  tabs.value.length = 0;
-  tabs.value.push(targetTab);
-  activeTabId.value = targetTab.id;
-  persist();
-}
-
-/** 关闭所有 tab */
-function closeAllTabs() {
-  tabs.value.length = 0;
-  activeTabId.value = "";
-  persist();
-}
-
-function persist() {
-  const data: PersistedTabs = {
-    paths: tabs.value.map((t) => t.path),
-    activePath: activeTab.value?.path ?? "",
-  };
-  localStorage.setItem(STORAGE_TABS, JSON.stringify(data));
-}
-
-function loadPersisted(): PersistedTabs | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_TABS);
-    if (raw) return JSON.parse(raw) as PersistedTabs;
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
+export type { Tab };
+export { normalizePath, samePath };
 
 export function useTabs() {
+  const store = useTabsStore();
+  const { tabs, activeTabId } = storeToRefs(store);
+  const activeTab = computed(() => store.activeTab);
+
+  function findTabByPath(path: string): Tab | undefined {
+    return store.findTabByPath(path);
+  }
+
+  function activateTab(id: string) {
+    store.activateTab(id);
+  }
+
+  function removeTab(id: string) {
+    store.removeTab(id);
+  }
+
+  function closeTabsLeft(targetId: string) {
+    store.closeTabsLeft(targetId);
+  }
+
+  function closeTabsRight(targetId: string) {
+    store.closeTabsRight(targetId);
+  }
+
+  function closeTabsOthers(targetId: string) {
+    store.closeTabsOthers(targetId);
+  }
+
+  function closeAllTabs() {
+    store.closeAllTabs();
+  }
+
+  function createTab(path: string): Tab {
+    return store.createTab(path);
+  }
+
+  function persist() {
+    store.persist();
+  }
+
+  function loadPersisted() {
+    return store.loadPersisted();
+  }
+
   return {
     tabs,
     activeTabId,
     activeTab,
     findTabByPath,
-    createTab,
     activateTab,
     removeTab,
     closeTabsLeft,
     closeTabsRight,
     closeTabsOthers,
     closeAllTabs,
+    createTab,
     persist,
     loadPersisted,
   };

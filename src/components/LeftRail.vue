@@ -4,7 +4,10 @@ import { useI18n } from "vue-i18n";
 import { LEFT_PANEL_META, type LeftPanelID } from "../composables/useFloatLayout";
 import PanelIcon from "./PanelIcon.vue";
 
-defineProps<{ activePanel: LeftPanelID | null }>();
+const props = defineProps<{
+  activePanel: LeftPanelID | null;
+  dynamicIcons?: Record<string, string>;
+}>();
 
 const emit = defineEmits<{ (e: "open-panel", id: LeftPanelID): void }>();
 
@@ -56,7 +59,8 @@ const groupBoundaries = new Set(
           :aria-pressed="activePanel === item.id"
           @click="emit('open-panel', item.id)"
         >
-          <PanelIcon :name="item.id" />
+          <span v-if="props.dynamicIcons?.[item.id]" class="left-rail-icon-text">{{ props.dynamicIcons[item.id] }}</span>
+          <PanelIcon v-else :name="item.id" />
         </button>
         <div v-if="groupBoundaries.has(idx)" class="left-rail-sep" aria-hidden="true"></div>
       </template>

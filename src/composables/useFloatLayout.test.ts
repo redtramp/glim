@@ -28,22 +28,26 @@ describe("useFloatLayout", () => {
       expect(floatLayout.state.leftPanelLoaded.size).toBe(0);
     });
 
-    it("LEFT_PANEL_META 包含 12 个面板", () => {
-      expect(LEFT_PANEL_META).toHaveLength(12);
+    it("LEFT_PANEL_META 包含 15 个面板", () => {
+      expect(LEFT_PANEL_META).toHaveLength(15);
       const ids = LEFT_PANEL_META.map((m) => m.id);
+      // 新顺序：navigation → content → actions → tools
       expect(ids).toEqual([
         "filetree",
         "history",
         "search",
         "annotations",
         "bookmark",
-        "ai",
-        "settings",
         "new-file",
         "open-file",
         "open-folder",
         "export",
         "edit",
+        "ai",
+        "settings",
+        "help",
+        "locale-toggle",
+        "theme-toggle",
       ]);
     });
   });

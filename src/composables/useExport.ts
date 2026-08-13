@@ -8,16 +8,10 @@ import { EXPORT_BASE_CSS } from "./exportStyles";
 import { inlineImages, ensureSvgNamespace } from "./exportInline";
 import { i18n } from "../i18n";
 import { renderMermaidAll } from "./useMarkdown";
+import { escapeHtml } from "../utils/html";
 
 function t(key: string): string {
   return i18n.global.t(key);
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
 }
 
 function pickTheme(): "light" | "dark" {
