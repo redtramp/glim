@@ -13,6 +13,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "open", path: string, line: number): void;
+  (e: "query-change", query: string): void;
 }>();
 
 const query = ref("");
@@ -21,6 +22,14 @@ const loading = ref(false);
 const results = ref<SearchMatch[]>([]);
 const error = ref("");
 const inputRef = ref<HTMLInputElement | null>(null);
+
+/** 供外部在面板打开后调用，将焦点移入输入框 */
+function focusInput(): void {
+  inputRef.value?.focus();
+  inputRef.value?.select();
+}
+
+defineExpose({ focusInput, get query() { return query.value; } });
 
 const grouped = computed(() => {
   const map: Record<string, SearchMatch[]> = {};
@@ -68,13 +77,13 @@ async function run() {
 
 let debounceTimer: number | null = null;
 function onInput() {
+  emit("query-change", query.value); // 实时同步查询，供父组件保存到 lastSearchQuery
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = window.setTimeout(run, 220);
 }
 
 function onKey(evt: KeyboardEvent) {
-  if (evt.key === "Escape") emit("close");
-  else if (evt.key === "Enter") run();
+  if (evt.key === "Enter") run();
 }
 
 function highlight(text: string, q: string): string {
@@ -108,6 +117,8 @@ watch(
       await nextTick();
       inputRef.value?.focus();
       inputRef.value?.select();
+      // 面板打开时将当前查询同步给父组件，用于切换文件后恢复高亮
+      emit("query-change", query.value);
     }
   }
 );
@@ -137,7 +148,7 @@ watch(
           <path d="M15 5v14" />
         </svg>
       </button>
-      <button class="ic" @click="emit('close')" :title="t('find.close') + ' (Esc)'">
+      <button class="ic" @click="emit('close')" :title="t('find.close')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />

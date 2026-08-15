@@ -66,6 +66,7 @@ export default [
         Range: "readonly",
         HTMLElement: "readonly",
         HTMLInputElement: "readonly",
+        HTMLButtonElement: "readonly",
         HTMLImageElement: "readonly",
         HTMLAnchorElement: "readonly",
         HTMLSelectElement: "readonly",

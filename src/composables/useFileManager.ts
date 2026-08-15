@@ -52,19 +52,14 @@ export function useFileManager() {
     void fileTree.setRootFromFile(filePath);
   }
 
-  /** 打开文件（完整流程：读取→填 tab→激活） */
-  async function loadFile(path: string, hash = ""): Promise<void> {
+  /** 打开文件（完整流程：读取→填 tab→激活）
+   *  @param sourceLine 跳转至指定行号（来自全局搜索），设为 0 时不主动滚动 */
+  async function loadFile(path: string, hash = "", sourceLine = 0): Promise<void> {
     const existing = tabs.findTabByPath(path);
     if (existing) {
-      if (hash) {
-        existing.pendingHash = hash;
-        existing.pendingScrollTop = 0;
-        existing.pendingSourceLine = 0;
-      } else {
-        existing.pendingHash = "";
-        existing.pendingScrollTop = existing.scrollTop;
-        existing.pendingSourceLine = 0;
-      }
+      existing.pendingHash = hash;
+      existing.pendingScrollTop = 0;
+      existing.pendingSourceLine = sourceLine;
       tabs.activateTab(existing.id);
       return;
     }
@@ -76,10 +71,10 @@ export function useFileManager() {
       tab.isDirty = false;
       tab.isEditing = false;
       tab.headings = extractHeadings(text);
-      tab.pendingHash = hash;
-      tab.pendingScrollTop = hash ? 0 : history.getScroll(path);
-      tab.scrollTop = tab.pendingScrollTop;
-      tab.pendingSourceLine = 0;
+      tab.pendingHash = "";
+      tab.pendingScrollTop = 0;
+      tab.pendingSourceLine = sourceLine;
+      tab.scrollTop = 0;
       history.pushRecent(path);
       app.errorMsg = "";
       tabs.tabs.push(tab);

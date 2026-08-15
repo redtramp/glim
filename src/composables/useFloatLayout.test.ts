@@ -131,5 +131,16 @@ describe("useFloatLayout", () => {
       document.body.click();
       expect(floatLayout.state.activeLeftPanel).toBe("search");
     });
+
+    it("点击 .search-overlay 区域时不关闭浮动面板", () => {
+      floatLayout.openPanel("filetree");
+      floatLayout.bindGlobalClick();
+      const overlay = document.createElement("div");
+      overlay.className = "search-overlay";
+      document.body.appendChild(overlay);
+      overlay.click();
+      document.body.removeChild(overlay);
+      expect(floatLayout.state.activeLeftPanel).toBe("filetree");
+    });
   });
 });

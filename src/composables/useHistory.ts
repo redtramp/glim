@@ -17,6 +17,10 @@ export function useHistory() {
     store.pushRecent(path);
   }
 
+  function pushRecentBatch(paths: string[]) {
+    store.pushRecentBatch(paths);
+  }
+
   function clearRecent() {
     store.clearRecent();
   }
@@ -32,6 +36,7 @@ export function useHistory() {
   return {
     recent,
     pushRecent,
+    pushRecentBatch,
     clearRecent,
     saveScroll,
     getScroll,

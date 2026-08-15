@@ -58,7 +58,7 @@ export function useFindInPage(bodyRef: Ref<HTMLElement | null>) {
     return span;
   }
 
-  function search() {
+  function search(autoScroll = true) {
     clearHighlights();
     const q = query.value;
     if (!q) return;
@@ -96,7 +96,7 @@ export function useFindInPage(bodyRef: Ref<HTMLElement | null>) {
     matches.value = found;
     if (found.length > 0) {
       activeIndex.value = 0;
-      highlightActive();
+      if (autoScroll) highlightActive();
     }
   }
 
@@ -119,6 +119,41 @@ export function useFindInPage(bodyRef: Ref<HTMLElement | null>) {
     if (!total.value) return;
     activeIndex.value = (activeIndex.value - 1 + total.value) % total.value;
     highlightActive();
+  }
+
+  function highlightSearch(text: string) {
+    if (!text.trim()) return;
+    // 恢复查询但不显示 FindBar（已移除）
+    query.value = text;
+    clearHighlights();
+    // autoScroll=false：由调用方（onRendered/scrollToLine）决定滚动行为
+    search(false);
+  }
+
+  /** 按源行号滚动到对应匹配项（用于全局搜索面板跳转到当前文档） */
+  function scrollToLine(line: number): void {
+    if (line <= 0) return;
+    // autoScroll=false：避免先滚到第一个匹配项再滚到目标行的视觉跳动
+    search(false);
+    if (!matches.value.length) return;
+    // span 本身不含 data-source-line，需向上查找最近的块级祖先
+    const idx = matches.value.findIndex((el) => {
+      const srcLine = el.closest<HTMLElement>("[data-source-line]")?.getAttribute("data-source-line");
+      return srcLine ? Number(srcLine) === line : false;
+    });
+    if (idx === -1) {
+      // 找不到行号匹配的项时退而求其次：高亮第一个匹配项（不滚动，已在视口内）
+      activeIndex.value = 0;
+      matches.value.forEach((el, i) => {
+        el.classList.toggle(HL_ACTIVE, i === 0);
+      });
+      return;
+    }
+    activeIndex.value = idx;
+    matches.value.forEach((el, i) => {
+      el.classList.toggle(HL_ACTIVE, i === idx);
+    });
+    matches.value[idx].scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
   function open() {
@@ -149,5 +184,7 @@ export function useFindInPage(bodyRef: Ref<HTMLElement | null>) {
     prev,
     reset,
     clearHighlights,
+    highlightSearch,
+    scrollToLine,
   };
 }

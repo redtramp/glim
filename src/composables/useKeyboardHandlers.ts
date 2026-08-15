@@ -13,8 +13,11 @@ export function useKeyboardHandlers(opts: {
     createNewFile: () => Promise<boolean>;
   };
   floatLayout?: { openPanel: (id: any) => void };
-  find?: { visible?: any; close?: () => void };
   unsavedDialog?: { showUnsavedDialog?: any; resolveDialog?: (choice: 'save' | 'discard' | 'cancel') => void };
+  /** 悬浮布局下打开独立搜索面板的回调 */
+  onOpenSearch?: () => void;
+  /** 是否使用悬浮布局 */
+  enableFloatLayout?: boolean | (() => boolean);
 }) {
   const tabs = useTabsStore();
   const shortcuts = useShortcutsStore();
@@ -50,7 +53,8 @@ export function useKeyboardHandlers(opts: {
   }
 
   function openSearchPanel() {
-    opts.floatLayout?.openPanel("search");
+    // 悬浮布局：通过回调通知 App 打开独立搜索面板
+    opts.onOpenSearch?.();
   }
 
   function openAnnotationsPanel() {
@@ -79,9 +83,6 @@ export function useKeyboardHandlers(opts: {
       }
       showSettings.value = false;
       showReviewPanel.value = false;
-      if (opts.find?.visible?.value && opts.find.close) {
-        opts.find.close();
-      }
       return;
     }
     if (e.target instanceof HTMLElement && e.target.closest(".modal-overlay")) return;

@@ -39,6 +39,31 @@ export const useHistoryStore = defineStore("history", () => {
     saveJson(STORAGE_RECENT, recent.value);
   }
 
+  /**
+   * 批量追加最近打开（多文档恢复用），只写一次 localStorage，避免恢复 N 个文件时
+   * 重复 JSON 序列化（saveJson 每文件一次）。
+   *
+   * 对去重后的输入，语义与循环调用 pushRecent(paths[i]) 一致（最后传入的路径最先展示），
+   * 因此这里将 additions 反转后置顶。调用方应先对输入去重（restoreTabs 已用 Set 去重）。
+   */
+  function pushRecentBatch(paths: string[]) {
+    if (!paths.length) return;
+    const seen = new Set<string>();
+    const additions: RecentItem[] = [];
+    const now = Date.now();
+    for (const path of paths) {
+      if (!path || seen.has(path)) continue;
+      seen.add(path);
+      additions.push({ path, name: basename(path), ts: now });
+    }
+    if (!additions.length) return;
+    recent.value = [
+      ...additions.reverse(),
+      ...recent.value.filter((x) => !seen.has(x.path)),
+    ].slice(0, MAX_RECENT);
+    saveJson(STORAGE_RECENT, recent.value);
+  }
+
   function clearRecent() {
     recent.value = [];
     saveJson(STORAGE_RECENT, []);
@@ -67,5 +92,5 @@ export const useHistoryStore = defineStore("history", () => {
     return scrollTopOf(scrollMap.value[path]);
   }
 
-  return { recent, pushRecent, clearRecent, saveScroll, getScroll };
+  return { recent, pushRecent, pushRecentBatch, clearRecent, saveScroll, getScroll };
 });

@@ -1,25 +1,12 @@
 <script setup lang="ts">
 // @ts-check
-import Banner from "./components/Banner.vue";
-import DiffView from "./components/DiffView.vue";
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from "vue";
-import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile, exists } from "@tauri-apps/plugin-fs";
+import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { invoke } from "@tauri-apps/api/core";
 import { useI18n } from "vue-i18n";
 import { persistLocale, type AppLocale } from "./i18n";
-import MarkdownView from "./components/MarkdownView.vue";
-import FileTree from "./components/FileTree.vue";
-import FindBar from "./components/FindBar.vue";
-import SearchPanel from "./components/SearchPanel.vue";
-import SettingsDialog from "./components/SettingsDialog.vue";
-import MarkdownEditor from "./components/MarkdownEditor.vue";
-import AnnotationToolbar from "./components/AnnotationToolbar.vue";
-import ReviewPanel from "./components/ReviewPanel.vue";
-import AiPanel from "./components/AiPanel.vue";
-import UnsavedChangesDialog from "./components/UnsavedChangesDialog.vue";
-import TabBar from "./components/TabBar.vue";
 import { useFileTree } from "./composables/useFileTree";
 import { useFileWatcher } from "./composables/useFileWatcher";
 import { extractHeadings } from "./composables/useMarkdown";
@@ -27,16 +14,10 @@ import { useScrollSpy } from "./composables/useScrollSpy";
 import { useFindInPage } from "./composables/useFindInPage";
 import { useHistory, type RecentItem } from "./composables/useHistory";
 import { useReadingSettings } from "./composables/useReadingSettings";
-import { useAnnotations } from "./composables/useAnnotations";
-import { resolveSelectionRange } from "./composables/useAnnotations";
+import { useAnnotations, resolveSelectionRange } from "./composables/useAnnotations";
 import { useAiPanel } from "./composables/useAiPanel";
 import type { CriticType } from "./composables/criticMarkup";
-import {
-  parseCriticMarkup,
-  applyDecision,
-  acceptAllCriticMarkup,
-  rejectAllCriticMarkup,
-} from "./composables/criticMarkup";
+import { parseCriticMarkup, applyDecision, acceptAllCriticMarkup, rejectAllCriticMarkup } from "./composables/criticMarkup";
 import { useTabs, samePath, type Tab } from "./composables/useTabs";
 import { copyTextToClipboard } from "./composables/clipboard";
 import {
@@ -48,848 +29,308 @@ import {
   printDocument,
   type PandocInfo,
 } from "./composables/useExport";
-
-// Pinia stores
-import { useAppStore } from "./stores/useAppStore";
-
-// Extracted composables
 import { useFileManager } from "./composables/useFileManager";
 import { useKeyboardHandlers } from "./composables/useKeyboardHandlers";
 import { useUnsavedDialog } from "./composables/useUnsavedDialog";
-
-// 悬浮布局（P0）
-import LeftRail from "./components/LeftRail.vue";
-import FloatingPanel from "./components/FloatingPanel.vue";
-import HistoryPanel from "./components/HistoryPanel.vue";
-import QuickSettings from "./components/QuickSettings.vue";
 import { useFloatLayout, ACTION_PANEL_IDS } from "./composables/useFloatLayout";
 import { useSectionMarkers } from "./composables/useSectionMarkers";
 import { useBookmarks } from "./composables/useBookmarks";
 import { basename, dirOf } from "./utils/path";
-import TocCapsule from "./components/TocCapsule.vue";
-import AnnotationList from "./components/AnnotationList.vue";
-import BookmarkPanel from "./components/BookmarkPanel.vue";
-import AiPanelInline from "./components/AiPanelInline.vue";
-import HelpPanel from "./components/HelpPanel.vue";
+import { useAppStore } from "./stores/useAppStore";
+
+// Components
 import Toolbar from "./components/Toolbar.vue";
+import TabBar from "./components/TabBar.vue";
+import LeftRail from "./components/LeftRail.vue";
+import TopTrigger from "./components/TopTrigger.vue";
+import SearchPanel from "./components/SearchPanel.vue";
+import TocCapsule from "./components/TocCapsule.vue";
+import SettingsDialog from "./components/SettingsDialog.vue";
+import UnsavedChangesDialog from "./components/UnsavedChangesDialog.vue";
+import Banner from "./components/Banner.vue";
+import DiffView from "./components/DiffView.vue";
+import ReviewPanel from "./components/ReviewPanel.vue";
+import AiPanel from "./components/AiPanel.vue";
+import MarkdownView from "./components/MarkdownView.vue";
+import MarkdownEditor from "./components/MarkdownEditor.vue";
+import AnnotationToolbar from "./components/AnnotationToolbar.vue";
 import ExportMenu from "./components/ExportMenu.vue";
 import MobileBottomBar from "./components/MobileBottomBar.vue";
-import TopTrigger from "./components/TopTrigger.vue";
+import FloatPanelContent from "./components/FloatPanelContent.vue";
 
 const { t, locale } = useI18n();
-
-/** 提取的文件管理器：接管文件打开/保存/关闭/新建全流程 */
+const appStore = useAppStore();
 const fileManager = useFileManager();
-
-/** 未保存变更对话框：接管 askUnsaved / resolveDialog */
 const unsavedDialog = useUnsavedDialog();
-
-/** 悬浮布局（P0）—— 浮层状态管理 */
 const floatLayout = useFloatLayout();
-
-/** 书签管理 */
 const bookmarks = useBookmarks();
-
-/** 当前滚动位置是否有书签（用于工具栏按钮高亮） */
-const hasBookmarkAtCurrentPos = computed(() => {
-  if (!currentFile.value || !viewerEl.value) return false;
-  return bookmarks.hasAt(currentFile.value, viewerEl.value.scrollTop);
-});
-
-/** 悬浮 Tab 条显隐（由 TopTrigger 控制） */
-const topTabBarVisible = ref(true);
-let topTabBarHideTimer: ReturnType<typeof setTimeout> | null = null;
-
-/** 是否为移动端视口（<768px） */
-const isMobileViewport = ref(window.innerWidth < 768);
-function onResize(): void {
-  isMobileViewport.value = window.innerWidth < 768;
-}
-window.addEventListener("resize", onResize, { passive: true });
-
-/** 切换当前滚动位置的书签 */
-function toggleBookmark(): void {
-  const tab = activeTab.value;
-  if (!tab || !viewerEl.value || isEditing.value) return;
-  const scrollTop = viewerEl.value.scrollTop;
-  // 从最近标题获取标签
-  const heading = headings.value
-    .filter((h) => {
-      const el = bodyRef.value?.querySelector(`#${CSS.escape(h.id)}`);
-      if (!el) return false;
-      const elTop = el.getBoundingClientRect().top + viewerEl.value!.scrollTop - viewerEl.value!.getBoundingClientRect().top;
-      return elTop <= scrollTop + 16;
-    })
-    .pop();
-  const label = heading?.text;
-  const result = bookmarks.toggle(tab.path, scrollTop, label, label);
-  showAnnotationToast(
-    result ? t("float.bookmarkAdded") : t("float.bookmarkRemoved")
-  );
-}
-
-/** 浮层布局开关（localStorage 持久化，默认关闭，与经典布局共存） */
-const enableFloatLayout = ref(
-  localStorage.getItem("glim-reader-float-layout") !== "0"
-);
-
-function toggleFloatLayout(): void {
-  enableFloatLayout.value = !enableFloatLayout.value;
-  localStorage.setItem(
-    "glim-reader-float-layout",
-    enableFloatLayout.value ? "1" : "0"
-  );
-}
-
-function toggleLocale() {
-  const next = locale.value === "zh-CN" ? "en-US" : "zh-CN";
-  locale.value = next;
-  persistLocale(next as AppLocale);
-}
-
-const {
-  rootDir,
-  tree,
-  loading: treeLoading,
-  refresh: refreshTree,
-  loadChildren,
-  openFolder,
-  setRootFromFile,
-  setHomeRoot,
-  clearRoot,
-  canGoUp,
-  goUp,
-} = useFileTree();
-
-const watcher = useFileWatcher();
-const { recent, pushRecent, clearRecent, saveScroll, getScroll } = useHistory();
-const {
-  apply: applyReadingSettings,
-  settings: readingSettings,
-  setFontSize,
-  setEditorFontSize,
-  setMaxWidth,
-  setLineHeight,
-} = useReadingSettings();
-
-/** 批注闭环(选区写回 / 复制给 AI / 清除全部) */
-const annotations = useAnnotations();
-const annotationToast = ref("");
-let annotationToastTimer: number | null = null;
-function showAnnotationToast(message: string) {
-  annotationToast.value = message;
-  if (annotationToastTimer) clearTimeout(annotationToastTimer);
-  annotationToastTimer = window.setTimeout(() => {
-    annotationToast.value = "";
-  }, 2500);
-}
-/** 当前文件上下文;无文件(或编辑模式)时返回 null,工具栏不出现 */
-function annotationContext() {
-  const tab = activeTab.value;
-  if (!tab || !tab.path) return null;
-  return {
-    getSource: () => tab.draftContent,
-    getFileName: () => basename(tab.path),
-    setSource: (next: string) => {
-      tab.draftContent = next;
-      tab.isDirty = true;
-    },
-    notify: (key: string) => showAnnotationToast(t(key)),
-    confirmClear: () =>
-      window.confirm(
-        `${t("annotation.clearConfirmTitle")}\n\n${t("annotation.clearConfirmMessage")}`
-      ),
-  };
-}
-function onAnnotationApply(type: CriticType, payload?: string) {
-  annotations.applyMarkup(type, payload);
-}
-
-/** 选区工具栏「复制」：复制选中文本到剪贴板 */
-async function onAnnotationCopy(): Promise<void> {
-  const container = bodyRef.value;
-  const range =
-    container && resolveSelectionRange(container, window.getSelection());
-  const text = range?.toString().trim() ?? "";
-  if (!text) return;
-  try {
-    await copyTextToClipboard(text);
-    showAnnotationToast(t("annotation.copyDone"));
-  } catch {
-    showAnnotationToast(t("annotation.copyFailed"));
-  }
-}
-
-/** 选区工具栏「粘贴」：读取剪贴板文本，以新增批注写入选区 */
-async function onAnnotationPaste(): Promise<void> {
-  // catch 分支必然 return，因此 try 成功后 text 必已赋值（TS 控制流分析可确认）
-  let text: string;
-  try {
-    text = await navigator.clipboard.readText();
-  } catch {
-    showAnnotationToast(t("annotation.pasteFailed"));
-    return;
-  }
-  if (!text.trim()) return;
-  onAnnotationApply("ins", text);
-}
-
-/** 内置 AI 面板(Phase 3):选区摘要/翻译/解释 + 按批注改写 */
-const aiPanel = useAiPanel();
-
-/** 打开 AI 面板:隐藏浮动工具栏,带入当前选区文本(无选区则为空) */
-function openAiPanel() {
-  annotations.hide();
-  const container = bodyRef.value;
-  const range =
-    container && resolveSelectionRange(container, window.getSelection());
-  aiPanel.openWithSelection(range ? range.toString().trim() : "");
-}
-
-/**
- * AI 改写结果应用到文档:确认后写回草稿。
- * AI 输出兜底 rejectAllCriticMarkup:模型偶发残留批注语法时源文件仍干净。
- */
-function onAiApplyResult(text: string) {
-  const tab = activeTab.value;
-  if (!tab) return;
-  if (!window.confirm(t("ai.applyConfirm"))) return;
-  tab.draftContent = rejectAllCriticMarkup(text);
-  tab.isDirty = true;
-  aiPanel.close();
-}
-
-/** 打开审阅面板:隐藏浮动工具栏,避免残留遮挡 */
-function openReviewPanel() {
-  annotations.hide();
-  showReviewPanel.value = true;
-}
-
-/**
- * 审阅面板逐条决策:重新解析当前草稿定位该 id 的批注后应用。
- * 面板的 source 与 draftContent 同源(prop 透传),id 一致;
- * 若外部变更已刷新 draftContent,此处基于最新文本定位,天然消除偏移。
- */
-function onReviewApply(decision: "accept" | "reject", id: number) {
-  const tab = activeTab.value;
-  if (!tab) return;
-  const ann = parseCriticMarkup(tab.draftContent).find((a) => a.id === id);
-  if (!ann) return;
-  tab.draftContent = applyDecision(tab.draftContent, ann, decision);
-  tab.isDirty = true;
-}
-
-/** 审阅面板全部接受/拒绝 */
-function onReviewApplyAll(decision: "accept" | "reject") {
-  const tab = activeTab.value;
-  if (!tab) return;
-  tab.draftContent =
-    decision === "accept"
-      ? acceptAllCriticMarkup(tab.draftContent)
-      : rejectAllCriticMarkup(tab.draftContent);
-  tab.isDirty = true;
-}
-
-/** 审阅面板条目点击 → 滚动预览到批注所在行 */
-function onReviewFocus(id: number) {
-  const tab = activeTab.value;
-  if (!tab) return;
-  const ann = parseCriticMarkup(tab.draftContent).find((a) => a.id === id);
-  if (ann) scrollPreviewToSourceLine(ann.line);
-}
-const {
-  tabs,
-  activeTabId,
-  activeTab,
-  findTabByPath,
-  createTab,
-  activateTab,
-  persist,
-  loadPersisted,
-} = useTabs();
-
-const app = useAppStore();
-const errorMsg = computed(() => app.errorMsg);
-const saving = computed(() => app.saving);
-const exportToast = computed(() => app.exportToast);
-const theme = computed(() => app.theme);
-const editorRef = fileManager.editorRef;
-
-/** 动态图标：语言切换按钮显示当前语言，编辑按钮根据状态切换 */
-const dynamicIcons = computed(() => ({
-  "locale-toggle": locale.value === "zh-CN" ? "中" : "En",
-  "edit": isEditing.value ? "👁" : "✎",
-}));
-
-const showExportMenu = ref(false);
-const exportBusy = ref(false);
-const pandocInfo = ref<PandocInfo | null>(null);
-const pdfEnginePath = ref<string | null>(null);
-const renderTick = ref(0);
-/** 递增后通知文件树重新聚焦（点击 `..` 切换根目录后使用） */
-const treeFocusKey = ref(0);
-
-function toggleExportMenu() {
-  showExportMenu.value = !showExportMenu.value;
-}
-
-function closeExportMenu() {
-  showExportMenu.value = false;
-}
-
-const showBanner = ref(false);
-const bannerTab = ref<Tab | null>(null);
-const showDiffView = ref(false);
-const diffOldContent = ref("");
-const diffNewContent = ref("");
-const diffFileName = ref("");
-
-const autoReloadWhitelist = ref<string[]>(
-  JSON.parse(localStorage.getItem("glim-reader-auto-reload-whitelist") || "[]")
-);
 
 const viewerEl = ref<HTMLElement | null>(null);
 const markdownRef = ref<{ root: HTMLElement | null } | null>(null);
-const treeScrollEl = ref<HTMLElement | null>(null);
 const bodyRef = computed(() => markdownRef.value?.root ?? null);
-
 const { onScroll } = useScrollSpy(viewerEl, bodyRef);
 const find = useFindInPage(bodyRef);
+const isMobileViewport = ref(window.innerWidth < 768);
+function onResize() { isMobileViewport.value = window.innerWidth < 768; }
+window.addEventListener("resize", onResize, { passive: true });
+const enableFloatLayout = ref(localStorage.getItem("glim-reader-float-layout") !== "0");
+function toggleFloatLayout() {
+  enableFloatLayout.value = !enableFloatLayout.value;
+  localStorage.setItem("glim-reader-float-layout", enableFloatLayout.value ? "1" : "0");
+}
+const { rootDir, tree, loading: treeLoading, refresh: refreshTree, openFolder, setRootFromFile, setHomeRoot, clearRoot, canGoUp, goUp, loadChildren } = useFileTree();
+const watcher = useFileWatcher();
+const { recent, pushRecent, pushRecentBatch, clearRecent, saveScroll, getScroll } = useHistory();
+const { apply: applyReadingSettings, settings: readingSettings, setFontSize, setEditorFontSize, setMaxWidth, setLineHeight } = useReadingSettings();
+const annotations = useAnnotations();
+const aiPanel = useAiPanel();
+// 注意：useTabs() 必须先于 useSectionMarkers() 执行 —— 后者的 immediate watch 会同步求值
+// headings computed，若 activeTab 尚未初始化将触发 TDZ 崩溃（ReferenceError）
+const { tabs, activeTabId, activeTab, findTabByPath, createTab, activateTab, persist, loadPersisted } = useTabs();
 
-/** 键盘事件处理器：接管快捷键匹配与分发 */
-const keyboardHandlers = useKeyboardHandlers({
-  fileManager: {
-    openFile: fileManager.openFile,
-    saveCurrentFile: fileManager.saveCurrentFile,
-    saveAs: fileManager.saveAs,
-    closeCurrentTab: fileManager.closeCurrentTab,
-    closeAllTabs: fileManager.closeAllTabs,
-    createNewFile: fileManager.createNewFile,
-  },
-  floatLayout,
-  find,
-  unsavedDialog,
-});
+const searchVisible = ref(false);
+const searchPanelRef = ref<InstanceType<typeof SearchPanel> | null>(null);
+let searchFocusSeq = 0; const lastSearchQuery = ref(""); const prevTabPath = ref("");
+/** 标记当前是否正在从搜索结果切换到新文件，用于保护 handleOnRendered 中的高亮恢复 */
+const pendingRestoreQuery = ref(false);
+/** 搜索浮层内联样式，由 recalcSearchPosition 动态更新 */
+const searchOverlayStyle = ref<Record<string, string>>({});
 
-// 未保存对话框状态别名，供模板使用
-const showUnsavedDialog = unsavedDialog.showUnsavedDialog;
-const unsavedDialogMode = unsavedDialog.unsavedDialogMode;
-const dialogTab = unsavedDialog.dialogTab;
-const showSettings = keyboardHandlers.showSettings;
-const showReviewPanel = keyboardHandlers.showReviewPanel;
-const addSuppress = fileManager.addSuppress;
-const isSuppressed = fileManager.isSuppressed;
-const clearSuppress = fileManager.clearSuppress;
-const scheduleSuppressClear = fileManager.scheduleSuppressClear;
+/** 根据当前悬浮布局状态计算搜索面板位置，并更新内联样式 */
+function recalcSearchPosition(): void {
+  if (!enableFloatLayout.value || isEditing.value) {
+    searchOverlayStyle.value = {};
+    return;
+  }
+  const tabbarEl = document.querySelector<HTMLElement>(".tab-bar.floating");
+  const topOffset = (tabbarEl?.offsetHeight ?? 0) + 20;
+  const panelEl = document.querySelector<HTMLElement>(".floating-panel.left");
+  const panelWidth = panelEl ? panelEl.offsetWidth : 0;
+  const leftOffset = 40 + panelWidth + 20;
+  searchOverlayStyle.value = {
+    top: `${topOffset}px`,
+    left: `${leftOffset}px`,
+    height: `calc(100vh - ${topOffset * 2}px)`,
+  };
+}
 
 const currentFile = computed(() => activeTab.value?.path ?? "");
 const draftContent = computed(() => activeTab.value?.draftContent ?? "");
-const isDirty = computed(() => activeTab.value?.isDirty ?? false);
 const isEditing = computed(() => activeTab.value?.isEditing ?? false);
 const headings = computed(() => activeTab.value?.headings ?? []);
-
-/** 悬浮布局：章节标记点 */
+// useSectionMarkers 的 immediate watch 会同步读取 headings，必须在 activeTab 可用后创建
 const sectionMarkers = useSectionMarkers(headings, viewerEl, bodyRef);
-
-
-/** 将 rootDir 同步到当前文件所在目录（如果不同），然后刷新文件树 */
-async function syncRootDir(path: string) {
-  const targetDir = dirOf(path);
-  if (!targetDir || samePath(rootDir.value, targetDir)) return;
-  await setRootFromFile(path);
-  // 重启文件监听器以监听新根目录；否则新目录下的文件发生外部变更时将无法被检测到
-  // （useFileWatcher.start 内部会先 stop 旧的监听）
-  await startWatching(targetDir);
-}
-
-const fileName = computed(() => {
-  if (!currentFile.value) return t("app.noFile");
-  return basename(currentFile.value);
-});
-const displayFileName = computed(() =>
-  isDirty.value ? `${fileName.value} *` : fileName.value
-);
-const canExport = computed(() => Boolean(activeTab.value?.draftContent));
+const isDirty = computed(() => activeTab.value?.isDirty ?? false);
 const hasActiveFile = computed(() => Boolean(activeTab.value?.path));
-const dialogFileName = computed(() =>
-  dialogTab.value ? basename(dialogTab.value.path) : ""
-);
-const unsavedDialogTitle = computed(() =>
-  unsavedDialogMode.value === "external"
-    ? t("editor.externalChangedTitle")
-    : t("editor.unsavedTitle")
-);
-const unsavedDialogMessage = computed(() =>
-  unsavedDialogMode.value === "external"
-    ? t("editor.externalChangedMessage")
-    : t("editor.unsavedMessage")
-);
+const fileName = computed(() => currentFile.value ? basename(currentFile.value) : t("app.noFile"));
+const displayFileName = computed(() => isDirty.value ? `${fileName.value} *` : fileName.value);
+const hasBookmarkAtCurrentPos = computed(() => !currentFile.value || !viewerEl.value ? false : bookmarks.hasAt(currentFile.value, viewerEl.value.scrollTop));
+const dynamicIcons = computed(() => ({ "locale-toggle": locale.value === "zh-CN" ? "中" : "En", "edit": isEditing.value ? "👁" : "✎" }));
+const showUnsavedDialog = unsavedDialog.showUnsavedDialog;
+const unsavedDialogMode = unsavedDialog.unsavedDialogMode;
+const dialogTab = unsavedDialog.dialogTab;
+const editorRef = fileManager.editorRef;
 
-let headingTimer: number | null = null;
-let appWindow: import("@tauri-apps/api/window").Window | null = null;
+/** 悬浮面板关闭后仍驻留 DOM 的卸载窗口（FloatingPanel unmountTimer 250ms）+ 缓冲 */
+const PANEL_UNMOUNT_SETTLE_MS = 300;
+let searchPosSettleTimer: ReturnType<typeof setTimeout> | null = null;
 
-function toggleAutoReload(path: string) {
-  const normalized = path.replace(/\\/g, "/").toLowerCase();
-  if (autoReloadWhitelist.value.includes(normalized)) {
-    autoReloadWhitelist.value = autoReloadWhitelist.value.filter((p) => p !== normalized);
-  } else {
-    autoReloadWhitelist.value.push(normalized);
-  }
-  localStorage.setItem("glim-reader-auto-reload-whitelist", JSON.stringify(autoReloadWhitelist.value));
-}
+function closeSearchPanel() { searchVisible.value = false; lastSearchQuery.value = ""; find.query.value = ""; find.clearHighlights(); }
+function onSearchQueryChange(q: string) { const q2 = q.trim(); lastSearchQuery.value = q2; find.query.value = q2; }
 
-async function onBannerReload() {
-  const tab = bannerTab.value;
-  if (tab) {
-    await forceReloadTab(tab);
-    tab.staleSince = null; // 已加载到最新，清除过期标记
-  }
-  closeBanner();
-}
-
-async function onBannerViewDiff() {
-  const tab = bannerTab.value;
-  if (!tab) return;
+async function readFileIntoTab(tab: Tab, path: string, hash = "", sourceLine = 0) {
+  fileManager.addSuppress(path);
   try {
-    const newText = await readTextFile(tab.path);
-    diffOldContent.value = tab.draftContent;
-    diffNewContent.value = newText;
-    diffFileName.value = basename(tab.path);
-    showDiffView.value = true;
-  } catch {
-    /* ignore */
-  }
-  // 不关闭 banner，也不清除 staleSince：用户查看完 diff 后 banner 仍然存在，等待后续操作
+    const text = await readTextFile(path);
+    tab.path = path; tab.content = text; tab.draftContent = text;
+    tab.isDirty = false; tab.isEditing = false; tab.headings = extractHeadings(text);
+    tab.pendingHash = hash; tab.pendingScrollTop = hash ? 0 : getScroll(path);
+    tab.pendingSourceLine = sourceLine; tab.scrollTop = tab.pendingScrollTop;
+    pushRecent(path); void watcher.watchFile(dirOf(path));
+    appStore.errorMsg = ""; fileManager.scheduleSuppressClear(path);
+  } catch (e: any) { fileManager.clearSuppress(path); throw e; }
 }
 
-function onBannerIgnore() {
-  const tab = bannerTab.value;
-  if (tab) tab.staleSince = null; // 已忽略，清除过期标记
-  closeBanner();
-}
-
-function onBannerAutoReload() {
-  const tab = bannerTab.value;
-  if (tab) toggleAutoReload(tab.path);
-  closeBanner();
-}
-
-function closeBanner() {
-  showBanner.value = false;
-  bannerTab.value = null;
-}
-
-function closeDiffView() {
-  showDiffView.value = false;
-}
-
-function showBannerForStaleTab(tab: Tab) {
-  if (showBanner.value && bannerTab.value?.id === tab.id) return;
-  bannerTab.value = tab;
-  showBanner.value = true;
-}
-
- async function readFileIntoTab(tab: Tab, path: string, hash = "") {
-   addSuppress(path);
-   try {
-     const text = await readTextFile(path);
-     tab.path = path;
-     tab.content = text;
-     tab.draftContent = text;
-     tab.isDirty = false;
-     tab.isEditing = false;
-     tab.headings = extractHeadings(text);
-     tab.pendingHash = hash;
-     tab.pendingScrollTop = hash ? 0 : getScroll(path);
-     tab.pendingSourceLine = 0;
-     tab.scrollTop = tab.pendingScrollTop;
-     pushRecent(path);
-     // 追加监听该文件所在目录，以便外部修改时提示 stale（避免整树深度遍历）
-     void watcher.watchFile(dirOf(path));
-     app.errorMsg = "";
-     scheduleSuppressClear(path);
-   } catch (e: any) {
-     clearSuppress(path);
-     throw e;
-   }
- }
-
-async function loadFile(path: string, hash = "") {
+async function loadFile(path: string, hash = "", sourceLine = 0) {
   const existing = findTabByPath(path);
   if (existing) {
-    saveCurrentScroll();
-    if (hash) {
-      existing.pendingHash = hash;
-      existing.pendingScrollTop = 0;
-      existing.pendingSourceLine = 0;
-    } else {
-      existing.pendingHash = "";
-      existing.pendingScrollTop = existing.scrollTop;
-      existing.pendingSourceLine = 0;
-    }
-    activateTab(existing.id);
-    await syncRootDir(path);
+    const t2 = activeTab.value;
+    if (t2 && t2.path && viewerEl.value && !t2.isEditing) { t2.scrollTop = viewerEl.value.scrollTop; saveScroll(t2.path, viewerEl.value.scrollTop); }
+    existing.pendingHash = hash; existing.pendingScrollTop = 0; existing.pendingSourceLine = sourceLine;
+    activateTab(existing.id); await syncRootDir(path);
+    if (lastSearchQuery.value) { find.highlightSearch(lastSearchQuery.value); lastSearchQuery.value = ""; }
+    if (existing.pendingSourceLine > 0) { scrollPreviewToSourceLine(existing.pendingSourceLine); existing.pendingSourceLine = 0; }
     return;
   }
-  saveCurrentScroll();
+  const t2 = activeTab.value;
+  if (t2 && t2.path && viewerEl.value && !t2.isEditing) { t2.scrollTop = viewerEl.value.scrollTop; saveScroll(t2.path, viewerEl.value.scrollTop); }
   const tab = createTab(path);
-  try {
-    await readFileIntoTab(tab, path, hash);
-  } catch (e: any) {
-    app.errorMsg = `${t("errors.readFailed")}: ${e?.message || e}`;
-    return;
-  }
-  tabs.value.push(tab);
-  activateTab(tab.id);
-  await syncRootDir(path);
+  try { await readFileIntoTab(tab, path, hash, sourceLine); } catch (e: any) { appStore.errorMsg = `${t("errors.readFailed")}: ${e?.message || e}`; return; }
+  tabs.value.push(tab); activateTab(tab.id); await syncRootDir(path);
 }
 
- async function forceReloadTab(tab: Tab) {
-   addSuppress(tab.path);
-   try {
-     const text = await readTextFile(tab.path);
-     tab.content = text;
-     tab.draftContent = text;
-     tab.isDirty = false;
-     tab.headings = extractHeadings(text);
-     if (tab.id === activeTabId.value) {
-       tab.pendingHash = "";
-       tab.pendingScrollTop = tab.scrollTop;
-       tab.pendingSourceLine = 0;
-       find.clearHighlights();
-     }
-     scheduleSuppressClear(tab.path);
-   } catch (e: any) {
-     clearSuppress(tab.path);
-     app.errorMsg = `${t("errors.readFailed")}: ${e?.message || e}`;
-   }
- }
+async function forceReloadTab(tab: Tab) {
+  fileManager.addSuppress(tab.path);
+  try {
+    const text = await readTextFile(tab.path);
+    tab.content = text; tab.draftContent = text; tab.isDirty = false; tab.headings = extractHeadings(text);
+    if (tab.id === activeTabId.value) { tab.pendingHash = ""; tab.pendingScrollTop = tab.scrollTop; tab.pendingSourceLine = 0; find.clearHighlights(); }
+    fileManager.scheduleSuppressClear(tab.path);
+  } catch (e: any) { fileManager.clearSuppress(tab.path); appStore.errorMsg = `${t("errors.readFailed")}: ${e?.message || e}`; }
+}
 
 async function switchToTab(id: string) {
   if (id === activeTabId.value) return;
-  saveCurrentScroll();
-  const tab = tabs.value.find((x) => x.id === id);
-  if (!tab) return;
-  tab.pendingHash = "";
-  tab.pendingScrollTop = tab.scrollTop;
-  tab.pendingSourceLine = 0;
-  activateTab(id);
-  await syncRootDir(tab.path);
-
-  // Check for stale tab
-  if (tab.staleSince) {
-    showBannerForStaleTab(tab);
-  }
+  const t2 = activeTab.value;
+  if (t2 && t2.path && viewerEl.value && !t2.isEditing) { t2.scrollTop = viewerEl.value.scrollTop; saveScroll(t2.path, viewerEl.value.scrollTop); }
+  const tab = tabs.value.find(x => x.id === id); if (!tab) return;
+  tab.pendingHash = ""; tab.pendingScrollTop = tab.scrollTop; tab.pendingSourceLine = 0;
+  activateTab(id); await syncRootDir(tab.path);
+  if (tab.staleSince) { bannerTab.value = tab; showBanner.value = true; }
 }
 
-async function handleRefresh() {
-  saveCurrentScroll();
-  if (isEditing.value && editorRef.value && activeTab.value) {
-    activeTab.value.pendingSourceLine = editorRef.value.getTopVisibleLine();
-  }
-  if (activeTab.value?.path) {
-    addSuppress(activeTab.value.path);
-  }
-  await refreshTree();
-  if (activeTab.value?.path) {
-    scheduleSuppressClear(activeTab.value.path);
-  }
-}
-
-async function closeTab(id: string) {
-  await fileManager.requestCloseTab(id);
-}
-
-async function confirmCloseAll(): Promise<boolean> {
-  await fileManager.closeAllTabs();
-  return true;
-}
-
-async function closeTabRight(targetId: string): Promise<void> {
-  await fileManager.closeTabRight(targetId);
-}
-
-async function closeTabLeft(targetId: string): Promise<void> {
-  await fileManager.closeTabLeft(targetId);
-}
-
-async function closeTabAll() {
-  await fileManager.closeAllTabs();
-}
-
-async function closeTabOthers(targetId: string) {
-  await fileManager.closeTabOthers(targetId);
+function scrollPreviewToSourceLine(line: number) {
+  const container = viewerEl.value, body = bodyRef.value;
+  if (!container || !body) return;
+  const items = Array.from(body.querySelectorAll<HTMLElement>("[data-source-line]"));
+  let target: HTMLElement | null = items[0] ?? null, targetLine = 0;
+  for (const item of items) { const l = Number(item.dataset.sourceLine || "0"); if (!l) continue; if (l <= line && l >= targetLine) { target = item; targetLine = l; } }
+  if (!target) return;
+  container.scrollTop += target.getBoundingClientRect().top - container.getBoundingClientRect().top - 8;
 }
 
 function getPreviewTopSourceLine(): number {
-  const container = viewerEl.value;
-  const body = bodyRef.value;
+  const container = viewerEl.value, body = bodyRef.value;
   if (!container || !body) return 1;
-  const containerTop = container.getBoundingClientRect().top;
-  const items = Array.from(
-    body.querySelectorAll<HTMLElement>("[data-source-line]")
-  );
+  const ct = container.getBoundingClientRect().top;
   let topLine = 1;
-  for (const item of items) {
-    const line = Number(item.dataset.sourceLine || "0");
-    if (!line) continue;
-    const top = item.getBoundingClientRect().top - containerTop;
-    if (top <= 16) {
-      topLine = line;
-    } else {
-      return topLine;
-    }
+  for (const item of Array.from(body.querySelectorAll<HTMLElement>("[data-source-line]"))) {
+    const line = Number(item.dataset.sourceLine || "0"); if (!line) continue;
+    if (item.getBoundingClientRect().top - ct <= 16) topLine = line; else return topLine;
   }
   return topLine;
 }
 
-function scrollPreviewToSourceLine(line: number) {
-  const container = viewerEl.value;
-  const body = bodyRef.value;
-  if (!container || !body) return;
-  const items = Array.from(
-    body.querySelectorAll<HTMLElement>("[data-source-line]")
-  );
-  let target = items[0] ?? null;
-  let targetLine = 0;
-  for (const item of items) {
-    const itemLine = Number(item.dataset.sourceLine || "0");
-    if (!itemLine) continue;
-    if (itemLine <= line && itemLine >= targetLine) {
-      target = item;
-      targetLine = itemLine;
-    }
-  }
-  if (!target) return;
-  container.scrollTop +=
-    target.getBoundingClientRect().top -
-    container.getBoundingClientRect().top -
-    8;
+let headingTimer: ReturnType<typeof setTimeout> | null = null;
+function onDraftUpdate(value: string) {
+  const tab = activeTab.value; if (!tab) return;
+  tab.draftContent = value; tab.isDirty = value !== tab.content;
+  if (headingTimer) clearTimeout(headingTimer);
+  headingTimer = setTimeout(() => { tab.headings = extractHeadings(value); }, 200);
 }
 
-function toggleEditorMode() {
-  const tab = activeTab.value;
-  if (!tab) return;
-  if (tab.isEditing) {
-    tab.pendingSourceLine = editorRef.value?.getTopVisibleLine() ?? 1;
-    tab.pendingScrollTop = 0;
-    tab.isEditing = false;
-    find.reset();
-    return;
-  }
-  const line = getPreviewTopSourceLine();
-  tab.pendingSourceLine = 0;
-  tab.isEditing = true;
-  find.close();
-  nextTick(() => editorRef.value?.scrollToLine(line));
-}
-
-function onRendered() {
-  nextTick(() => {
-    const tab = activeTab.value;
-    if (!viewerEl.value || !tab) return;
-    // 渲染完成后初始化批注选区监听(幂等:configure 每次刷新上下文,监听只注册一次)
-    annotations.configure(annotationContext, () => bodyRef.value);
-    annotations.initSelectionWatch();
-    // AI 面板上下文:getSource 经闭包读取当前 tab,配置一次即可保持最新
-    aiPanel.configure(() => ({
-      getSource: () => activeTab.value?.draftContent ?? "",
-      applyResult: onAiApplyResult,
-    }));
-    if (tab.pendingHash) {
-      sectionMarkers.jumpTo(tab.pendingHash);
-      tab.pendingHash = "";
-    } else if (tab.pendingSourceLine > 0) {
-      scrollPreviewToSourceLine(tab.pendingSourceLine);
-      tab.pendingSourceLine = 0;
-    } else if (tab.pendingScrollTop > 0) {
-      viewerEl.value.scrollTop = tab.pendingScrollTop;
-    } else {
-      viewerEl.value.scrollTop = 0;
-    }
-  });
-}
-
-function saveCurrentScroll() {
-  const tab = activeTab.value;
-  if (tab && tab.path && viewerEl.value && !tab.isEditing) {
-    tab.scrollTop = viewerEl.value.scrollTop;
-    saveScroll(tab.path, viewerEl.value.scrollTop);
-  }
-}
-
-async function pickFolder() {
-  const dir = await openFolder();
-  if (dir) await startWatching(dir);
-}
-
-/** 文件树 `..`：切换到上一级目录，并让文件树重新聚焦当前文件 */
-async function onGoUp() {
-  const parent = await goUp();
-  if (parent) {
-    treeFocusKey.value += 1;
-    await startWatching(parent);
-  }
+let scrollSaveTimer: ReturnType<typeof setTimeout> | null = null;
+function onViewerScroll() {
+  if (isEditing.value) return; onScroll();
+  if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = setTimeout(() => { const t2 = activeTab.value; if (t2 && t2.path && viewerEl.value && !t2.isEditing) { t2.scrollTop = viewerEl.value.scrollTop; saveScroll(t2.path, viewerEl.value.scrollTop); } }, 400);
 }
 
 async function startWatching(dir: string) {
   await watcher.start(dir, async (paths) => {
-    // 自身写盘/读取触发的事件必须在回调到达时立即判定并忽略:
-    // 若等 refreshTree + 150ms 延迟后再判,保存的 suppress 窗口(1000ms)
-    // 可能已过期,导致保存后误报「外部修改」。
-    const relevant = paths.filter((p) =>
-      tabs.value.some((t) => samePath(p, t.path))
-    );
-    if (relevant.length > 0 && relevant.every((p) => isSuppressed(p))) {
-      return;
-    }
+    const relevant = paths.filter(p => tabs.value.some(t => samePath(p, t.path)));
+    if (relevant.length > 0 && relevant.every(p => fileManager.isSuppressed(p))) return;
     await refreshTree();
-    window.setTimeout(() => {
-      void onFilesChanged(paths);
+    setTimeout(async () => {
+      for (const tab of [...tabs.value]) {
+        if (!paths.some(p => samePath(p, tab.path))) continue;
+        if (fileManager.isSuppressed(tab.path)) continue;
+        try { const diskText = await readTextFile(tab.path); if (diskText === tab.draftContent) continue; } catch { /* ignore */ }
+        const normalized = tab.path.replace(/\\/g, "/").toLowerCase();
+        if (autoReloadWhitelist.value.includes(normalized) && !tab.isDirty) { await forceReloadTab(tab); continue; }
+        if (tab.isEditing) continue; tab.staleSince = Date.now();
+        if (tab.id === activeTabId.value) { bannerTab.value = tab; showBanner.value = true; }
+      }
     }, 150);
   });
-  // start_watch 会重建 debouncer，之前 watch_path 追加的目录监听全部丢失；
-  // 重建后重新监听所有已打开文件的目录，保证外部修改 stale 提醒不失效。
-  for (const tab of tabs.value) {
-    void watcher.watchFile(dirOf(tab.path));
-  }
+  const dirs = new Set<string>();
+  for (const tab of tabs.value) { const d = dirOf(tab.path); if (d) dirs.add(d); }
+  for (const d of dirs) void watcher.watchFile(d);
 }
 
-async function onFilesChanged(paths: string[]) {
-  for (const tab of [...tabs.value]) {
-    if (!paths.some((p) => samePath(p, tab.path))) continue;
-    if (isSuppressed(tab.path)) {
-      // 仍在抑制窗口内:忽略保存/读取自身触发的变更事件。
-      // 一次写盘可能产生多个事件批次(notify 多事件 + 多目录监听),
-      // 不能在这里清除抑制标记,否则后续批次会误报「外部修改」;
-      // 统一由 scheduleSuppressClear 定时清除。
-      continue;
-    }
-    // 内容级校验:磁盘内容与当前文档草稿一致 → 事件源于自身写入(保存),忽略。
-    // 比 suppress 窗口更可靠:不受事件到达时序/批次影响,即使写盘事件
-    // (如原子写 tmp+rename 产生的目录级事件)延迟到窗口外也能被拦截。
-    try {
-      const diskText = await readTextFile(tab.path);
-      if (diskText === tab.draftContent) continue;
-    } catch {
-      // 读取失败(文件被删除/移动):按外部修改处理
-    }
-    const normalized = tab.path.replace(/\\/g, "/").toLowerCase();
-    if (autoReloadWhitelist.value.includes(normalized) && !tab.isDirty) {
-      // 白名单且当前无未保存编辑：自动重载
-      await forceReloadTab(tab);
-      continue;
-    }
-    // 非白名单，或白名单但存在未保存编辑：提示用户，避免静默覆盖草稿（数据丢失）
-    tab.staleSince = Date.now();
-    if (tab.id === activeTabId.value) {
-      showBannerForStaleTab(tab);
-    }
-  }
-}
-function closeFolder() {
-  void watcher.stop();
-  clearRoot();
+async function syncRootDir(path: string) {
+  const targetDir = dirOf(path); if (!targetDir || samePath(rootDir.value, targetDir)) return;
+  await setRootFromFile(path); await startWatching(targetDir);
 }
 
-async function getInitialOpenFile(): Promise<string> {
-  try {
-    const path = await invoke<string | null>("initial_open_file");
-    return typeof path === "string" ? path : "";
-  } catch {
-    return "";
-  }
+function toggleEditorMode() {
+  const tab = activeTab.value; if (!tab) return;
+  if (tab.isEditing) { tab.pendingSourceLine = editorRef.value?.getTopVisibleLine() ?? 1; tab.pendingScrollTop = 0; tab.isEditing = false; find.reset(); return; }
+  tab.pendingSourceLine = 0; tab.isEditing = true;
+  nextTick(() => editorRef.value?.scrollToLine(getPreviewTopSourceLine()));
 }
 
-async function restoreTabs(initialPath = "") {
-  const persisted = loadPersisted();
-  let paths: string[] = [];
-  let activePath = "";
-  if (persisted && persisted.paths.length) {
-    paths = persisted.paths;
-    activePath = persisted.activePath;
-  } else {
-    const last = localStorage.getItem("glim-reader-last-file");
-    if (last) {
-      paths = [last];
-      activePath = last;
-    }
-  }
-  let activeId = "";
-  for (const path of paths) {
-    if (findTabByPath(path)) continue;
-    const tab = createTab(path);
-    try {
-      await readFileIntoTab(tab, path);
-    } catch {
-      continue;
-    }
-    tabs.value.push(tab);
-    if (samePath(path, activePath)) activeId = tab.id;
-  }
-  if (!activeId && tabs.value.length) activeId = tabs.value[0].id;
-  if (activeId) activateTab(activeId);
-  if (initialPath) await loadFile(initialPath);
+const autoReloadWhitelist = ref<string[]>(JSON.parse(localStorage.getItem("glim-reader-auto-reload-whitelist") || "[]"));
+function toggleAutoReload(path: string) {
+  const normalized = path.replace(/\\/g, "/").toLowerCase();
+  if (autoReloadWhitelist.value.includes(normalized)) autoReloadWhitelist.value = autoReloadWhitelist.value.filter(p => p !== normalized);
+  else autoReloadWhitelist.value.push(normalized);
+  localStorage.setItem("glim-reader-auto-reload-whitelist", JSON.stringify(autoReloadWhitelist.value));
 }
 
-function toggleTheme() {
-  app.toggleTheme();
-  // Force Mermaid/KaTeX re-render so charts follow the new theme.
-  renderTick.value++;
+const showBanner = ref(false); const bannerTab = ref<Tab | null>(null);
+const showDiffView = ref(false); const diffOldContent = ref(""); const diffNewContent = ref(""); const diffFileName = ref("");
+function closeDiffView() { showDiffView.value = false; }
+async function onBannerViewDiff() {
+  const tab = bannerTab.value; if (!tab) return;
+  try { const newText = await readTextFile(tab.path); diffOldContent.value = tab.draftContent; diffNewContent.value = newText; diffFileName.value = basename(tab.path); showDiffView.value = true; } catch { /* ignore */ }
 }
+function onBannerIgnore() { const tab = bannerTab.value; if (tab) tab.staleSince = null; showBanner.value = false; bannerTab.value = null; }
+async function onBannerReload() { const tab = bannerTab.value; if (tab) { await forceReloadTab(tab); tab.staleSince = null; } showBanner.value = false; bannerTab.value = null; }
+function onBannerAutoReload() { const tab = bannerTab.value; if (tab) toggleAutoReload(tab.path); showBanner.value = false; bannerTab.value = null; }
 
-function applyTheme() {
-  app.applyTheme();
-}
+const renderTick = ref(0); const treeFocusKey = ref(0);
+const annotationToast = ref(""); let annotationToastTimer: ReturnType<typeof setTimeout> | null = null;
+function showAnnotationToast(message: string) { annotationToast.value = message; if (annotationToastTimer) clearTimeout(annotationToastTimer); annotationToastTimer = setTimeout(() => { annotationToast.value = ""; }, 2500); }
+const showExportMenu = ref(false);
+const exportBusy = ref(false);
+const pandocInfo = ref<PandocInfo | null>(null);
+const pdfEnginePath = ref<string | null>(null);
 
-async function exportHtml() {
+function toggleExportMenu() { showExportMenu.value = !showExportMenu.value; }
+function closeExportMenu() { showExportMenu.value = false; }
+
+/** 导出/打印前必须处于预览模式且有内容 */
+function ensurePreviewForExport(): boolean {
   if (isEditing.value) {
     closeExportMenu();
-    app.errorMsg = t("editor.previewBeforeExport");
-    return;
+    appStore.errorMsg = t("editor.previewBeforeExport");
+    return false;
   }
   if (!bodyRef.value || !draftContent.value) {
     closeExportMenu();
-    return;
+    return false;
   }
+  return true;
+}
+
+async function exportHtml() {
+  if (!ensurePreviewForExport()) return;
   try {
     const dest = await exportToHtml(
-      bodyRef.value,
-      fileName.value || "document.html",
-      currentFile.value || undefined
+      bodyRef.value!, fileName.value || "document.html", currentFile.value || undefined
     );
     showExportMenu.value = false;
-    if (!dest) return;
+    if (dest) appStore.exportToast = dest;
   } catch (e: any) {
     showExportMenu.value = false;
-    app.errorMsg = `${t("export.exportFailed")}: ${e?.message ?? e}`;
+    appStore.errorMsg = `${t("export.exportFailed")}: ${e?.message ?? e}`;
   }
 }
 
 async function exportDocx() {
-  if (isEditing.value) {
-    showExportMenu.value = false;
-    app.errorMsg = t("editor.previewBeforeExport");
-    return;
-  }
-  if (!bodyRef.value || !draftContent.value) {
-    showExportMenu.value = false;
-    return;
-  }
+  if (!ensurePreviewForExport()) return;
   exportBusy.value = true;
-  app.exportToast = t("export.generatingDocx");
+  appStore.exportToast = t("export.generatingDocx");
   try {
     const out = await exportToDocx(
-      bodyRef.value,
-      fileName.value || "document",
-      displayFileName.value,
-      currentFile.value || undefined
+      bodyRef.value!, fileName.value || "document",
+      displayFileName.value, currentFile.value || undefined
     );
-    if (out) app.exportToast = `${t("export.exportedDocx")}: ${out}`;
-    else app.exportToast = "";
+    appStore.exportToast = out ? `${t("export.exportedDocx")}: ${out}` : "";
   } catch (e: any) {
-    app.errorMsg = `${t("export.docxFailed")}: ${e?.message ?? e}`;
-    app.exportToast = "";
+    appStore.errorMsg = `${t("export.docxFailed")}: ${e?.message ?? e}`;
+    appStore.exportToast = "";
   } finally {
     exportBusy.value = false;
     showExportMenu.value = false;
@@ -897,29 +338,19 @@ async function exportDocx() {
 }
 
 async function exportPdf() {
-  if (isEditing.value) {
-    showExportMenu.value = false;
-    app.errorMsg = t("editor.previewBeforeExport");
-    return;
-  }
-  if (!bodyRef.value || !draftContent.value) {
-    showExportMenu.value = false;
-    return;
-  }
+  if (!ensurePreviewForExport()) return;
   exportBusy.value = true;
-  app.exportToast = t("export.generatingPdf");
+  appStore.exportToast = t("export.generatingPdf");
   try {
     const result = await exportToPdf(
-      bodyRef.value,
-      fileName.value || "document",
-      displayFileName.value,
+      bodyRef.value!, fileName.value || "document", displayFileName.value,
       currentFile.value || undefined,
       async () => {
         const picked = await open({
           title: t("export.chooseEdgePath"),
           multiple: false,
           filters: [
-            { name: "Edge / Chrome", extensions: ["exe"] },
+            { name: t("export.edgeChrome"), extensions: ["exe"] },
             { name: t("app.allFiles"), extensions: ["*"] },
           ],
         });
@@ -929,14 +360,14 @@ async function exportPdf() {
     if (result) {
       pdfEnginePath.value = result.edge_path;
       const sec = (result.elapsed_ms / 1000).toFixed(1);
-      app.exportToast = `${t("export.exportedPdf")} (${sec}s): ${result.out_path}`;
+      appStore.exportToast = `${t("export.exportedPdf")} (${sec}s): ${result.out_path}`;
     } else {
-      app.exportToast = "";
+      appStore.exportToast = "";
     }
   } catch (e: any) {
     const msg = e?.message || (typeof e === "string" ? e : JSON.stringify(e));
-    app.errorMsg = `${t("export.pdfFailed")}: ${msg}`;
-    app.exportToast = "";
+    appStore.errorMsg = `${t("export.pdfFailed")}: ${msg}`;
+    appStore.exportToast = "";
   } finally {
     exportBusy.value = false;
     showExportMenu.value = false;
@@ -946,656 +377,408 @@ async function exportPdf() {
 function doPrint() {
   if (isEditing.value) {
     closeExportMenu();
-    app.errorMsg = t("editor.previewBeforeExport");
+    appStore.errorMsg = t("editor.previewBeforeExport");
     return;
   }
   if (bodyRef.value) printDocument(bodyRef.value, fileName.value);
 }
 
-/** 悬浮布局：浮层内打开文件（FileTree） */
-function onFloatPanelOpenFile(path: string): void {
-  floatLayout.closePanel();
-  void loadFile(path);
+function annotationContext() {
+  const tab = activeTab.value; if (!tab || !tab.path) return null;
+  return { getSource: () => tab.draftContent, getFileName: () => basename(tab.path),
+    setSource: (next: string) => { tab.draftContent = next; tab.isDirty = true; },
+    notify: (key: string) => showAnnotationToast(t(key)),
+    confirmClear: () => window.confirm(`${t("annotation.clearConfirmTitle")}\n\n${t("annotation.clearConfirmMessage")}`),
+  };
 }
-
-/** 悬浮布局：处理左栏特殊动作（文件操作/编辑切换等） */
-function onFloatPanelAction(id: string): void {
-  floatLayout.closePanel();
-  switch (id) {
-    case "edit":
-      toggleEditorMode();
-      break;
-    case "new-file":
-      void fileManager.createNewFile();
-      break;
-    case "open-file":
-      void fileManager.openFile();
-      break;
-    case "open-folder":
-      void pickFolder();
-      break;
-    case "export":
-      toggleExportMenu();
-      break;
-    case "locale-toggle":
-      toggleLocale();
-      break;
-    case "theme-toggle":
-      toggleTheme();
-      break;
-  }
+function onAnnotationApply(type: CriticType, payload?: string) { annotations.applyMarkup(type, payload); }
+async function onAnnotationCopy() {
+  const container = bodyRef.value, range = container && resolveSelectionRange(container, window.getSelection());
+  const text = range?.toString().trim() ?? ""; if (!text) return;
+  try { await copyTextToClipboard(text); showAnnotationToast(t("annotation.copyDone")); } catch { showAnnotationToast(t("annotation.copyFailed")); }
 }
-
-/** 悬浮布局：浮层内打开文件（HistoryPanel） */
-function onFloatPanelOpen(path: string): void {
-  floatLayout.closePanel();
-  void loadFile(path);
+async function onAnnotationPaste() {
+  let text: string; try { text = await navigator.clipboard.readText(); } catch { showAnnotationToast(t("annotation.pasteFailed")); return; }
+  if (!text.trim()) return; onAnnotationApply("ins", text);
 }
-
-/** 悬浮布局：浮层内打开搜索文件 */
-function onFloatPanelOpenSearch(path: string, _line: number): void {
-  floatLayout.closePanel();
-  void loadFile(path);
+function openAiPanel() { annotations.hide(); const container = bodyRef.value, range = container && resolveSelectionRange(container, window.getSelection()); aiPanel.openWithSelection(range ? range.toString().trim() : ""); }
+function onAiApplyResult(text: string) {
+  const tab = activeTab.value; if (!tab) return;
+  if (!window.confirm(t("ai.applyConfirm"))) return;
+  tab.draftContent = rejectAllCriticMarkup(text); tab.isDirty = true; aiPanel.close();
 }
-
-/** 悬浮布局：胶囊迷你目录跳转 */
-function onFloatPanelTocJump(id: string): void {
-  sectionMarkers.jumpTo(id);
+function openReviewPanel() { annotations.hide(); showReviewPanel.value = true; }
+function onReviewApply(decision: "accept" | "reject", id: number) {
+  const tab = activeTab.value; if (!tab) return;
+  const ann = parseCriticMarkup(tab.draftContent).find(a => a.id === id); if (!ann) return;
+  tab.draftContent = applyDecision(tab.draftContent, ann, decision); tab.isDirty = true;
 }
-
-/** 悬浮布局：批注列表聚焦到指定批注行 */
-function onFloatPanelAnnotationFocus(id: number): void {
-  const tab = activeTab.value;
-  if (!tab) return;
-  const ann = parseCriticMarkup(tab.draftContent).find((a) => a.id === id);
-  if (ann) scrollPreviewToSourceLine(ann.line);
+function onReviewApplyAll(decision: "accept" | "reject") {
+  const tab = activeTab.value; if (!tab) return;
+  tab.draftContent = decision === "accept" ? acceptAllCriticMarkup(tab.draftContent) : rejectAllCriticMarkup(tab.draftContent); tab.isDirty = true;
 }
-
-/** 悬浮布局：书签跳转到指定位置 */
-function onFloatPanelBookmarkJump(path: string, scrollTop: number): void {
-  floatLayout.closePanel();
-  void loadFile(path).then(() => {
-    nextTick(() => {
-      if (viewerEl.value) {
-        viewerEl.value.scrollTop = scrollTop;
-      }
-    });
-  });
+function onReviewFocus(id: number) {
+  const tab = activeTab.value; if (!tab) return;
+  const ann = parseCriticMarkup(tab.draftContent).find(a => a.id === id); if (ann) scrollPreviewToSourceLine(ann.line);
 }
-
-/** 悬浮 Tab 条切换文档：切换后暂时保持显示，2s 后自动隐藏 */
-function onFloatFloatingTabActivate(id: string): void {
-  void switchToTab(id);
-  // 切换后保持 2s 显示，方便用户继续操作
-  topTabBarVisible.value = true;
-  setTimeout(() => {
-    topTabBarVisible.value = false;
-  }, 2000);
-}
-
-/** 悬浮 Tab 条：鼠标进入 → 取消自动隐藏 */
-function onFloatTabBarMouseEnter(): void {
-  topTabBarVisible.value = true;
-  if (topTabBarHideTimer !== null) {
-    clearTimeout(topTabBarHideTimer);
-    topTabBarHideTimer = null;
-  }
-}
-
-/** 悬浮 Tab 条：鼠标离开 → 2s 后自动隐藏 */
-function onFloatTabBarMouseLeave(): void {
-  if (topTabBarHideTimer !== null) {
-    clearTimeout(topTabBarHideTimer);
-  }
-  topTabBarHideTimer = setTimeout(() => {
-    topTabBarVisible.value = false;
-    topTabBarHideTimer = null;
-  }, 2000);
-}
-
-function onInternalLink(path: string, hash: string) {
-  void loadFile(path, hash);
-}
-
-function onDraftUpdate(value: string) {
-  const tab = activeTab.value;
-  if (!tab) return;
-  tab.draftContent = value;
-  tab.isDirty = value !== tab.content;
-  if (headingTimer) clearTimeout(headingTimer);
-  headingTimer = window.setTimeout(() => {
-    tab.headings = extractHeadings(value);
-  }, 200);
-}
-
 
 const recentFiltered = ref<RecentItem[]>([]);
-
 async function refreshRecent() {
-  const items = recent.value.slice(0, 10);
-  const checks = await Promise.all(
-    items.map(async (item) => ({
-      item,
-      ok: await exists(item.path).catch(() => false),
-    }))
-  );
-  recentFiltered.value = checks.filter((c) => c.ok).map((c) => c.item);
+  const checks = await Promise.all(recent.value.slice(0, 10).map(async (item) => {
+    try { return { item, ok: await exists(item.path) }; } catch { return { item, ok: false }; }
+  }));
+  recentFiltered.value = checks.filter(c => c.ok).map(c => c.item);
 }
 
-function zoomFont(delta: number) {
-  if (isEditing.value)
-    setEditorFontSize(readingSettings.value.editorFontSize + delta);
-  else setFontSize(readingSettings.value.fontSize + delta);
-}
+// Keyboard handlers — must be after all handler functions are defined
+const keyboardHandlers = useKeyboardHandlers({
+  fileManager: { openFile: fileManager.openFile, saveCurrentFile: fileManager.saveCurrentFile, saveAs: fileManager.saveAs, closeCurrentTab: fileManager.closeCurrentTab, closeAllTabs: fileManager.closeAllTabs, createNewFile: fileManager.createNewFile },
+  floatLayout, unsavedDialog, onOpenSearch: () => { searchVisible.value = true; }, enableFloatLayout: () => enableFloatLayout.value,
+});
+const showSettings = keyboardHandlers.showSettings;
+const showReviewPanel = ref(false);
 
-let scrollSaveTimer: number | null = null;
-function onViewerScroll() {
-  if (isEditing.value) return;
-  onScroll();
-  if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
-  scrollSaveTimer = window.setTimeout(saveCurrentScroll, 400);
+function handleToggleBookmark() {
+  const tab = activeTab.value; if (!tab || !viewerEl.value || isEditing.value) return;
+  const scrollTop = viewerEl.value.scrollTop;
+  const h = headings.value.filter(hh => {
+    const el = bodyRef.value?.querySelector(`#${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(hh.id) : hh.id}`);
+    if (!el) return false;
+    return el.getBoundingClientRect().top + scrollTop - viewerEl.value!.getBoundingClientRect().top <= scrollTop + 16;
+  }).pop();
+  const label = h?.text;
+  const r = bookmarks.toggle(tab.path, scrollTop, label, label);
+  showAnnotationToast(r ? t('float.bookmarkAdded') : t('float.bookmarkRemoved'));
 }
+function handleToggleTheme() { appStore.toggleTheme(); renderTick.value++; }
+function handleToggleLocale() { const next = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'; locale.value = next; persistLocale(next as AppLocale); }
+function handleOnRendered() {
+  nextTick(() => {
+    const tab = activeTab.value; if (!viewerEl.value || !tab) return;
+    annotations.configure(annotationContext, () => bodyRef.value);
+    annotations.initSelectionWatch();
+    aiPanel.configure(() => ({ getSource: () => activeTab.value?.draftContent ?? '', applyResult: onAiApplyResult }));
+    if (tab.pendingHash) { sectionMarkers.jumpTo(tab.pendingHash); tab.pendingHash = ''; }
+    if (lastSearchQuery.value) { find.highlightSearch(lastSearchQuery.value); lastSearchQuery.value = ''; }
+    pendingRestoreQuery.value = false;
+    if (tab.pendingSourceLine > 0) { scrollPreviewToSourceLine(tab.pendingSourceLine); tab.pendingSourceLine = 0; }
+    else if (tab.pendingScrollTop > 0) viewerEl.value.scrollTop = tab.pendingScrollTop;
+    else viewerEl.value.scrollTop = 0;
+  });
+}
+function handleBookmarkJump(path: string, scrollTop: number) {
+  floatLayout.closePanel();
+  void loadFile(path).then(() => { nextTick(() => { if (viewerEl.value) viewerEl.value.scrollTop = scrollTop; }); });
+}
+function handleZoomIn() { isEditing.value ? setEditorFontSize(readingSettings.value.editorFontSize + 1) : setFontSize(readingSettings.value.fontSize + 1); }
+function handleZoomOut() { isEditing.value ? setEditorFontSize(readingSettings.value.editorFontSize - 1) : setFontSize(readingSettings.value.fontSize - 1); }
 
-watch(isEditing, (editing) => {
-  if (editing) {
-    markdownRef.value = null;
-    // 编辑模式下无预览选区,清理批注监听与工具栏,避免残留
-    annotations.dispose();
+let topTabBarVisible = ref(true);
+let topTabBarHideTimer: ReturnType<typeof setTimeout> | null = null;
+function onFloatFloatingTabActivate(id: string) { void switchToTab(id); topTabBarVisible.value = true; setTimeout(() => { topTabBarVisible.value = false; }, 2000); }
+function onFloatTabBarMouseEnter() { topTabBarVisible.value = true; if (topTabBarHideTimer !== null) { clearTimeout(topTabBarHideTimer); topTabBarHideTimer = null; } }
+function onFloatTabBarMouseLeave() {
+  if (topTabBarHideTimer !== null) clearTimeout(topTabBarHideTimer);
+  topTabBarHideTimer = setTimeout(() => { topTabBarVisible.value = false; topTabBarHideTimer = null; }, 2000);
+}
+function onFloatPanelAction(id: string) {
+  floatLayout.closePanel();
+  if (id === "edit") toggleEditorMode();
+  else if (id === "new-file") void fileManager.createNewFile();
+  else if (id === "open-file") void fileManager.openFile();
+  else if (id === "open-folder") void onPickFolder();
+  else if (id === "export") toggleExportMenu();
+  else if (id === "locale-toggle") handleToggleLocale();
+  else if (id === "theme-toggle") handleToggleTheme();
+}
+function onFloatPanelOpenFile(path: string) { floatLayout.closePanel(); void loadFile(path); }
+function toggleSearchPanel() { searchVisible.value = !searchVisible.value; }
+function onFind() { if (isEditing.value) editorRef.value?.openSearch(); else searchVisible.value = true; }
+async function onPickFolder() { const d = await openFolder(); if (d) await startWatching(d); }
+function onFloatPanelOpenSearch(path: string, line: number) {
+  const currentPath = activeTab.value?.path;
+  if (currentPath && samePath(path, currentPath) && !activeTab.value?.isEditing) {
+    const q = find.query.value || lastSearchQuery.value;
+    if (q) { find.query.value = q; lastSearchQuery.value = q; }
+    nextTick(() => { find.scrollToLine(line); });
     return;
   }
-  nextTick(onScroll);
-});
+  const q = find.query.value || lastSearchQuery.value;
+  if (q) lastSearchQuery.value = q;
+  pendingRestoreQuery.value = true;
+  void loadFile(path, "", line);
+}
 
-watch(activeTabId, () => {
-  app.errorMsg = "";
-  find.close();
-  find.clearHighlights();
-  // 切换文档时清理批注状态,避免旧文档的工具栏残留
-  annotations.dispose();
-  if (!activeTab.value?.isEditing) nextTick(onScroll);
-});
+let restoreInFlight = false;
+/** 组件已卸载：窗口关闭/重挂载时，restoreTabs 异步续体必须中止状态写入 */
+let appDisposed = false;
 
-
-let unlistenDrop: (() => void) | null = null;
-let unlistenOpen: (() => void) | null = null;
-let unlistenClose: (() => void) | null = null;
-
-onMounted(async () => {
-  applyTheme();
-  applyReadingSettings();
-  void checkPandoc().then((info) => (pandocInfo.value = info));
-  void checkPdfEngine().then((p) => (pdfEnginePath.value = p));
-
-  // 先恢复历史 tab（文档路径为绝对路径）
-  const initialPath = await getInitialOpenFile();
-  await restoreTabs(initialPath);
-
-  // 文件树根目录：有历史文档 → 激活文档所在目录（平级显示）；无 → 用户主目录
-  if (currentFile.value) {
-    await syncRootDir(currentFile.value);
-  } else {
-    await setHomeRoot();
-  }
-  if (rootDir.value) await startWatching(rootDir.value);
-
-  // Listen for file-open events fired by Rust (file association / single-instance).
+async function restoreTabs(initialPath = "") {
+  if (restoreInFlight) return; // 防重入：onMounted 只调用一次，但 HMR/测试重挂载时防止并发二次恢复
+  restoreInFlight = true;
   try {
-    const { listen } = await import("@tauri-apps/api/event");
-    unlistenOpen = await listen<string>("glim-reader://open-file", async (e) => {
-      const path = e.payload;
-      if (typeof path === "string" && path) {
-        await loadFile(path);
-      }
-    });
-  } catch (e) {
-    console.warn("listen open-file unavailable", e);
-  }
-
-  try {
-    const { getCurrentWindow } = await import("@tauri-apps/api/window");
-    appWindow = getCurrentWindow();
-    unlistenClose = await appWindow.onCloseRequested(async (event) => {
-      if (!tabs.value.some((tb) => tb.isDirty)) {
-        // No unsaved changes: let the default close proceed.
+    const persisted = loadPersisted(); let paths: string[] = [], activePath = "";
+    if (persisted?.paths.length) { paths = persisted.paths; activePath = persisted.activePath; }
+    else { const last = localStorage.getItem("glim-reader-last-file"); if (last) { paths = [last]; activePath = last; } }
+    const uniquePaths = [...new Set(paths.filter(p => p && !findTabByPath(p)))];
+    if (uniquePaths.length > 0) {
+      // 并行读取（有界并发 4）：串行 IPC 读取是「多文档启动变慢」的主因
+      const textByPath = new Map<string, string>();
+      let cursor = 0;
+      const readWorkers = Array.from({ length: Math.min(4, uniquePaths.length) }, async () => {
+        while (cursor < uniquePaths.length) {
+          const path = uniquePaths[cursor++];
+          fileManager.addSuppress(path);
+          try { textByPath.set(path, await readTextFile(path)); } catch { /* 单文件失败不影响整体恢复 */ }
+        }
+      });
+      await Promise.all(readWorkers);
+      // 窗口在恢复期间已关闭（onUnmounted）：不再装配标签/激活/写历史，避免状态写入已销毁实例
+      if (appDisposed) {
+        // 平衡读取阶段加入的 suppress，避免残留；应用关闭场景下无害，但保持状态一致
+        for (const path of uniquePaths) fileManager.clearSuppress(path);
         return;
       }
-      event.preventDefault();
-      const ok = await confirmCloseAll();
-      if (ok) await appWindow!.destroy();
-    });
-  } catch (e) {
-    console.warn("close listener unavailable", e);
-  }
-
-  try {
-    const webview = getCurrentWebview();
-    unlistenDrop = await webview.onDragDropEvent(async (event) => {
-      if (event.payload.type === "drop") {
-        const paths = event.payload.paths;
-        if (paths && paths.length > 0) {
-          const target = paths.find((p) => /\.(md|markdown|mdx|txt)$/i.test(p));
-          if (target) await loadFile(target);
-        }
+      // 按原顺序装配 tab，保证标签页顺序与上次会话一致
+      const recentPaths: string[] = [];
+      let activeId = "";
+      for (const path of uniquePaths) {
+        const text = textByPath.get(path);
+        if (text === undefined) { fileManager.clearSuppress(path); continue; }
+        const tab = createTab(path);
+        tab.path = path; tab.content = text; tab.draftContent = text;
+        tab.isDirty = false; tab.isEditing = false;
+        // 仅对本次激活的标签同步提取大纲，其余延迟到激活时（显著加快多文档启动）
+        tab.headings = samePath(path, activePath) ? extractHeadings(text) : [];
+        tab.pendingHash = ""; tab.pendingScrollTop = getScroll(path);
+        tab.pendingSourceLine = 0; tab.scrollTop = tab.pendingScrollTop;
+        tabs.value.push(tab);
+        recentPaths.push(path);
+        fileManager.scheduleSuppressClear(path);
+        if (samePath(path, activePath)) activeId = tab.id;
       }
-    });
-  } catch (e) {
-    console.warn("drag-drop unavailable", e);
+      if (!activeId && tabs.value.length) activeId = tabs.value[0].id;
+      if (activeId) activateTab(activeId);
+      // activePath 为空（默认取第一个标签）时补一次大纲提取
+      const activated = tabs.value.find(tb => tb.id === activeId);
+      if (activated && !activated.headings.length && activated.draftContent) {
+        activated.headings = extractHeadings(activated.draftContent);
+      }
+      // 最近打开列表批量写入一次，避免每文件一次 localStorage 序列化
+      if (recentPaths.length) pushRecentBatch(recentPaths);
+      // 注意：恢复期间 watcher 尚未启动，目录监听由 onMounted 中的 startWatching 统一注册
+    }
+    if (appDisposed) return;
+    if (initialPath) await loadFile(initialPath);
+  } finally {
+    restoreInFlight = false;
   }
-  void refreshRecent();
-  floatLayout.bindGlobalClick();
+}
+
+let unlistenDrop: (() => void) | null = null, unlistenOpen: (() => void) | null = null, unlistenClose: (() => void) | null = null;
+let appWindow: import("@tauri-apps/api/window").Window | null = null;
+
+onMounted(async () => {
+  appStore.applyTheme(); applyReadingSettings();
+  const initialPath = await (async () => { try { return await invoke<string | null>("initial_open_file"); } catch { return ""; } })();
+  await restoreTabs(typeof initialPath === "string" ? initialPath : "");
+  if (currentFile.value) await syncRootDir(currentFile.value); else await setHomeRoot();
+  // syncRootDir 已启动监听时跳过，避免重复 stop/start
+  if (rootDir.value && watcher.watching.value !== rootDir.value) await startWatching(rootDir.value);
+  // 探测导出能力：pandoc（DOCX）与 Edge（PDF）
+  void checkPandoc().then(info => { pandocInfo.value = info; }).catch(() => {});
+  void checkPdfEngine().then(p => { pdfEnginePath.value = p; }).catch(() => {});
+  try { const { listen } = await import("@tauri-apps/api/event"); unlistenOpen = await listen<string>("glim-reader://open-file", async e => { const p = e.payload; if (typeof p === "string" && p) await loadFile(p); }); } catch { /* ignore */ }
+  try { const { getCurrentWindow } = await import("@tauri-apps/api/window"); appWindow = getCurrentWindow(); unlistenClose = await appWindow.onCloseRequested(async event => { if (!tabs.value.some(tb => tb.isDirty)) return; event.preventDefault(); await fileManager.closeAllTabs(); if (appWindow) await appWindow.destroy(); }); } catch { /* ignore */ }
+  try { const webview = getCurrentWebview(); unlistenDrop = await webview.onDragDropEvent(async event => { if (event.payload.type === "drop" && event.payload.paths) { const target = event.payload.paths.find(p => /\.(md|markdown|mdx|txt)$/i.test(p)); if (target) await loadFile(target); } }); } catch { /* ignore */ }
+  void refreshRecent(); floatLayout.bindGlobalClick();
 });
 
 onUnmounted(() => {
-  unlistenDrop?.();
-  unlistenOpen?.();
-  unlistenClose?.();
+  appDisposed = true; // 标记已卸载：restoreTabs 的异步续体据此中止状态写入
+  unlistenDrop?.(); unlistenOpen?.(); unlistenClose?.();
   if (headingTimer) clearTimeout(headingTimer);
-  void watcher.stop();
-  annotations.dispose();
-  floatLayout.unbindGlobalClick();
+  if (searchPosSettleTimer !== null) clearTimeout(searchPosSettleTimer);
+  void watcher.stop(); annotations.dispose(); floatLayout.unbindGlobalClick();
 });
 
-watch(
-  () => tabs.value.map((tb) => tb.path).join("\n"),
-  () => persist()
-);
-
-watch(exportToast, (v) => {
-  if (v) {
-    window.setTimeout(() => {
-      app.exportToast = "";
-    }, 3500);
+watch(() => tabs.value.map(tb => tb.path).join("\n"), () => persist());
+watch(() => appStore.exportToast, (v) => { if (v) setTimeout(() => { appStore.exportToast = ""; }, 3500); });
+watch(() => appStore.errorMsg, (v) => { if (v) setTimeout(() => { appStore.errorMsg = ""; }, 5000); });
+watch(hasActiveFile, (v) => { if (!v) void refreshRecent(); });
+watch(isEditing, (editing) => { if (editing) { markdownRef.value = null; annotations.dispose(); return; } nextTick(onScroll); });
+watch(activeTabId, () => {
+  appStore.errorMsg = ""; const newPath = activeTab.value?.path ?? "";
+  // 后台标签在恢复时未提取大纲，激活时补一次（TOC / 章节标记依赖）。
+  // 延迟到下一帧并校验仍为当前标签：快速连续切换标签时避免主线程同步 tokenize 卡顿
+  const switchedTab = activeTab.value;
+  if (switchedTab && switchedTab.draftContent && !switchedTab.headings.length) {
+    const tabId = switchedTab.id;
+    requestAnimationFrame(() => {
+      const cur = activeTab.value;
+      if (!cur || cur.id !== tabId || cur.headings.length) return;
+      cur.headings = extractHeadings(cur.draftContent);
+    });
+  }
+  if (!searchVisible.value || newPath !== prevTabPath.value) {
+    if (lastSearchQuery.value && !pendingRestoreQuery.value) find.clearHighlights();
+  }
+  prevTabPath.value = newPath; annotations.dispose();
+  if (!activeTab.value?.isEditing) nextTick(onScroll);
+});
+watch(() => searchVisible.value, (visible) => {
+  if (visible) {
+    const seq = ++searchFocusSeq;
+    void nextTick(() => {
+      if (seq === searchFocusSeq && searchPanelRef.value) {
+        searchPanelRef.value.focusInput();
+      }
+      recalcSearchPosition();
+    });
+  } else {
+    lastSearchQuery.value = "";
+    find.query.value = "";
   }
 });
-
-watch(errorMsg, (v) => {
-  if (v) {
-    window.setTimeout(() => {
-      app.errorMsg = "";
-    }, 5000);
+watch(enableFloatLayout, () => { void requestAnimationFrame(recalcSearchPosition); });
+watch(() => floatLayout.state.activeLeftPanel, () => {
+  void requestAnimationFrame(recalcSearchPosition);
+  // FloatingPanel 关闭后仍保留在 DOM 中 250ms（unmountTimer，供滑出动画），
+  // 此刻立即重算仍会读到面板宽度，搜索框位置无法恢复。延迟到面板真正卸载后再重算一次。
+  // 每次关闭都重置计时：快速连续关闭面板时，以最后一次关闭为起点（防抖式重挂），
+  // 避免旧的待执行计时器在面板仍驻留时触发后无人再重算。
+  if (!floatLayout.state.activeLeftPanel) {
+    if (searchPosSettleTimer !== null) clearTimeout(searchPosSettleTimer);
+    searchPosSettleTimer = setTimeout(() => {
+      searchPosSettleTimer = null;
+      recalcSearchPosition();
+    }, PANEL_UNMOUNT_SETTLE_MS);
   }
 });
+watch(topTabBarVisible, () => { void requestAnimationFrame(recalcSearchPosition); });
 
-watch(hasActiveFile, (v) => {
-  if (!v) void refreshRecent();
-});
+window.addEventListener("resize", recalcSearchPosition, { passive: true });
+onUnmounted(() => window.removeEventListener("resize", recalcSearchPosition));
 </script>
 
 <template>
   <div class="app">
     <Toolbar v-if="!enableFloatLayout"
-             :is-editing="isEditing"
-             :is-dirty="isDirty"
-             :has-active-file="hasActiveFile"
-             :saving="saving"
-             :can-export="canExport"
-             :export-busy="exportBusy"
-             :show-export-menu="showExportMenu"
-             :current-file="currentFile"
-             :display-file-name="displayFileName"
-             :root-dir="rootDir"
-             :tree-loading="treeLoading"
-             :show-settings="showSettings"
-             :theme="theme"
-             :locale="locale"
-             :has-bookmark-at-current-pos="hasBookmarkAtCurrentPos"
-             :float-layout-enabled="enableFloatLayout"
-             :pandoc-info="pandocInfo"
-             :pdf-engine-path="pdfEnginePath"
-             @create-new-file="fileManager.createNewFile"
-             @pick-file="fileManager.openFile"
-             @pick-folder="pickFolder"
-             @refresh-tree="handleRefresh"
-             @close-folder="closeFolder"
-             @toggle-editor-mode="toggleEditorMode"
-             @save="fileManager.saveCurrentFile"
-             @save-as="fileManager.saveAs"
-             @find="isEditing ? editorRef?.openSearch() : find.open()"
-             @toggle-export-menu="toggleExportMenu"
-             @close-export-menu="closeExportMenu"
-             @export-html="exportHtml"
-             @export-docx="exportDocx"
-             @export-pdf="exportPdf"
+             :is-editing="isEditing" :is-dirty="isDirty" :has-active-file="hasActiveFile" :saving="appStore.saving"
+             :can-export="Boolean(activeTab?.draftContent)" :export-busy="exportBusy" :show-export-menu="showExportMenu"
+             :current-file="currentFile" :display-file-name="displayFileName" :root-dir="rootDir"
+             :tree-loading="treeLoading" :show-settings="showSettings" :theme="appStore.theme"
+             :locale="locale" :has-bookmark-at-current-pos="hasBookmarkAtCurrentPos"
+             :float-layout-enabled="enableFloatLayout" :pandoc-info="pandocInfo" :pdf-engine-path="pdfEnginePath"
+             @create-new-file="fileManager.createNewFile" @pick-file="fileManager.openFile"
+             @pick-folder="onPickFolder"
+             @refresh-tree="void refreshTree()" @close-folder="() => { void watcher.stop(); clearRoot(); }"
+             @toggle-editor-mode="toggleEditorMode" @save="fileManager.saveCurrentFile"
+             @save-as="fileManager.saveAs" @find="onFind"
+             @toggle-export-menu="toggleExportMenu" @close-export-menu="closeExportMenu"
+             @export-html="exportHtml" @export-docx="exportDocx" @export-pdf="exportPdf"
              @print="doPrint"
              @open-settings="showSettings = true"
-             @toggle-bookmark="toggleBookmark"
-             @toggle-theme="toggleTheme"
-             @toggle-locale="toggleLocale"
+             @toggle-bookmark="handleToggleBookmark"
+             @toggle-theme="handleToggleTheme"
+             @toggle-locale="handleToggleLocale"
              @toggle-float-layout="toggleFloatLayout"
     />
-
-    <TabBar
-      v-if="tabs.length && !enableFloatLayout"
-      :tabs="tabs"
-      :active-tab-id="activeTabId"
-      :auto-reload="autoReloadWhitelist"
-      @activate="switchToTab"
-      @close="closeTab"
-      @close-left="closeTabLeft"
-      @close-right="closeTabRight"
-      @close-all="closeTabAll"
-      @close-others="closeTabOthers"
-    />
-
+    <TabBar v-if="tabs.length && !enableFloatLayout" :tabs="tabs" :active-tab-id="activeTabId" :auto-reload="autoReloadWhitelist"
+            @activate="switchToTab" @close="(id) => void fileManager.requestCloseTab(id)"
+            @close-left="(id) => void fileManager.closeTabLeft(id)" @close-right="(id) => void fileManager.closeTabRight(id)"
+            @close-all="fileManager.closeAllTabs()" @close-others="(id) => void fileManager.closeTabOthers(id)" />
     <main class="layout">
-      <section
-        ref="viewerEl"
-        class="viewer"
-        data-scroll-root
-        :class="{ editing: isEditing }"
-        tabindex="0"
-        @scroll.passive="onViewerScroll"
-      >
-        <div v-if="errorMsg" class="error" @click="app.errorMsg = ''">
-          {{ errorMsg }}
-        </div>
+      <section ref="viewerEl" class="viewer" data-scroll-root :class="{ editing: isEditing }" tabindex="0" @scroll.passive="onViewerScroll">
+        <div v-if="appStore.errorMsg" class="error" @click="appStore.errorMsg = ''">{{ appStore.errorMsg }}</div>
         <div v-if="!hasActiveFile" class="empty">
-          <div class="empty-title">{{ t("app.emptyTitle") }}</div>
-          <div class="empty-hint">{{ t("app.emptyHint") }}</div>
-          <div class="shortcut-hint">
-            {{ t("app.shortcutHint") }}
-          </div>
+          <div class="empty-title">{{ t('app.emptyTitle') }}</div>
+          <div class="empty-hint">{{ t('app.emptyHint') }}</div>
+          <div class="shortcut-hint">{{ t('app.shortcutHint') }}</div>
           <div v-if="recentFiltered.length" class="recent-files">
-            <div class="recent-title">{{ t("app.recentFiles") }}</div>
-            <div
-              v-for="item in recentFiltered"
-              :key="item.path"
-              class="recent-item"
-              @click="loadFile(item.path)"
-              :title="item.path"
-            >
-              <span class="recent-name">{{ item.name }}</span>
-              <span class="recent-path">{{ dirOf(item.path) }}</span>
+            <div class="recent-title">{{ t('app.recentFiles') }}</div>
+            <div v-for="item in recentFiltered" :key="item.path" class="recent-item" @click="loadFile(item.path)" :title="item.path">
+              <span class="recent-name">{{ item.name }}</span><span class="recent-path">{{ dirOf(item.path) }}</span>
             </div>
-            <button
-              class="recent-clear"
-              @click="
-                clearRecent();
-                recentFiltered = [];
-              "
-            >
-              {{ t("app.clearRecent") }}
-            </button>
+            <button class="recent-clear" @click="clearRecent(); recentFiltered = []">{{ t('app.clearRecent') }}</button>
           </div>
         </div>
-        <MarkdownEditor
-          v-else-if="isEditing"
-          ref="editorRef"
-          :model-value="draftContent"
-          :theme="theme"
-          :current-file="currentFile"
-          @update:model-value="onDraftUpdate"
-          @toggle-mode="toggleEditorMode"
-        />
-        <MarkdownView
-          v-else
-          ref="markdownRef"
-          :source="draftContent"
-          :current-file="currentFile"
-          :root-dir="rootDir"
-          :render-tick="renderTick"
-          @rendered="onRendered"
-          @internal-link="onInternalLink"
-        />
-        <AnnotationToolbar
-          :visible="annotations.toolbar.visible"
-          :x="annotations.toolbar.x"
-          :y="annotations.toolbar.y"
-          :mode="annotations.toolbar.mode"
-          @apply="onAnnotationApply"
-          @input-start="(m) => (annotations.toolbar.mode = m)"
-          @cancel="annotations.toolbar.mode = ''"
-          @copy-ai="() => void annotations.copyForAI()"
-          @copy="onAnnotationCopy"
-          @paste="onAnnotationPaste"
-          @clear-all="() => void annotations.clearAll()"
-          @review="openReviewPanel"
-          @ai="openAiPanel"
-        />
+        <MarkdownEditor v-else-if="isEditing" ref="editorRef" :model-value="draftContent" :theme="appStore.theme" :current-file="currentFile" @update:model-value="onDraftUpdate" @toggle-mode="toggleEditorMode" />
+        <MarkdownView v-else ref="markdownRef" :source="draftContent" :current-file="currentFile" :root-dir="rootDir" :render-tick="renderTick" @rendered="handleOnRendered" @internal-link="p => void loadFile(p)" />
+        <AnnotationToolbar :visible="annotations.toolbar.visible" :x="annotations.toolbar.x" :y="annotations.toolbar.y" :mode="annotations.toolbar.mode"
+                           @apply="onAnnotationApply" @input-start="(m: any) => { annotations.toolbar.mode = m; }" @cancel="annotations.toolbar.mode = ''"
+                           @copy-ai="() => void annotations.copyForAI()" @copy="onAnnotationCopy" @paste="onAnnotationPaste"
+                           @clear-all="() => void annotations.clearAll()" @review="openReviewPanel" @ai="openAiPanel" />
       </section>
     </main>
-
-    <!-- 悬浮布局（P0），可由设置开关启用 -->
-    <!-- 左栏工具栏与悬浮 Tab 条在编辑模式下也保持显示，确保可以退出编辑状态 -->
-    <LeftRail
-      v-if="enableFloatLayout"
-      :active-panel="floatLayout.state.activeLeftPanel"
-      :dynamic-icons="dynamicIcons"
-      @open-panel="(id) => ACTION_PANEL_IDS.has(id) ? onFloatPanelAction(id) : floatLayout.openPanel(id)"
-    />
-
-    <TopTrigger
-      v-if="enableFloatLayout"
-      enabled
-      @show="topTabBarVisible = true"
-    />
-    <TabBar
-      v-if="enableFloatLayout && tabs.length"
-      :tabs="tabs"
-      :active-tab-id="activeTabId"
-      :auto-reload="autoReloadWhitelist"
-      :floating="true"
-      :visible="topTabBarVisible"
-      @activate="onFloatFloatingTabActivate"
-      @close="closeTab"
-      @close-left="closeTabLeft"
-      @close-right="closeTabRight"
-      @close-all="closeTabAll"
-      @close-others="closeTabOthers"
-      @mouse-enter="onFloatTabBarMouseEnter"
-      @mouse-leave="onFloatTabBarMouseLeave"
-    />
-
+    <LeftRail v-if="enableFloatLayout" :active-panel="floatLayout.state.activeLeftPanel" :dynamic-icons="dynamicIcons"
+              @open-panel="(id: string) => (id === 'search' ? toggleSearchPanel() : ACTION_PANEL_IDS.has(id as any) ? onFloatPanelAction(id) : floatLayout.openPanel(id as any))" />
+    <TopTrigger v-if="enableFloatLayout" enabled @show="topTabBarVisible = true" />
+    <TabBar v-if="enableFloatLayout && tabs.length" :tabs="tabs" :active-tab-id="activeTabId" :auto-reload="autoReloadWhitelist"
+            :floating="true" :visible="topTabBarVisible" @activate="onFloatFloatingTabActivate"
+            @close="(id) => void fileManager.requestCloseTab(id)" @close-left="(id) => void fileManager.closeTabLeft(id)"
+            @close-right="(id) => void fileManager.closeTabRight(id)" @close-all="fileManager.closeAllTabs()"
+            @close-others="(id) => void fileManager.closeTabOthers(id)"
+            @mouse-enter="onFloatTabBarMouseEnter" @mouse-leave="onFloatTabBarMouseLeave" />
     <template v-if="enableFloatLayout && !isEditing">
-      <MobileBottomBar
-        :active-panel="floatLayout.state.activeLeftPanel"
-        @open-panel="(id) => ACTION_PANEL_IDS.has(id) ? onFloatPanelAction(id) : floatLayout.openPanel(id)"
+      <MobileBottomBar :active-panel="floatLayout.state.activeLeftPanel"
+                       @open-panel="(id: string) => (id === 'search' ? toggleSearchPanel() : ACTION_PANEL_IDS.has(id as any) ? onFloatPanelAction(id) : floatLayout.openPanel(id as any))" />
+      <FloatPanelContent
+        :float-state="{ activeLeftPanel: floatLayout.state.activeLeftPanel, closePanel: () => floatLayout.closePanel() }"
+        :is-mobile="isMobileViewport" :root-dir="rootDir" :tree="tree" :current-file="currentFile"
+        :can-go-up="canGoUp" :tree-focus-key="treeFocusKey" :load-children="loadChildren"
+        :recent-filtered="recentFiltered" :draft-content="draftContent" :theme="appStore.theme"
+        :is-editing="isEditing" :reading-settings="readingSettings" :float-layout-enabled="enableFloatLayout"
+        :show-settings="showSettings" :ai-panel="aiPanel"
+        @open-file="onFloatPanelOpenFile" @go-up="() => void goUp()" @open="onFloatPanelOpenFile"
+        @refresh-recent="refreshRecent" @annotation-focus="onReviewFocus"
+        @open-review="openReviewPanel" @bookmark-jump="handleBookmarkJump"
+        @refresh-bookmarks="() => bookmarks.reload()"
+        @toggle-theme="handleToggleTheme"
+        @zoom-in="handleZoomIn" @zoom-out="handleZoomOut"
+        @set-max-width="setMaxWidth" @set-line-height="setLineHeight" @toggle-float-layout="toggleFloatLayout"
+        @open-settings="showSettings = true"
       />
-
-      <FloatingPanel
-        :visible="!!floatLayout.state.activeLeftPanel"
-        :side="isMobileViewport ? 'bottom' : 'left'"
-        :width="320"
-        @close="floatLayout.closePanel"
-      >
-        <template v-if="floatLayout.state.activeLeftPanel === 'filetree'">
-          <div class="float-panel-header">{{ t("float.filetree") }}</div>
-          <div class="float-panel-body tree-scroll" ref="treeScrollEl">
-            <FileTree
-              v-if="rootDir"
-              :nodes="tree"
-              :current-path="currentFile"
-              :scroll-container="treeScrollEl"
-              :can-go-up="canGoUp"
-              :focus-key="treeFocusKey"
-              :root-dir="rootDir"
-              :load-children="loadChildren"
-              @open="onFloatPanelOpenFile"
-              @go-up="onGoUp"
-            />
-            <div v-else class="empty-tip">{{ t("app.openFolderHint") }}</div>
-          </div>
-        </template>
-        <template v-else-if="floatLayout.state.activeLeftPanel === 'history'">
-          <HistoryPanel
-            :items="recentFiltered"
-            :current-path="currentFile"
-            @open="onFloatPanelOpen"
-            @clear="refreshRecent"
-          />
-        </template>
-        <template v-else-if="floatLayout.state.activeLeftPanel === 'search'">
-          <div class="float-panel-header">{{ t("float.search") }}</div>
-          <div class="float-panel-body">
-            <SearchPanel
-              :visible="true"
-              :root-dir="rootDir"
-              @close="floatLayout.closePanel"
-              @open="onFloatPanelOpenSearch"
-            />
-          </div>
-        </template>
-        <template v-else-if="floatLayout.state.activeLeftPanel === 'annotations'">
-          <AnnotationList
-            :source="draftContent"
-            :file-name="currentFile"
-            @focus="onFloatPanelAnnotationFocus"
-            @open-review="openReviewPanel"
-            @copy-ai="() => void annotations.copyForAI()"
-          />
-        </template>
-        <template v-else-if="floatLayout.state.activeLeftPanel === 'bookmark'">
-          <BookmarkPanel
-            :current-path="currentFile"
-            :show-current-only="true"
-            @jump="onFloatPanelBookmarkJump"
-            @refresh="() => {}"
-          />
-        </template>
-        <template v-else-if="floatLayout.state.activeLeftPanel === 'ai'">
-          <AiPanelInline
-            :selection-text="aiPanel.state.selectionText"
-            :result="aiPanel.state.result"
-            :loading="aiPanel.state.loading"
-            :error="aiPanel.state.error"
-            :active-action="aiPanel.state.activeAction"
-            @run-action="(a) => void aiPanel.runAction(a)"
-            @apply-result="() => void aiPanel.applyResultToDoc()"
-            @close="aiPanel.close"
-          />
-        </template>
-        <template v-else-if="floatLayout.state.activeLeftPanel === 'settings'">
-          <QuickSettings
-            :theme="theme"
-            :font-size="isEditing ? readingSettings.editorFontSize : readingSettings.fontSize"
-            :float-layout-enabled="enableFloatLayout"
-            @toggle-theme="toggleTheme"
-            @open-settings="showSettings = true"
-            @zoom-in="zoomFont(1)"
-            @zoom-out="zoomFont(-1)"
-            @set-max-width="(v) => setMaxWidth(v)"
-            @set-line-height="(v) => setLineHeight(v)"
-            @toggle-float-layout="toggleFloatLayout"
-          />
-        </template>
-        <template v-else-if="floatLayout.state.activeLeftPanel === 'help'">
-          <HelpPanel />
-        </template>
-      </FloatingPanel>
-
-      <TocCapsule
-        :headings="headings"
-        :active-id="sectionMarkers.activeId.value"
-        @jump="onFloatPanelTocJump"
-      />
+      <div class="search-overlay" :class="{ 'is-visible': searchVisible && enableFloatLayout && !isEditing }" :style="searchOverlayStyle">
+        <SearchPanel ref="searchPanelRef" :visible="searchVisible" :root-dir="rootDir" @close="closeSearchPanel" @open="onFloatPanelOpenSearch" @query-change="onSearchQueryChange" />
+      </div>
+      <TocCapsule :headings="headings" :active-id="sectionMarkers.activeId.value" @jump="id => sectionMarkers.jumpTo(id)" />
     </template>
-
-    <FindBar
-      v-if="!isEditing"
-      :visible="find.visible.value"
-      :query="find.query.value"
-      :case-sensitive="find.caseSensitive.value"
-      :total="find.total.value"
-      :active-index="find.activeIndex.value"
-      @update:query="(v) => (find.query.value = v)"
-      @update:case-sensitive="(v) => (find.caseSensitive.value = v)"
-      @search="find.search"
-      @next="find.next"
-      @prev="find.prev"
-      @close="find.close"
-    />
-
-    <SettingsDialog
-      :visible="showSettings"
-      :float-layout-enabled="enableFloatLayout"
-      @close="showSettings = false"
-      @toggle-float-layout="toggleFloatLayout"
-    />
-
-    <UnsavedChangesDialog
-      :visible="showUnsavedDialog"
-      :title="unsavedDialogTitle"
-      :message="unsavedDialogMessage"
-      :file-name="dialogFileName"
-      :save-label="
-        unsavedDialogMode === 'external'
-          ? t('editor.reloadFromDisk')
-          : t('editor.saveAndContinue')
-      "
-      :discard-label="
-        unsavedDialogMode === 'external'
-          ? t('editor.keepEditing')
-          : t('editor.discardAndContinue')
-      "
-      @save="unsavedDialog.resolveDialog('save')"
-      @discard="
-        unsavedDialogMode === 'external'
-          ? unsavedDialog.resolveDialog('cancel')
-          : unsavedDialog.resolveDialog('discard')
-      "
-      @cancel="unsavedDialog.resolveDialog('cancel')"
-    />
-
-    <Banner
-      :tab="bannerTab"
-      :visible="showBanner"
-      :on-reload="onBannerReload"
-      :on-view-diff="onBannerViewDiff"
-      :on-ignore="onBannerIgnore"
-      :on-auto-reload="onBannerAutoReload"
-    />
-
-    <div v-if="exportToast" class="toast" @click="app.exportToast = ''">
-      ✓ {{ exportToast }}
-    </div>
-    <div
-      v-if="annotationToast"
-      class="toast"
-      @click="annotationToast = ''"
-    >
-      ✓ {{ annotationToast }}
-    </div>
-    <DiffView
-      :old-content="diffOldContent"
-      :new-content="diffNewContent"
-      :file-name="diffFileName"
-      :visible="showDiffView"
-      @close="closeDiffView"
-    />
-    <ReviewPanel
-      :visible="showReviewPanel"
-      :source="draftContent"
-      :file-name="currentFile"
-      @apply="onReviewApply"
-      @apply-all="onReviewApplyAll"
-      @focus="onReviewFocus"
-      @close="showReviewPanel = false"
-    />
-    <AiPanel
-      :visible="aiPanel.state.visible"
-      :selection-text="aiPanel.state.selectionText"
-      :result="aiPanel.state.result"
-      :loading="aiPanel.state.loading"
-      :error="aiPanel.state.error"
-      :active-action="aiPanel.state.activeAction"
-      @run-action="(a) => void aiPanel.runAction(a)"
-      @apply-result="() => void aiPanel.applyResultToDoc()"
-      @close="aiPanel.close"
-    />
-    <div
-      v-if="showExportMenu"
-      class="menu-overlay"
-      @click="closeExportMenu"
-    ></div>
-    <ExportMenu
-      :visible="showExportMenu"
-      :pandoc-info="pandocInfo"
-      :pdf-engine-path="pdfEnginePath"
-      @export-html="exportHtml"
-      @export-docx="exportDocx"
-      @export-pdf="exportPdf"
-      @print="doPrint"
-      @close="closeExportMenu"
-    />
+    <SettingsDialog :visible="showSettings" :float-layout-enabled="enableFloatLayout" @close="showSettings = false" @toggle-float-layout="toggleFloatLayout" />
+    <UnsavedChangesDialog :visible="showUnsavedDialog" :title="unsavedDialogMode === 'external' ? t('editor.externalChangedTitle') : t('editor.unsavedTitle')"
+                          :message="unsavedDialogMode === 'external' ? t('editor.externalChangedMessage') : t('editor.unsavedMessage')"
+                          :file-name="dialogTab?.path ? basename(dialogTab.path) : ''"
+                          :save-label="unsavedDialogMode === 'external' ? t('editor.reloadFromDisk') : t('editor.saveAndContinue')"
+                          :discard-label="unsavedDialogMode === 'external' ? t('editor.keepEditing') : t('editor.discardAndContinue')"
+                          @save="unsavedDialog.resolveDialog('save')"
+                          @discard="unsavedDialog.resolveDialog(unsavedDialogMode === 'external' ? 'cancel' : 'discard')"
+                          @cancel="unsavedDialog.resolveDialog('cancel')" />
+    <Banner :tab="bannerTab" :visible="showBanner" :on-reload="onBannerReload" :on-view-diff="onBannerViewDiff" :on-ignore="onBannerIgnore" :on-auto-reload="onBannerAutoReload" />
+    <div v-if="appStore.exportToast" class="toast" @click="appStore.exportToast = ''">✓ {{ appStore.exportToast }}</div>
+    <div v-if="annotationToast" class="toast" @click="annotationToast = ''">✓ {{ annotationToast }}</div>
+    <DiffView :old-content="diffOldContent" :new-content="diffNewContent" :file-name="diffFileName" :visible="showDiffView" @close="closeDiffView" />
+    <ReviewPanel :visible="showReviewPanel" :source="draftContent" :file-name="currentFile" @apply="onReviewApply" @apply-all="onReviewApplyAll" @focus="onReviewFocus" @close="showReviewPanel = false" />
+    <AiPanel :visible="aiPanel.state.visible" :selection-text="aiPanel.state.selectionText" :result="aiPanel.state.result" :loading="aiPanel.state.loading" :error="aiPanel.state.error" :active-action="aiPanel.state.activeAction" @run-action="(a: any) => void aiPanel.runAction(a)" @apply-result="() => void aiPanel.applyResultToDoc()" @close="aiPanel.close" />
+    <div v-if="showExportMenu" class="menu-overlay" @click="closeExportMenu"></div>
+    <ExportMenu :visible="showExportMenu" :pandoc-info="pandocInfo" :pdf-engine-path="pdfEnginePath"
+                @export-html="exportHtml" @export-docx="exportDocx" @export-pdf="exportPdf"
+                @print="doPrint" @close="closeExportMenu" />
   </div>
 </template>
+
+<style>
+.search-overlay {
+  position: fixed; width: 320px; z-index: 60;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border-left: 0.5px solid rgba(0, 0, 0, 0.06);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.08);
+  display: flex; flex-direction: column; overflow: hidden;
+  opacity: 0; transform: translateX(8px);
+  transition: opacity 150ms ease, transform 150ms cubic-bezier(0.16, 1, 0.3, 1), left 200ms ease;
+  pointer-events: none;
+}
+.search-overlay.is-visible { opacity: 1; transform: translateX(0); pointer-events: auto; }
+:root[data-theme="dark"] .search-overlay { background: rgba(24, 24, 24, 0.78); border-left-color: rgba(255, 255, 255, 0.06); box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3); }
+@media (max-width: 767px) { .search-overlay { left: 0; right: 0; width: 100vw; height: 100vh; } }
+</style>

@@ -101,8 +101,9 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 
 ### Navigation
 - Floating file tree (🗂): **lazy-loading, non-recursive** — only lists direct children of the current directory, directories collapsed by default, clicking the caret loads the next level on demand; the `..` entry at the top goes up one level
-- Floating panels: file tree / recent / full-text search / annotations / bookmarks / AI assistant / quick settings
+- Floating panels: file tree / recent / full-text search / annotations / bookmarks / AI assistant / quick settings / help documentation
 - Right section markers + bottom-right capsule mini-TOC (TocCapsule): scroll-synchronized highlighting, collapsible, supports title search; the outline stays as a small capsule that expands into a floating heading list
+- Search overlay auto-avoidance: when a floating panel (Help / AI, etc.) opens, the full-text search box shifts right to make room and returns automatically after the panel closes
 - Internal link navigation and relative path resolution for images
 - With a history document, the file tree is rooted at the document's directory; without one, it shows the user's home directory
 
@@ -122,6 +123,7 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - File change monitoring with automatic file tree refresh
 - External modification detection: a prompt appears when a file is modified outside the app, with options to view the diff, reload, or ignore
 - Recent files and scroll position persistence
+- **Faster multi-document startup**: tabs from the last session are restored in parallel (bounded concurrency of 4, ~3.6× faster in benchmarks); outlines for background tabs are extracted lazily on activation, so reopening many documents stays smooth
 - File association: double-click `.md / .markdown / .mdx` to open directly, re-registrable in Settings
 - Single-instance operation, open files from command line / drag-and-drop
 - Simplified Chinese / English UI switching (🌐 button in left floating menu, current language dynamically shown)

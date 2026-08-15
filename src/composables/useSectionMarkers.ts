@@ -43,6 +43,8 @@ export function useSectionMarkers(
   /** 标题 id → 滚动位置（缓存）；scrollMapDirty 时在下次读取前重建 */
   const scrollMap = new Map<string, number>();
   let scrollMapDirty = true;
+  /** 跳转序列号：用于防竞态，确保只有最新的 jumpTo 调用才能执行滚动 */
+  let scrollSeq = 0;
 
   let rafId: number | null = null;
   let layoutTimer: ReturnType<typeof setTimeout> | null = null;
@@ -97,6 +99,7 @@ export function useSectionMarkers(
   }
 
   function jumpTo(id: string): void {
+    const jumpSeq = ++scrollSeq;
     if (scrollMapDirty) rebuildScrollMap();
     let top = scrollMap.get(id);
     if (top === undefined) {
@@ -105,7 +108,27 @@ export function useSectionMarkers(
       top = scrollMap.get(id);
     }
     const container = viewerEl.value;
-    if (top === undefined || !container) return;
+    if (top === undefined || !container) {
+      // DOM 尚未就绪，反复重试直到文档渲染完成
+      let retries = 0;
+      const MAX_RETRIES = 30;
+      function retry(): void {
+        if (retries >= MAX_RETRIES) return;
+        retries++;
+        // 已有更新的跳转请求，放弃本次
+        if (jumpSeq !== scrollSeq) return;
+        if (scrollMapDirty) rebuildScrollMap();
+        const t = scrollMap.get(id);
+        const c = viewerEl.value;
+        const body = bodyRef.value;
+        // bodyRef 已变（切换了文档），放弃本次跳转
+        if (t === undefined || !c || body === null) return;
+        activeId.value = id;
+        c.scrollTo({ top: t, behavior: "smooth" });
+      }
+      requestAnimationFrame(retry);
+      return;
+    }
     activeId.value = id;
     container.scrollTo({ top, behavior: "smooth" });
   }
