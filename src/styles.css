@@ -931,6 +931,8 @@ body {
   opacity: 0;
   transition: opacity 0.15s;
   color: var(--fg-muted);
+  user-select: none;
+  -webkit-user-select: none;
 }
 .markdown-body h1:hover .header-anchor,
 .markdown-body h2:hover .header-anchor,

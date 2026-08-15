@@ -75,6 +75,8 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - Math formulas (KaTeX, loaded on demand)
 - Flowcharts / sequence diagrams / mind maps and more (Mermaid)
 - Task lists / footnotes / Emoji / heading anchors
+- Image context menu: right-click an image in preview to open a menu (copy / view original / open in new tab)
+- Image fullscreen preview: click a preview image for fullscreen view, `Ctrl+wheel` to zoom while keeping mouse position fixed
 - Light / dark theme switching with theme preference persistence
 - Adjustable reading font size, line height, width, and font family (custom fonts and system fonts supported)
 
@@ -121,7 +123,8 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - Independent font size, line height, width, and font family for reading and editing
 - Customizable keyboard shortcuts with conflict detection and reset
 - File change monitoring with automatic file tree refresh
-- External modification detection: a prompt appears when a file is modified outside the app, with options to view the diff, reload, or ignore
+- External modification detection: when a file is modified outside the app, a top banner appears with options to reload from disk, view line-level diff (LCS-based), ignore, or add to the auto-reload whitelist
+- Auto-reload whitelist: trusted files auto-reload on external modification without manual confirmation; the whitelist is persisted
 - Recent files and scroll position persistence
 - **Faster multi-document startup**: tabs from the last session are restored in parallel (bounded concurrency of 4, ~3.6× faster in benchmarks); outlines for background tabs are extracted lazily on activation, so reopening many documents stays smooth
 - File association: double-click `.md / .markdown / .mdx` to open directly, re-registrable in Settings
@@ -146,8 +149,9 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 | `Ctrl+G` | Go to line |
 | `Ctrl+Shift+F` | Full-text search (sidebar) |
 | `Ctrl+Shift+C` | Copy annotations to AI |
+| `Ctrl+Shift+R` | Open review panel |
 | `Ctrl+D` | Toggle bookmark |
-| `Ctrl+E` | Open file tree panel |
+| `Ctrl+E` (non-edit mode) | Open file tree panel |
 | `Ctrl+Shift+A` | Open annotations panel |
 | `Ctrl+N` | New file |
 | `Ctrl+O` | Open file |
@@ -170,6 +174,7 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - Settings dialog split into "Reading / AI / Other" tabs; the AI tab configures Ollama / OpenAI-compatible / Anthropic / Azure / Gemini service URL, API Key, and model or deployment name
 - Word export reference template (.docx)
 - File association registration (`.md / .markdown / .mdx`)
+- Auto-reload whitelist (trusted files auto-reload on external modification, persisted)
 - View / customize keyboard shortcuts
 - Check for updates
 - Theme and UI language switching
