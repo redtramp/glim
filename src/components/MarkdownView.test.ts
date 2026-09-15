@@ -26,6 +26,16 @@ vi.mock("vue-i18n", () => ({
         "image.reset": "重置",
         "image.close": "关闭",
         "image.hint": "滚轮缩放 · 拖拽平移",
+        "image.fullscreen": "全屏",
+        "image.exitFullscreen": "退出全屏",
+        "mermaid.zoom": "放大查看图表",
+        "mermaid.zoomIn": "放大",
+        "mermaid.zoomOut": "缩小",
+        "mermaid.reset": "重置",
+        "mermaid.fullscreen": "全屏",
+        "mermaid.exitFullscreen": "退出全屏",
+        "mermaid.close": "关闭",
+        "mermaid.hint": "滚轮缩放 · 拖拽平移",
       };
       return map[key] || key;
     },
@@ -251,27 +261,27 @@ describe("图片右键菜单", () => {
     await flushPromises();
     await wrapper.find(".image-context-menu").trigger("keydown", { key: "Enter" });
     await flushPromises();
-    expect(wrapper.find(".zoom-overlay").exists()).toBe(true);
+    expect(wrapper.find(".viewer-overlay").exists()).toBe(true);
     // 重新打开,Space 同样激活
     await img.trigger("contextmenu");
     await flushPromises();
     await wrapper.find(".image-context-menu").trigger("keydown", { key: " " });
     await flushPromises();
-    expect(wrapper.find(".zoom-overlay").exists()).toBe(true);
+    expect(wrapper.find(".viewer-overlay").exists()).toBe(true);
   });
 });
 
 describe("全屏预览", () => {
   it("点击菜单项打开预览并携带 src/alt 与标题说明", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const overlay = wrapper.find(".zoom-overlay");
+    const overlay = wrapper.find(".viewer-overlay");
     expect(overlay.exists()).toBe(true);
-    const img = wrapper.find(".zoom-image");
+    const img = wrapper.find(".viewer-image");
     expect(img.attributes("src")).toBe("https://example.com/a.png");
     expect(img.attributes("alt")).toBe("示例图");
-    expect(wrapper.find(".zoom-info").text()).toBe("100%");
+    expect(wrapper.find(".viewer-info").text()).toBe("100%");
     // alt 存在时显示 caption
-    expect(wrapper.find(".zoom-caption").text()).toBe("示例图");
+    expect(wrapper.find(".viewer-caption").text()).toBe("示例图");
   });
 
   it("图片无 alt 时预览不显示 caption", async () => {
@@ -279,20 +289,20 @@ describe("全屏预览", () => {
       '<p><img src="https://example.com/b.png"></p>'
     );
     const wrapper = await openZoom(mountView());
-    expect(wrapper.find(".zoom-overlay").exists()).toBe(true);
-    expect(wrapper.find(".zoom-caption").exists()).toBe(false);
+    expect(wrapper.find(".viewer-overlay").exists()).toBe(true);
+    expect(wrapper.find(".viewer-caption").exists()).toBe(false);
   });
 
   it("点击遮罩关闭预览", async () => {
     const wrapper = await openZoom(mountWithImage());
-    await wrapper.find(".zoom-overlay").trigger("click");
+    await wrapper.find(".viewer-overlay").trigger("click");
     await flushPromises();
-    expect(wrapper.find(".zoom-overlay").exists()).toBe(false);
+    expect(wrapper.find(".viewer-overlay").exists()).toBe(false);
   });
 
   it("滚轮缩放(以鼠标位置为中心)并可缩小回退", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const img = wrapper.find(".zoom-image");
+    const img = wrapper.find(".viewer-image");
     vi.spyOn(img.element, "getBoundingClientRect").mockReturnValue({
       x: 0,
       y: 0,
@@ -304,11 +314,11 @@ describe("全屏预览", () => {
       height: 200,
       toJSON: () => ({}),
     } as DOMRect);
-    const overlay = wrapper.find(".zoom-overlay");
+    const overlay = wrapper.find(".viewer-overlay");
     dispatchWheel(overlay.element, { deltaY: -100, clientX: 100, clientY: 100 });
     await nextTick();
     expect(img.attributes("style")).toContain("scale(1.25)");
-    expect(wrapper.find(".zoom-info").text()).toBe("125%");
+    expect(wrapper.find(".viewer-info").text()).toBe("125%");
     dispatchWheel(overlay.element, { deltaY: 100 });
     await nextTick();
     expect(img.attributes("style")).toContain("scale(1)");
@@ -316,29 +326,29 @@ describe("全屏预览", () => {
 
   it("Ctrl/Cmd+滚轮交给应用层,不缩放", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const img = wrapper.find(".zoom-image");
+    const img = wrapper.find(".viewer-image");
     vi.spyOn(img.element, "getBoundingClientRect").mockReturnValue({
       x: 0, y: 0, left: 0, top: 0, right: 200, bottom: 200,
       width: 200, height: 200, toJSON: () => ({}),
     } as DOMRect);
-    dispatchWheel(wrapper.find(".zoom-overlay").element, { deltaY: -100, ctrlKey: true });
+    dispatchWheel(wrapper.find(".viewer-overlay").element, { deltaY: -100, ctrlKey: true });
     await nextTick();
     expect(img.attributes("style")).toContain("scale(1)");
   });
 
   it("图片未加载(尺寸 0)时滚轮不缩放", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const img = wrapper.find(".zoom-image");
+    const img = wrapper.find(".viewer-image");
     // jsdom getBoundingClientRect 默认返回全 0 → 提前返回
-    dispatchWheel(wrapper.find(".zoom-overlay").element, { deltaY: -100 });
+    dispatchWheel(wrapper.find(".viewer-overlay").element, { deltaY: -100 });
     await nextTick();
     expect(img.attributes("style")).toContain("scale(1)");
   });
 
   it("拖拽平移且不触发 click 关闭", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const overlay = wrapper.find(".zoom-overlay");
-    const img = wrapper.find(".zoom-image");
+    const overlay = wrapper.find(".viewer-overlay");
+    const img = wrapper.find(".viewer-image");
     await overlay.trigger("mousedown", { button: 0, clientX: 100, clientY: 100 });
     await overlay.trigger("mousemove", { clientX: 130, clientY: 110 });
     expect(img.attributes("style")).toContain("translate(30px, 10px)");
@@ -346,12 +356,12 @@ describe("全屏预览", () => {
     await overlay.trigger("click");
     await flushPromises();
     // 拖拽后的 click 被抑制,预览保持打开
-    expect(wrapper.find(".zoom-overlay").exists()).toBe(true);
+    expect(wrapper.find(".viewer-overlay").exists()).toBe(true);
   });
 
   it("双击切换 1x / 3x", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const img = wrapper.find(".zoom-image");
+    const img = wrapper.find(".viewer-image");
     await img.trigger("dblclick");
     expect(img.attributes("style")).toContain("scale(3)");
     await img.trigger("dblclick");
@@ -360,8 +370,8 @@ describe("全屏预览", () => {
 
   it("键盘 +/−/0/方向键 与 Escape 关闭", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const overlay = wrapper.find(".zoom-overlay");
-    const img = wrapper.find(".zoom-image");
+    const overlay = wrapper.find(".viewer-overlay");
+    const img = wrapper.find(".viewer-image");
     await overlay.trigger("keydown", { key: "+" });
     expect(img.attributes("style")).toContain("scale(1.25)");
     await overlay.trigger("keydown", { key: "0" });
@@ -372,51 +382,51 @@ describe("全屏预览", () => {
     expect(img.attributes("style")).toContain("translate(40px, 40px)");
     await overlay.trigger("keydown", { key: "Escape" });
     await flushPromises();
-    expect(wrapper.find(".zoom-overlay").exists()).toBe(false);
+    expect(wrapper.find(".viewer-overlay").exists()).toBe(false);
   });
 
   it("Ctrl+按键不缩放(交给应用层)", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const img = wrapper.find(".zoom-image");
+    const img = wrapper.find(".viewer-image");
     await wrapper
-      .find(".zoom-overlay")
+      .find(".viewer-overlay")
       .trigger("keydown", { key: "+", ctrlKey: true });
     expect(img.attributes("style")).toContain("scale(1)");
   });
 
   it("缩放上限钳制为 10x", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const overlay = wrapper.find(".zoom-overlay");
+    const overlay = wrapper.find(".viewer-overlay");
     for (let i = 0; i < 12; i++) {
       await overlay.trigger("keydown", { key: "+" });
     }
-    expect(wrapper.find(".zoom-info").text()).toBe("1000%");
+    expect(wrapper.find(".viewer-info").text()).toBe("1000%");
     await overlay.trigger("keydown", { key: "0" });
-    expect(wrapper.find(".zoom-info").text()).toBe("100%");
+    expect(wrapper.find(".viewer-info").text()).toBe("100%");
   });
 
   it("缩放下限钳制为 0.5x", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const overlay = wrapper.find(".zoom-overlay");
+    const overlay = wrapper.find(".viewer-overlay");
     for (let i = 0; i < 15; i++) {
       await overlay.trigger("keydown", { key: "-" });
     }
-    expect(wrapper.find(".zoom-info").text()).toBe("50%");
+    expect(wrapper.find(".viewer-info").text()).toBe("50%");
   });
 
   it("工具栏按钮:缩小/放大/重置/关闭", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const img = wrapper.find(".zoom-image");
-    await wrapper.find(".zoom-btn[aria-label='放大']").trigger("click");
+    const img = wrapper.find(".viewer-image");
+    await wrapper.find(".viewer-btn[aria-label='放大']").trigger("click");
     expect(img.attributes("style")).toContain("scale(1.25)");
-    await wrapper.find(".zoom-btn[aria-label='缩小']").trigger("click");
+    await wrapper.find(".viewer-btn[aria-label='缩小']").trigger("click");
     expect(img.attributes("style")).toContain("scale(1)");
-    await wrapper.find(".zoom-btn[aria-label='放大']").trigger("click");
-    await wrapper.find(".zoom-btn[aria-label='重置']").trigger("click");
+    await wrapper.find(".viewer-btn[aria-label='放大']").trigger("click");
+    await wrapper.find(".viewer-btn[aria-label='重置']").trigger("click");
     expect(img.attributes("style")).toContain("scale(1)");
-    await wrapper.find(".zoom-btn[aria-label='关闭']").trigger("click");
+    await wrapper.find(".viewer-btn[aria-label='关闭']").trigger("click");
     await flushPromises();
-    expect(wrapper.find(".zoom-overlay").exists()).toBe(false);
+    expect(wrapper.find(".viewer-overlay").exists()).toBe(false);
   });
 
   it("关闭预览后焦点还原到打开前元素", async () => {
@@ -425,7 +435,7 @@ describe("全屏预览", () => {
     btn.focus();
     try {
       const wrapper = await openZoom(mountWithImage());
-      await wrapper.find(".zoom-overlay").trigger("keydown", { key: "Escape" });
+      await wrapper.find(".viewer-overlay").trigger("keydown", { key: "Escape" });
       await flushPromises();
       expect(document.activeElement).toBe(btn);
     } finally {
@@ -435,8 +445,8 @@ describe("全屏预览", () => {
 
   it("Tab 焦点陷阱在预览内循环", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const overlay = wrapper.find(".zoom-overlay");
-    const buttons = wrapper.findAll(".zoom-btn");
+    const overlay = wrapper.find(".viewer-overlay");
+    const buttons = wrapper.findAll(".viewer-btn");
     const first = buttons[0].element as HTMLElement;
     const last = buttons[buttons.length - 1].element as HTMLElement;
     // Shift+Tab 从第一个回绕到最后一个
@@ -450,8 +460,8 @@ describe("全屏预览", () => {
 
   it("mouseleave 结束拖拽后不再平移", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const overlay = wrapper.find(".zoom-overlay");
-    const img = wrapper.find(".zoom-image");
+    const overlay = wrapper.find(".viewer-overlay");
+    const img = wrapper.find(".viewer-image");
     await overlay.trigger("mousedown", { button: 0, clientX: 100, clientY: 100 });
     await overlay.trigger("mousemove", { clientX: 130, clientY: 100 });
     expect(img.attributes("style")).toContain("translate(30px, 0px)");
@@ -463,7 +473,7 @@ describe("全屏预览", () => {
 
   it("预览内右键被阻止(不弹出浏览器菜单)", async () => {
     const wrapper = await openZoom(mountWithImage());
-    const overlay = wrapper.find(".zoom-overlay");
+    const overlay = wrapper.find(".viewer-overlay");
     const evt = new MouseEvent("contextmenu", {
       cancelable: true,
       bubbles: true,

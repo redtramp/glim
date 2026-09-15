@@ -75,8 +75,8 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - Math formulas (KaTeX, loaded on demand)
 - Flowcharts / sequence diagrams / mind maps and more (Mermaid)
 - Task lists / footnotes / Emoji / heading anchors
-- Image context menu: right-click an image in preview to open a menu (copy / view original / open in new tab)
-- Image fullscreen preview: click a preview image for fullscreen view, `Ctrl+wheel` to zoom while keeping mouse position fixed
+- **Unified fullscreen viewer**: click any image or Mermaid diagram to enlarge, with scroll-wheel zoom, drag-to-pan, fullscreen toggle (`F`), arrow-key panning, `+/-/0` zoom controls
+- Image hover shows magnifier cursor; Mermaid diagram hover shows blue outline hint
 - Light / dark theme switching with theme preference persistence
 - Adjustable reading font size, line height, width, and font family (custom fonts and system fonts supported)
 

@@ -1,5 +1,22 @@
 # 更新日志
 
+## [0.8.2] - 2026-09-14
+
+### 新增
+- Mermaid 图表点击放大：点击任意 Mermaid 图表进入全屏查看器，支持滚轮缩放、拖拽平移、`F` 全屏切换、方向键平移、`+/-/0` 缩放控制
+- 统一查看器：图片与 Mermaid 图表共用同一套全屏查看器交互（工具栏按钮、键盘快捷键、拖拽/滚轮缩放）
+- 图片左键点击直接放大（替代原右键菜单方式），悬停显示放大镜光标提示
+
+### 修复
+- 修复 Mermaid 图表在查看器中放大后内容不可见的问题：保留 SVG 的 `width`/`height` 属性提供初始渲染尺寸，清理内联 `style` 中的 `height:100%`/`width:100%` 撑满容器行为，正则增加负向断言防止误删 `max-width`/`min-width`
+- 修复 Mermaid SVG 在暗色主题下连线/文字不可见：查看器内注入暗色适配样式（文字填充 `#e0e0e0`、连线 `#aaa`、标签背景半透明）
+- 修复 Mermaid SVG 清晰度：注入 `shape-rendering: geometricPrecision` + `text-rendering: optimizeLegibility`
+
+### 变更
+- i18n 新增 `mermaid.*` 命名空间（zoom/zoomIn/zoomOut/reset/fullscreen/exitFullscreen/close/hint），中英文同步
+
+---
+
 ## [0.8.1] - 2026-08-15
 
 ### 修复

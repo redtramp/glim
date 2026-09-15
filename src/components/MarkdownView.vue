@@ -29,11 +29,10 @@ const root = ref<HTMLElement | null>(null);
 let renderSeq = 0;
 
 async function update() {
-  // 文档切换/重渲染时清理图片预览与右键菜单，避免残留旧图片
+  // 文档切换/重渲染时清理预览与右键菜单
   closeContextMenu();
-  closeZoom();
+  closeViewer();
   const seq = ++renderSeq;
-  // 渲染期间保留旧内容,避免切换文档时白屏闪烁;新结果就绪后原子替换
   let renderedHtml: string;
   try {
     renderedHtml = await renderMarkdown(props.source);
@@ -45,7 +44,7 @@ async function update() {
     )}</pre>`;
     return;
   }
-  if (seq !== renderSeq) return; // 已有更新的渲染请求,丢弃本次结果
+  if (seq !== renderSeq) return;
   html.value = renderedHtml;
   await nextTick();
   if (seq !== renderSeq) return;
@@ -63,13 +62,15 @@ async function update() {
 }
 
 async function refreshThemeRender() {
-  // 只重渲染 mermaid,不参与 markdown 渲染的请求序号,避免废弃进行中的渲染结果
   if (!root.value) return;
   await renderMermaid(root.value, true);
   emit("rendered", root.value);
 }
 
-onMounted(() => update());
+onMounted(() => {
+  update();
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+});
 watch(
   () => [props.source, props.currentFile, props.rootDir],
   () => update()
@@ -80,9 +81,10 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  document.removeEventListener("fullscreenchange", onFullscreenChange);
   renderSeq++;
   closeContextMenu();
-  closeZoom();
+  closeViewer();
   if (wheelTimer !== null) {
     clearTimeout(wheelTimer);
     wheelTimer = null;
@@ -95,13 +97,63 @@ onBeforeUnmount(() => {
 
 defineExpose({ root });
 
-/* ============ 图片右键菜单 + 全屏预览 ============ */
+/* ============ 统一查看器（图片 + Mermaid） ============ */
+
+const viewer = ref<{
+  visible: boolean;
+  type: "image" | "mermaid";
+  src: string;
+  alt: string;
+  svgContent: string;
+  scale: number;
+  translateX: number;
+  translateY: number;
+  isFullscreen: boolean;
+}>({
+  visible: false,
+  type: "image",
+  src: "",
+  alt: "",
+  svgContent: "",
+  scale: 1,
+  translateX: 0,
+  translateY: 0,
+  isFullscreen: false,
+});
+
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 10;
+const zoomStep = 1.25;
+const DRAG_THRESHOLD = 4;
+
+function clampScale(s: number): number {
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
+}
+
+function setZoomScale(next: number): void {
+  viewer.value.scale = clampScale(next);
+}
+
+function resetZoom(): void {
+  viewer.value.scale = 1;
+  viewer.value.translateX = 0;
+  viewer.value.translateY = 0;
+}
+
+function toggleZoom(): void {
+  if (viewer.value.scale > 1) {
+    resetZoom();
+  } else {
+    viewer.value.scale = 3;
+  }
+}
+
+/* ============ 图片右键菜单 ============ */
 
 interface ContextMenuState {
   visible: boolean;
   x: number;
   y: number;
-  /** 触发菜单的图片 src */
   src: string;
   alt: string;
 }
@@ -114,59 +166,12 @@ const contextMenu = ref<ContextMenuState>({
   alt: "",
 });
 
-/** 全屏预览状态 */
-const zoom = ref<{
-  visible: boolean;
-  src: string;
-  alt: string;
-  scale: number;
-  translateX: number;
-  translateY: number;
-}>({
-  visible: false,
-  src: "",
-  alt: "",
-  scale: 1,
-  translateX: 0,
-  translateY: 0,
-});
-
-const MIN_SCALE = 0.5;
-const MAX_SCALE = 10;
-const zoomStep = 1.25;
-/** 判定为拖拽的最小位移：小于该位移的按下-抬起视为单击 */
-const DRAG_THRESHOLD = 4;
-
-function clampScale(scale: number): number {
-  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
-}
-
-function setZoomScale(next: number): void {
-  zoom.value.scale = clampScale(next);
-}
-
-function resetZoom(): void {
-  zoom.value.scale = 1;
-  zoom.value.translateX = 0;
-  zoom.value.translateY = 0;
-}
-
-/** 双击切换 1x / 3x，回到 1x 时同时复位平移 */
-function toggleZoom(): void {
-  if (zoom.value.scale > 1) {
-    resetZoom();
-  } else {
-    zoom.value.scale = 3;
-  }
-}
-
 function onContextMenu(e: MouseEvent): void {
   const target = e.target as HTMLElement;
   const img = target.closest<HTMLImageElement>("img[src]");
   if (!img || !root.value?.contains(img)) return;
   e.preventDefault();
   e.stopPropagation();
-  // 记录焦点基准：右键菜单链（菜单 → 预览）关闭后还原到打开前的位置
   prevFocusEl = document.activeElement as HTMLElement | null;
   contextMenu.value = {
     visible: true,
@@ -177,19 +182,17 @@ function onContextMenu(e: MouseEvent): void {
   };
   nextTick(() => {
     clampMenuPosition();
-    // 键盘可达：菜单打开即聚焦菜单项，支持 Enter/Space/Escape
     menuEl.value?.querySelector<HTMLElement>(".image-menu-item")?.focus();
   });
 }
 
-/** 图片菜单键盘操作：Enter/Space 激活，Escape/Tab 关闭 */
 function onMenuKeydown(e: KeyboardEvent): void {
   if (e.key === "Escape" || e.key === "Tab") {
     e.preventDefault();
     closeContextMenu();
   } else if (e.key === "Enter" || e.key === " ") {
     e.preventDefault();
-    onZoomMenuItem();
+    openImageViewer();
   }
 }
 
@@ -212,35 +215,135 @@ function closeContextMenu(): void {
   contextMenu.value.visible = false;
 }
 
-/** 菜单/预览打开前的焦点元素，关闭时还原，避免焦点丢失到 body */
+/** 菜单/预览打开前的焦点元素，关闭时还原 */
 let prevFocusEl: HTMLElement | null = null;
 
-function onZoomMenuItem(): void {
+function openImageViewer(): void {
   const { src, alt } = contextMenu.value;
   closeContextMenu();
   if (!src) return;
-  zoom.value = { visible: true, src, alt, scale: 1, translateX: 0, translateY: 0 };
-  nextTick(() => zoomEl.value?.focus());
+  viewer.value = {
+    visible: true,
+    type: "image",
+    src,
+    alt,
+    svgContent: "",
+    scale: 1,
+    translateX: 0,
+    translateY: 0,
+    isFullscreen: false,
+  };
+  nextTick(() => viewerEl.value?.focus());
 }
 
-function closeZoom(): void {
-  if (!zoom.value.visible) return;
-  zoom.value.visible = false;
+/* ============ Mermaid 图表点击 ============ */
+
+/** 为 mermaid SVG 注入暗色背景适配样式并修复清晰度 */
+function injectMermaidDarkSvg(svg: string): string {
+  // 保留 width/height 属性（给浏览器提供初始渲染尺寸），
+  // 仅清理内联 style 中的 height:100%/width:100%（它们会撑满容器）。
+  let cleaned = svg;
+
+  // 1. 清理内联 style 中的固定尺寸(mermaid 输出 style="... height:100%; width:100% ...")
+  //    仅匹配独立的 height:/width:，不误删 max-width/min-width 等
+  cleaned = cleaned.replace(
+    /(<svg[^>]*style=")([^"]*)(")/,
+    (_, pre, styles, post) => {
+      const cleaned = styles
+        .replace(/(?:^|;\s*)(?<!max-|min-)height:\s*100%\s*;?/g, ";")
+        .replace(/(?:^|;\s*)(?<!max-|min-)width:\s*100%\s*;?/g, ";")
+        .replace(/;{2,}/g, ";")
+        .replace(/^;\s*/, "")
+        .replace(/;\s*$/, "");
+      return pre + cleaned + post;
+    }
+  );
+
+  const darkStyle = `<style>
+    .mermaid-zoom-svg { shape-rendering: geometricPrecision; text-rendering: optimizeLegibility; }
+    .mermaid-zoom-svg text { fill: #e0e0e0 !important; }
+    .mermaid-zoom-svg .edgeLabel { background: rgba(0,0,0,0.6) !important; color: #e0e0e0 !important; }
+    .mermaid-zoom-svg .nodeLabel { color: #e0e0e0 !important; }
+    .mermaid-zoom-svg .edgePath .path { stroke: #aaa !important; }
+    .mermaid-zoom-svg .edgePath marker path { fill: #aaa !important; }
+    .mermaid-zoom-svg line { stroke: #aaa !important; }
+    .mermaid-zoom-svg rect { stroke-width: 2px !important; }
+    .mermaid-zoom-svg .flowchart-link { stroke: #aaa !important; }
+  </style>`;
+  return cleaned.replace(/<svg([^>]*)>/, `<svg$1 class="mermaid-zoom-svg">` + darkStyle);
+}
+
+function onMermaidClick(e: MouseEvent): void {
+  if (viewer.value.visible) return;
+  const target = e.target as HTMLElement;
+  const block = target.closest<HTMLElement>(".mermaid-rendered");
+  if (!block || !root.value?.contains(block)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  prevFocusEl = document.activeElement as HTMLElement | null;
+  const svgContent = injectMermaidDarkSvg(block.innerHTML);
+  viewer.value = {
+    visible: true,
+    type: "mermaid",
+    src: "",
+    alt: "",
+    svgContent,
+    scale: 1,
+    translateX: 0,
+    translateY: 0,
+    isFullscreen: false,
+  };
+  nextTick(() => viewerEl.value?.focus());
+}
+
+function onImageClick(e: MouseEvent): void {
+  if (viewer.value.visible) return;
+  const target = e.target as HTMLElement;
+  const img = target.closest<HTMLImageElement>("img[src]");
+  if (!img || !root.value?.contains(img)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  prevFocusEl = document.activeElement as HTMLElement | null;
+  viewer.value = {
+    visible: true,
+    type: "image",
+    src: img.currentSrc || img.src,
+    alt: img.alt || "",
+    svgContent: "",
+    scale: 1,
+    translateX: 0,
+    translateY: 0,
+    isFullscreen: false,
+  };
+  nextTick(() => viewerEl.value?.focus());
+}
+
+function onContentClick(e: MouseEvent): void {
+  onMermaidClick(e);
+  if (!viewer.value.visible) onImageClick(e);
+}
+
+/* ============ 关闭查看器 ============ */
+
+function closeViewer(): void {
+  if (!viewer.value.visible) return;
+  if (viewer.value.isFullscreen && document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+  viewer.value.visible = false;
   prevFocusEl?.focus();
   prevFocusEl = null;
 }
 
-/** 滚轮缩放时临时禁用 CSS 过渡：避免锚点位置随动画中的 transform 漂移 */
+/* ============ 滚轮缩放 ============ */
+
 const wheelZooming = ref(false);
 let wheelTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** 以鼠标位置为中心缩放 */
-function onZoomWheel(e: WheelEvent): void {
-  // Ctrl/Cmd+滚轮为应用级字体缩放（App 已注册全局处理），这里放行避免图片与字体同时缩放
-  if (!zoom.value.visible || e.ctrlKey || e.metaKey) return;
+function onViewerWheel(e: WheelEvent): void {
+  if (!viewer.value.visible || e.ctrlKey || e.metaKey) return;
   e.preventDefault();
-  const rect = zoomImageEl.value?.getBoundingClientRect();
-  // 图片尚未加载/加载失败时尺寸为 0，除零会产生 NaN 使 transform 失效
+  const rect = viewerContentEl.value?.getBoundingClientRect();
   if (!rect || rect.width === 0 || rect.height === 0) return;
   wheelZooming.value = true;
   if (wheelTimer !== null) clearTimeout(wheelTimer);
@@ -249,38 +352,37 @@ function onZoomWheel(e: WheelEvent): void {
     wheelTimer = null;
   }, 120);
   const delta = e.deltaY < 0 ? zoomStep : 1 / zoomStep;
-  const next = clampScale(zoom.value.scale * delta);
-  if (next === zoom.value.scale) return;
-  // 计算鼠标相对于图片中心的比例,保持该点不移动
+  const next = clampScale(viewer.value.scale * delta);
+  if (next === viewer.value.scale) return;
   const ratioX = (e.clientX - rect.left) / rect.width - 0.5;
   const ratioY = (e.clientY - rect.top) / rect.height - 0.5;
-  const factor = next / zoom.value.scale;
-  zoom.value.translateX -= ratioX * rect.width * (factor - 1);
-  zoom.value.translateY -= ratioY * rect.height * (factor - 1);
-  zoom.value.scale = next;
+  const factor = next / viewer.value.scale;
+  viewer.value.translateX -= ratioX * rect.width * (factor - 1);
+  viewer.value.translateY -= ratioY * rect.height * (factor - 1);
+  viewer.value.scale = next;
 }
 
-/** 拖拽平移 */
+/* ============ 拖拽平移 ============ */
+
 const dragging = ref(false);
-/** 本次按下是否产生了有效拖拽位移（用于抑制拖拽结束时的 click 关闭） */
 let dragMoved = false;
 let dragStartX = 0;
 let dragStartY = 0;
 let dragOriginX = 0;
 let dragOriginY = 0;
 
-function onZoomMouseDown(e: MouseEvent): void {
-  if (!zoom.value.visible || e.button !== 0) return;
+function onViewerMouseDown(e: MouseEvent): void {
+  if (!viewer.value.visible || e.button !== 0) return;
   dragging.value = true;
   dragMoved = false;
   dragStartX = e.clientX;
   dragStartY = e.clientY;
-  dragOriginX = zoom.value.translateX;
-  dragOriginY = zoom.value.translateY;
+  dragOriginX = viewer.value.translateX;
+  dragOriginY = viewer.value.translateY;
   e.preventDefault();
 }
 
-function onZoomMouseMove(e: MouseEvent): void {
+function onViewerMouseMove(e: MouseEvent): void {
   if (!dragging.value) return;
   if (
     !dragMoved &&
@@ -289,60 +391,81 @@ function onZoomMouseMove(e: MouseEvent): void {
   ) {
     dragMoved = true;
   }
-  zoom.value.translateX = dragOriginX + (e.clientX - dragStartX);
-  zoom.value.translateY = dragOriginY + (e.clientY - dragStartY);
+  viewer.value.translateX = dragOriginX + (e.clientX - dragStartX);
+  viewer.value.translateY = dragOriginY + (e.clientY - dragStartY);
 }
 
-function onZoomMouseUp(): void {
+function onViewerMouseUp(): void {
   dragging.value = false;
 }
 
-/** 点击遮罩关闭预览；拖拽平移后的 click 事件被忽略 */
-function onZoomClick(): void {
+function onViewerClick(): void {
   if (dragMoved) return;
-  closeZoom();
+  closeViewer();
 }
 
-function onZoomKeydown(e: KeyboardEvent): void {
-  if (!zoom.value.visible) return;
+/* ============ 全屏 ============ */
+
+function toggleFullscreen(): void {
+  const el = viewerEl.value;
+  if (!el) return;
+  if (viewer.value.isFullscreen) {
+    document.exitFullscreen().catch(() => {});
+  } else {
+    el.requestFullscreen().catch(() => {});
+  }
+}
+
+function onFullscreenChange(): void {
+  viewer.value.isFullscreen = !!document.fullscreenElement;
+  if (!document.fullscreenElement && viewer.value.visible) {
+    resetZoom();
+  }
+}
+
+/* ============ 键盘 ============ */
+
+function onViewerKeydown(e: KeyboardEvent): void {
+  if (!viewer.value.visible) return;
   if (e.key === "Escape") {
     e.preventDefault();
-    closeZoom();
+    closeViewer();
     return;
   }
   if (e.key === "Tab") {
     trapFocus(e);
     return;
   }
-  // 组合键（如 Ctrl+`+`）交给应用层的字体缩放，不干扰图片预览
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === "+" || e.key === "=") {
     e.preventDefault();
-    setZoomScale(zoom.value.scale * zoomStep);
+    setZoomScale(viewer.value.scale * zoomStep);
   } else if (e.key === "-") {
     e.preventDefault();
-    setZoomScale(zoom.value.scale / zoomStep);
+    setZoomScale(viewer.value.scale / zoomStep);
   } else if (e.key === "0") {
     e.preventDefault();
     resetZoom();
+  } else if (e.key === "f" || e.key === "F") {
+    e.preventDefault();
+    toggleFullscreen();
   } else if (e.key === "ArrowUp") {
     e.preventDefault();
-    zoom.value.translateY -= 40;
+    viewer.value.translateY -= 40;
   } else if (e.key === "ArrowDown") {
     e.preventDefault();
-    zoom.value.translateY += 40;
+    viewer.value.translateY += 40;
   } else if (e.key === "ArrowLeft") {
     e.preventDefault();
-    zoom.value.translateX -= 40;
+    viewer.value.translateX -= 40;
   } else if (e.key === "ArrowRight") {
     e.preventDefault();
-    zoom.value.translateX += 40;
+    viewer.value.translateX += 40;
   }
 }
 
-/** 简易焦点陷阱：Tab 在预览内循环，避免焦点逃逸到背景页面 */
 function trapFocus(e: KeyboardEvent): void {
-  const overlay = zoomEl.value;
+  const overlay = viewerEl.value;
   if (!overlay) return;
   const focusables = Array.from(
     overlay.querySelectorAll<HTMLElement>(
@@ -364,9 +487,57 @@ function trapFocus(e: KeyboardEvent): void {
   }
 }
 
+/* ============ 模板引用 ============ */
+
 const menuEl = ref<HTMLElement | null>(null);
-const zoomEl = ref<HTMLElement | null>(null);
-const zoomImageEl = ref<HTMLElement | null>(null);
+const viewerEl = ref<HTMLElement | null>(null);
+const viewerContentEl = ref<HTMLElement | null>(null);
+
+/* ============ 计算 Viewer aria-label ============ */
+
+function viewerLabel(): string {
+  if (viewer.value.type === "image") {
+    return viewer.value.alt || t("image.zoom");
+  }
+  return t("mermaid.zoom");
+}
+
+function viewerHint(): string {
+  return viewer.value.type === "image"
+    ? t("image.hint")
+    : t("mermaid.hint");
+}
+
+function viewerZoomInLabel(): string {
+  return viewer.value.type === "image"
+    ? t("image.zoomIn")
+    : t("mermaid.zoomIn");
+}
+
+function viewerZoomOutLabel(): string {
+  return viewer.value.type === "image"
+    ? t("image.zoomOut")
+    : t("mermaid.zoomOut");
+}
+
+function viewerResetLabel(): string {
+  return viewer.value.type === "image"
+    ? t("image.reset")
+    : t("mermaid.reset");
+}
+
+function viewerFullscreenLabel(): string {
+  const ns = viewer.value.type === "image" ? "image" : "mermaid";
+  return viewer.value.isFullscreen
+    ? t(`${ns}.exitFullscreen`)
+    : t(`${ns}.fullscreen`);
+}
+
+function viewerCloseLabel(): string {
+  return viewer.value.type === "image"
+    ? t("image.close")
+    : t("mermaid.close");
+}
 </script>
 
 <template>
@@ -375,6 +546,7 @@ const zoomImageEl = ref<HTMLElement | null>(null);
     class="markdown-body"
     v-html="html"
     @contextmenu="onContextMenu"
+    @click="onContentClick"
   ></article>
 
   <!-- 图片右键菜单 -->
@@ -387,7 +559,7 @@ const zoomImageEl = ref<HTMLElement | null>(null);
     @click.stop
     @keydown="onMenuKeydown"
   >
-    <div class="image-menu-item" role="menuitem" tabindex="-1" @click="onZoomMenuItem">
+    <div class="image-menu-item" role="menuitem" tabindex="-1" @click="openImageViewer">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="8" />
         <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -399,37 +571,37 @@ const zoomImageEl = ref<HTMLElement | null>(null);
   </div>
   <div v-if="contextMenu.visible" class="image-context-overlay" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu"></div>
 
-  <!-- 全屏预览 -->
+  <!-- 统一全屏预览（图片 + Mermaid） -->
   <div
-    v-if="zoom.visible"
-    ref="zoomEl"
-    class="zoom-overlay"
+    v-if="viewer.visible"
+    ref="viewerEl"
+    class="viewer-overlay"
     tabindex="-1"
     role="dialog"
     aria-modal="true"
-    :aria-label="zoom.alt || t('image.zoom')"
-    :class="{ dragging, wheelZooming }"
-    @wheel="onZoomWheel"
-    @mousedown="onZoomMouseDown"
-    @mousemove="onZoomMouseMove"
-    @mouseup="onZoomMouseUp"
-    @mouseleave="onZoomMouseUp"
-    @keydown="onZoomKeydown"
-    @click="onZoomClick"
+    :aria-label="viewerLabel()"
+    :class="{ dragging, 'wheel-zooming': wheelZooming, 'is-fullscreen': viewer.isFullscreen }"
+    @wheel="onViewerWheel"
+    @mousedown="onViewerMouseDown"
+    @mousemove="onViewerMouseMove"
+    @mouseup="onViewerMouseUp"
+    @mouseleave="onViewerMouseUp"
+    @keydown="onViewerKeydown"
+    @click="onViewerClick"
     @contextmenu.prevent
   >
-    <div class="zoom-toolbar" @click.stop>
-      <span class="zoom-info">
-        {{ Math.round(zoom.scale * 100) }}%
+    <div class="viewer-toolbar" @click.stop>
+      <span class="viewer-info">
+        {{ Math.round(viewer.scale * 100) }}%
       </span>
-      <button class="zoom-btn" :aria-label="t('image.zoomOut')" :title="t('image.zoomOut')" @click="setZoomScale(zoom.scale / zoomStep)">
+      <button class="viewer-btn" :aria-label="viewerZoomOutLabel()" :title="viewerZoomOutLabel()" @click="setZoomScale(viewer.scale / zoomStep)">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8" />
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
           <line x1="8" y1="11" x2="14" y2="11" />
         </svg>
       </button>
-      <button class="zoom-btn" :aria-label="t('image.zoomIn')" :title="t('image.zoomIn')" @click="setZoomScale(zoom.scale * zoomStep)">
+      <button class="viewer-btn" :aria-label="viewerZoomInLabel()" :title="viewerZoomInLabel()" @click="setZoomScale(viewer.scale * zoomStep)">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8" />
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -437,35 +609,77 @@ const zoomImageEl = ref<HTMLElement | null>(null);
           <line x1="8" y1="11" x2="14" y2="11" />
         </svg>
       </button>
-      <button class="zoom-btn" :aria-label="t('image.reset')" :title="t('image.reset')" @click="resetZoom">
+      <button class="viewer-btn" :aria-label="viewerResetLabel()" :title="viewerResetLabel()" @click="resetZoom">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="1 4 1 10 7 10" />
           <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
         </svg>
       </button>
-      <button class="zoom-btn zoom-close" :aria-label="t('image.close')" :title="t('image.close')" @click="closeZoom">
+      <button
+        class="viewer-btn"
+        :aria-label="viewerFullscreenLabel()"
+        :title="viewerFullscreenLabel()"
+        @click="toggleFullscreen"
+      >
+        <svg v-if="!viewer.isFullscreen" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 3 21 3 21 9" />
+          <polyline points="9 21 3 21 3 15" />
+          <line x1="21" y1="3" x2="14" y2="10" />
+          <line x1="3" y1="21" x2="10" y2="14" />
+        </svg>
+        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4 14 10 14 10 20" />
+          <polyline points="20 10 14 10 14 4" />
+          <line x1="14" y1="10" x2="21" y2="3" />
+          <line x1="3" y1="21" x2="10" y2="14" />
+        </svg>
+      </button>
+      <button
+        class="viewer-btn viewer-close"
+        :aria-label="viewerCloseLabel()"
+        :title="viewerCloseLabel()"
+        @click="closeViewer"
+      >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
         </svg>
       </button>
     </div>
+
+    <!-- 图片内容 -->
     <img
-      ref="zoomImageEl"
-      :src="zoom.src"
-      :alt="zoom.alt"
-      class="zoom-image"
+      v-if="viewer.type === 'image'"
+      ref="viewerContentEl"
+      :src="viewer.src"
+      :alt="viewer.alt"
+      class="viewer-image"
       :style="{
-        transform: `translate(${zoom.translateX}px, ${zoom.translateY}px) scale(${zoom.scale})`,
+        transform: `translate(${viewer.translateX}px, ${viewer.translateY}px) scale(${viewer.scale})`,
         cursor: dragging ? 'grabbing' : 'grab',
       }"
       draggable="false"
       @click.stop
       @dblclick.stop="toggleZoom"
     />
-    <div v-if="zoom.alt" class="zoom-caption" @click.stop>{{ zoom.alt }}</div>
-    <div class="zoom-hint" @click.stop>
-      {{ t("image.hint") }}
+
+    <!-- Mermaid SVG 内容 -->
+    <div
+      v-else
+      ref="viewerContentEl"
+      class="viewer-content"
+      :style="{
+        transform: `translate(${viewer.translateX}px, ${viewer.translateY}px) scale(${viewer.scale})`,
+        cursor: dragging ? 'grabbing' : 'grab',
+      }"
+      @click.stop
+      @dblclick.stop="toggleZoom"
+      v-html="viewer.svgContent"
+    />
+
+    <div v-if="viewer.type === 'image' && viewer.alt" class="viewer-caption" @click.stop>{{ viewer.alt }}</div>
+    <div class="viewer-hint" @click.stop>
+      {{ viewerHint() }}
     </div>
   </div>
 </template>
@@ -523,22 +737,27 @@ const zoomImageEl = ref<HTMLElement | null>(null);
   z-index: 199;
 }
 
-/* ===== 全屏预览 ===== */
-.zoom-overlay {
+/* ===== 统一全屏预览 ===== */
+.viewer-overlay {
   position: fixed;
   inset: 0;
   z-index: 300;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.82);
+  background: rgba(0, 0, 0, 0.88);
   backdrop-filter: blur(4px);
   outline: none;
   overflow: hidden;
   user-select: none;
 }
 
-.zoom-image {
+.viewer-overlay.is-fullscreen {
+  background: #000;
+  backdrop-filter: none;
+}
+
+.viewer-image {
   max-width: 92vw;
   max-height: 88vh;
   object-fit: contain;
@@ -548,12 +767,48 @@ const zoomImageEl = ref<HTMLElement | null>(null);
   will-change: transform;
 }
 
-.zoom-overlay.dragging .zoom-image,
-.zoom-overlay.wheel-zooming .zoom-image {
+.viewer-content {
+  max-width: 92vw;
+  max-height: 88vh;
+  border-radius: 2px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+  transition: transform 60ms linear;
+  will-change: transform;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewer-content :deep(svg) {
+  max-width: 100%;
+  max-height: 88vh;
+  shape-rendering: geometricPrecision;
+  text-rendering: optimizeLegibility;
+}
+
+.viewer-overlay.is-fullscreen .viewer-image {
+  max-width: 100vw;
+  max-height: 100vh;
+}
+
+.viewer-overlay.is-fullscreen .viewer-content {
+  max-width: 100vw;
+  max-height: 100vh;
+}
+
+.viewer-overlay.is-fullscreen .viewer-content :deep(svg) {
+  max-width: 100vw;
+  max-height: 100vh;
+}
+
+.viewer-overlay.dragging .viewer-image,
+.viewer-overlay.dragging .viewer-content,
+.viewer-overlay.wheel-zooming .viewer-image,
+.viewer-overlay.wheel-zooming .viewer-content {
   transition: none;
 }
 
-.zoom-toolbar {
+.viewer-toolbar {
   position: absolute;
   top: 16px;
   left: 50%;
@@ -568,7 +823,7 @@ const zoomImageEl = ref<HTMLElement | null>(null);
   border-radius: 8px;
 }
 
-.zoom-info {
+.viewer-info {
   min-width: 44px;
   text-align: center;
   font-size: 12px;
@@ -576,7 +831,7 @@ const zoomImageEl = ref<HTMLElement | null>(null);
   font-variant-numeric: tabular-nums;
 }
 
-.zoom-btn {
+.viewer-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -590,18 +845,18 @@ const zoomImageEl = ref<HTMLElement | null>(null);
   transition: background-color 0.12s, color 0.12s;
 }
 
-.zoom-btn:hover {
+.viewer-btn:hover {
   background: rgba(255, 255, 255, 0.16);
   color: #fff;
 }
 
-.zoom-close {
+.viewer-close {
   margin-left: 6px;
   border-left: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 0 6px 6px 0;
 }
 
-.zoom-caption {
+.viewer-caption {
   position: absolute;
   bottom: 56px;
   left: 50%;
@@ -618,7 +873,7 @@ const zoomImageEl = ref<HTMLElement | null>(null);
   white-space: nowrap;
 }
 
-.zoom-hint {
+.viewer-hint {
   position: absolute;
   bottom: 18px;
   left: 50%;

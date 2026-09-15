@@ -917,6 +917,24 @@ body {
 .markdown-body .mermaid-block svg {
   max-width: 100%;
   height: auto;
+  shape-rendering: geometricPrecision;
+  text-rendering: optimizeLegibility;
+}
+.markdown-body .mermaid-rendered {
+  cursor: zoom-in;
+  transition: outline-color 0.15s;
+}
+.markdown-body .mermaid-rendered:hover {
+  outline: 2px solid var(--accent, #4f8ff7);
+  outline-offset: 2px;
+}
+.markdown-body img[src] {
+  cursor: zoom-in;
+  transition: outline-color 0.15s;
+}
+.markdown-body img[src]:hover {
+  outline: 2px solid var(--accent, #4f8ff7);
+  outline-offset: 2px;
 }
 .markdown-body .mermaid-error {
   color: #c00;
