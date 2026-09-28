@@ -32,6 +32,7 @@ import {
 import { useFileManager } from "./composables/useFileManager";
 import { useKeyboardHandlers } from "./composables/useKeyboardHandlers";
 import { useUnsavedDialog } from "./composables/useUnsavedDialog";
+import { useFsAuthorize } from "./composables/useFsAuthorize";
 import { useFloatLayout, ACTION_PANEL_IDS } from "./composables/useFloatLayout";
 import { useSectionMarkers } from "./composables/useSectionMarkers";
 import { useBookmarks } from "./composables/useBookmarks";
@@ -47,6 +48,7 @@ import SearchPanel from "./components/SearchPanel.vue";
 import TocCapsule from "./components/TocCapsule.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
 import UnsavedChangesDialog from "./components/UnsavedChangesDialog.vue";
+import GrantAccessDialog from "./components/GrantAccessDialog.vue";
 import Banner from "./components/Banner.vue";
 import DiffView from "./components/DiffView.vue";
 import ReviewPanel from "./components/ReviewPanel.vue";
@@ -62,6 +64,7 @@ const { t, locale } = useI18n();
 const appStore = useAppStore();
 const fileManager = useFileManager();
 const unsavedDialog = useUnsavedDialog();
+const fsAuthorize = useFsAuthorize();
 const floatLayout = useFloatLayout();
 const bookmarks = useBookmarks();
 
@@ -127,6 +130,8 @@ const displayFileName = computed(() => isDirty.value ? `${fileName.value} *` : f
 const hasBookmarkAtCurrentPos = computed(() => !currentFile.value || !viewerEl.value ? false : bookmarks.hasAt(currentFile.value, viewerEl.value.scrollTop));
 const dynamicIcons = computed(() => ({ "locale-toggle": locale.value === "zh-CN" ? "中" : "En", "edit": isEditing.value ? "👁" : "✎" }));
 const showUnsavedDialog = unsavedDialog.showUnsavedDialog;
+const showGrantDialog = fsAuthorize.showGrantDialog;
+const grantDir = fsAuthorize.grantDir;
 const unsavedDialogMode = unsavedDialog.unsavedDialogMode;
 const dialogTab = unsavedDialog.dialogTab;
 const editorRef = fileManager.editorRef;
@@ -141,7 +146,7 @@ function onSearchQueryChange(q: string) { const q2 = q.trim(); lastSearchQuery.v
 async function readFileIntoTab(tab: Tab, path: string, hash = "", sourceLine = 0) {
   fileManager.addSuppress(path);
   try {
-    const text = await readTextFile(path);
+    const text = await fsAuthorize.readTextFileAuthorized(path);
     tab.path = path; tab.content = text; tab.draftContent = text;
     tab.isDirty = false; tab.isEditing = false; tab.headings = extractHeadings(text);
     tab.pendingHash = hash; tab.pendingScrollTop = hash ? 0 : getScroll(path);
@@ -172,7 +177,7 @@ async function loadFile(path: string, hash = "", sourceLine = 0) {
 async function forceReloadTab(tab: Tab) {
   fileManager.addSuppress(tab.path);
   try {
-    const text = await readTextFile(tab.path);
+    const text = await fsAuthorize.readTextFileAuthorized(tab.path);
     tab.content = text; tab.draftContent = text; tab.isDirty = false; tab.headings = extractHeadings(text);
     if (tab.id === activeTabId.value) { tab.pendingHash = ""; tab.pendingScrollTop = tab.scrollTop; tab.pendingSourceLine = 0; find.clearHighlights(); }
     fileManager.scheduleSuppressClear(tab.path);
@@ -753,6 +758,8 @@ onUnmounted(() => window.removeEventListener("resize", recalcSearchPosition));
                           @save="unsavedDialog.resolveDialog('save')"
                           @discard="unsavedDialog.resolveDialog(unsavedDialogMode === 'external' ? 'cancel' : 'discard')"
                           @cancel="unsavedDialog.resolveDialog('cancel')" />
+    <GrantAccessDialog :visible="showGrantDialog" :dir="grantDir"
+                       @allow="fsAuthorize.resolveDialog(true)" @deny="fsAuthorize.resolveDialog(false)" />
     <Banner :tab="bannerTab" :visible="showBanner" :on-reload="onBannerReload" :on-view-diff="onBannerViewDiff" :on-ignore="onBannerIgnore" :on-auto-reload="onBannerAutoReload" />
     <div v-if="appStore.exportToast" class="toast" @click="appStore.exportToast = ''">✓ {{ appStore.exportToast }}</div>
     <div v-if="annotationToast" class="toast" @click="annotationToast = ''">✓ {{ annotationToast }}</div>

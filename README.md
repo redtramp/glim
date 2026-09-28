@@ -113,6 +113,13 @@ Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与�
 - `Ctrl+F` 当前文档查找，`Ctrl+H` 查找替换
 - `Ctrl+Shift+F` 跨文件全文搜索（Rust 后端高速，结果按文件分组）
 
+### 文件访问与授权
+- 读取文档经由 Tauri fs 插件的能力授权：`src-tauri/capabilities/default.json` 预置 13 个用户目录（`$HOME`、`$DOCUMENT`、`$DESKTOP`、`$DOWNLOAD`、`$PICTURE`、`$MUSIC`、`$VIDEO`、`$PUBLIC`、`$TEMP`、`$APPDATA`、`$APPLOCALDATA`、`$APPCONFIG`、`$CACHE`）为可读写根，家目录下的隐藏目录（`~/.config`、`~/.local`、`~/.cache`、项目里的 `.config`）**任意深度均可直接打开**
+- `plugins.fs.requireLiteralLeadingDot: false`：允许通配符匹配以 `.` 开头的目录分量，修复授权根内 `**` 路径被 `PathForbidden` 拒绝的问题
+- **授权根之外**的目录（如 `/opt`、`/etc`）：首次打开其中的文档时弹出**授权提示**，确认后为该目录追加会话级读写授权并自动重试打开，拒绝则保留原有的「读取失败」提示
+- 授权仅在本次运行会话内有效，重启后再次询问；通过系统文件选择器选中的文件/文件夹本身即隐式授权
+- 文件树与全局搜索不主动列出 `.` 开头的隐藏目录以及 `node_modules` / `target`，可经「打开文件夹」或直接打开其中某个文件进入
+
 ### 导出与打印
 - **PDF**：Edge headless，所见即所得
 - **HTML**：自包含单文件，资源全部内嵌

@@ -218,6 +218,12 @@ const zhCN = {
     readFailed: "读取失败",
     fileExists: "文件已存在，请换个文件名",
   },
+  grant: {
+    title: "需要访问授权",
+    message: "该文档位于预置授权目录之外，需要你的确认才能读取。授权仅在本次运行内有效，重启后会重新询问。",
+    allow: "授权并打开",
+    deny: "取消",
+  },
   annotation: {
     groupClipboard: "剪贴板",
     groupAI: "AI",

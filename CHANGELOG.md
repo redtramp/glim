@@ -1,5 +1,21 @@
 # 更新日志
 
+## [Unreleased]
+
+### 新增
+- 授权根之外的目录：打开其中文档时弹出**授权提示**，确认后为该目录追加会话级读写授权（Rust `allow_dir` → `fs_scope().allow_directory(dir, true)`）并自动重试，拒绝则维持原错误提示；i18n 新增 `grant.*` 中英文案
+
+### 修复
+- 修复 `~/.config`、`~/.local` 等隐藏目录中的文档无法打开的问题：Tauri fs 插件 Unix 默认 `requireLiteralLeadingDot=true`，ACL 模式 `$HOME/**` 的通配符不能匹配以 `.` 开头的路径分量，导致 `readTextFile` 报 `PathForbidden`。现于 `tauri.conf.json` 设置 `plugins.fs.requireLiteralLeadingDot: false`，实测授权根内任意深度隐藏目录（含隐藏子目录）均可读取
+
+### 工程
+- 新增 `useFsAuthorize`（8）与 `GrantAccessDialog`（5）单测，覆盖授权错误识别、拒绝/授权后重试、提示未决期并发拒绝、弹窗渲染与 emit；全量 561 个用例通过
+
+### 文档
+- README（中/英）新增「文件访问与授权」：13 个预置授权根、隐藏目录覆盖范围、运行时授权提示、会话级生效说明
+
+---
+
 ## [0.8.2] - 2026-09-14
 
 ### 新增

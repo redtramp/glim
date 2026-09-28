@@ -113,6 +113,13 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - `Ctrl+F` for current document search, `Ctrl+H` for find & replace
 - `Ctrl+Shift+F` for cross-file full-text search (high-speed Rust backend, results grouped by file)
 
+### File Access & Authorization
+- Document reads go through the Tauri fs plugin's capability authorization: `src-tauri/capabilities/default.json` pre-authorizes 13 user roots (`$HOME`, `$DOCUMENT`, `$DESKTOP`, `$DOWNLOAD`, `$PICTURE`, `$MUSIC`, `$VIDEO`, `$PUBLIC`, `$TEMP`, `$APPDATA`, `$APPLOCALDATA`, `$APPCONFIG`, `$CACHE`) as read/write roots, so hidden directories under home (`~/.config`, `~/.local`, `~/.cache`, a project's `.config`) **open directly at any depth**
+- `plugins.fs.requireLiteralLeadingDot: false` lets glob patterns match path components starting with `.`, fixing `PathForbidden` rejections for `**` patterns inside authorized roots
+- For directories **outside the authorized roots** (e.g. `/opt`, `/etc`): the first time a document there is opened, a **permission prompt** appears; confirming grants session-scoped read/write access to that directory and automatically retries the open, declining keeps the normal "read failed" error
+- Grants last for the current app session only and are re-asked after a restart; paths picked through the system file dialog are implicitly authorized
+- The file tree and global search do not list dot-directories or `node_modules` / `target`; use "Open Folder" or open a file inside them to navigate there
+
 ### Export & Print
 - **PDF**: Edge headless, WYSIWYG
 - **HTML**: Self-contained single file with all resources embedded

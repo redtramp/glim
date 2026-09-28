@@ -54,6 +54,7 @@ fn extract_md_path_from_args(argv: &[String]) -> Option<String> {
     None
 }
 use tauri::{Emitter, State};
+use tauri_plugin_fs::FsExt;
 use walkdir::WalkDir;
 
 #[derive(Debug, Serialize, Clone)]
@@ -126,6 +127,21 @@ fn get_home_dir() -> Result<String, String> {
         .or_else(|| std::env::var_os("USERPROFILE"))
         .ok_or_else(|| "Cannot determine home directory".to_string())?;
     Ok(PathBuf::from(home).to_string_lossy().to_string())
+}
+
+/// 会话级目录授权：为指定目录（含递归子目录）追加 fs scope 读写模式。
+/// 用于「授权提示」确认后重试打开预置授权根之外的文档；授权仅在本次运行内有效。
+/// 注意：运行时 FsScope 的 require_literal_leading_dot 为 true（硬编码于插件 setup），
+/// `**` 仍匹配不到隐藏子目录，嵌套隐藏目录会再次触发提示，确认一次即可继续。
+#[tauri::command]
+fn allow_dir(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let dir = PathBuf::from(&path);
+    if !dir.is_dir() {
+        return Err(format!("Not a directory: {}", path));
+    }
+    app.fs_scope()
+        .allow_directory(&dir, true)
+        .map_err(|e| e.to_string())
 }
 
 /// 判断路径是否位于应排除的子树下（与 list_dir 的过滤保持一致）。
@@ -560,6 +576,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_dir,
             get_home_dir,
+            allow_dir,
             start_watch,
             stop_watch,
             watch_path,

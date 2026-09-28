@@ -222,6 +222,13 @@ const enUS = {
     readFailed: "Failed to read file",
     fileExists: "File already exists. Choose another name.",
   },
+  grant: {
+    title: "Permission required",
+    message:
+      "This document lies outside the pre-authorized roots and needs your confirmation to read. The grant lasts for this session only and is asked again after a restart.",
+    allow: "Allow & Open",
+    deny: "Cancel",
+  },
   annotation: {
     groupClipboard: "Clipboard",
     groupAI: "AI",
