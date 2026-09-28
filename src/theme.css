@@ -1,0 +1,260 @@
+:root {
+  /* MUD 终端 · 亮色 = 打印纸终端变体（米白纸面 + 墨绿字符） */
+  --mdr-ink: #1c241c;
+  --mdr-muted: #5c6b5c;
+  --mdr-faint: #8a948a;
+  --mdr-paper: #f7f5ec;
+  --mdr-paper-soft: #f7f5ec;
+  --mdr-line: #d8d4c2;
+  --mdr-panel: #f0eee2;
+  --mdr-panel-soft: #faf9f1;
+  --mdr-panel-raised: #e6e3d4;
+  --mdr-panel-line: #d8d4c2;
+  --mdr-panel-muted: #5c6b5c;
+  --mdr-accent-gold: #00853d;
+  --mdr-accent-teal: #0e7490;
+  --mdr-success: #00853d;
+  --mdr-danger: #b3261e;
+
+  /* 语义色：diff / 警告 / 遮罩（组件层收编硬编码） */
+  --diff-add: #00853d;
+  --diff-add-bg: rgba(0, 133, 61, 0.1);
+  --diff-remove: #b3261e;
+  --diff-remove-bg: rgba(179, 38, 30, 0.1);
+  --warn: #b45309;
+  --search-hl-bg: rgba(255, 176, 0, 0.4);
+  --search-hl-fg: #1c241c;
+  --overlay: rgba(0, 0, 0, 0.55);
+
+  /* UI 骨架等宽栈（顶栏/侧栏/大纲/按钮/标签；正文由 --reader-font-family 覆盖） */
+  --ui-font: ui-monospace, SFMono-Regular, "Cascadia Mono", "JetBrains Mono",
+    Menlo, Consolas, "Liberation Mono", monospace;
+
+  --critic-del-color: #b3261e;
+  --critic-del-bg: rgba(179, 38, 30, 0.1);
+  --critic-ins-color: #00853d;
+  --critic-ins-bg: rgba(0, 133, 61, 0.1);
+  --critic-hl-bg: #fde68a;
+  --critic-hl-fg: #5b4400;
+  --critic-comment-color: #0e7490;
+  --critic-comment-bg: rgba(14, 116, 144, 0.1);
+  --critic-tooltip-bg: #faf9f1;
+  --critic-tooltip-fg: #1c241c;
+  --critic-tooltip-border: rgba(216, 212, 194, 0.9);
+  --critic-tooltip-shadow: 0 8px 24px rgba(28, 36, 28, 0.14),
+    0 2px 8px rgba(28, 36, 28, 0.08);
+
+  --bg: #f7f5ec;
+  --bg-toolbar: #f0eee2;
+  --bg-btn: #faf9f1;
+  --bg-btn-hover: #e6e3d4;
+  --bg-active: rgba(0, 133, 61, 0.12);
+  --bg-code: #efece0;
+  --fg: #1c241c;
+  --fg-muted: #5c6b5c;
+  --border: #d8d4c2;
+  --link: #00853d;
+  --editor-selection-bg: rgba(0, 133, 61, 0.2);
+  --editor-active-line-bg: rgba(0, 0, 0, 0.025);
+  --blockquote-border: #00853d;
+  --blockquote-fg: #5c6b5c;
+  --table-border: #d8d4c2;
+  --table-stripe: #efece0;
+  --scrollbar-track: #f0eee2;
+  --scrollbar-thumb: #c9c4b0;
+  --scrollbar-thumb-hover: #00853d;
+
+  --shell-toolbar-bg: var(--bg-toolbar);
+  --shell-toolbar-border: var(--border);
+  --shell-sidebar-bg: var(--bg-toolbar);
+  --shell-right-bg: var(--bg-toolbar);
+  --shell-sidebar-border: var(--border);
+  --shell-filename-color: var(--fg-muted);
+  --shell-panel-header-color: var(--fg-muted);
+  --shell-panel-header-border: var(--border);
+  --shell-tab-color: var(--fg-muted);
+  --shell-tab-hover-color: var(--fg);
+  --shell-tab-active-color: var(--link);
+  --shell-tab-active-border: var(--link);
+  --shell-export-bg: var(--bg);
+  --shell-export-hover-bg: var(--bg-btn-hover);
+
+  /* 悬浮布局 — 浮层/窄条 */
+  --float-left-rail-bg: rgba(255, 255, 255, 0.5);
+  --float-rail-icon-color: var(--fg-muted);
+  --float-rail-icon-hover-bg: rgba(0, 0, 0, 0.06);
+  --float-rail-icon-active: var(--link);
+  --float-rail-icon-active-bg: rgba(0, 133, 61, 0.12);
+  --float-rail-separator: var(--border);
+  --float-marker-bookmark: var(--mdr-accent-gold);
+  --float-panel-header-fg: var(--fg-muted);
+  --float-panel-header-border: var(--border);
+
+  --tree-row-color: var(--fg);
+  --tree-row-hover-bg: var(--bg-btn-hover);
+  --tree-row-active-bg: var(--bg-active);
+  --tree-row-active-color: var(--link);
+  --tree-row-active-shadow: none;
+  --tree-dir-color: var(--fg);
+  --tree-file-color: var(--fg);
+  --tree-caret-color: var(--fg-muted);
+
+  --toc-item-color: var(--fg);
+  --toc-hover-color: var(--fg);
+  --toc-hover-bg: var(--bg-btn-hover);
+  --toc-active-color: var(--link);
+  --toc-active-bg: var(--bg-active);
+  --toc-active-line: var(--link);
+  --toc-active-shadow: none;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  /* MUD 终端 · 暗色主视觉（近黑微绿底 + 磷光绿字符） */
+  --mdr-ink: #c9d8c9;
+  --mdr-muted: #7d8f7d;
+  --mdr-faint: #556655;
+  --mdr-paper: #0f1410;
+  --mdr-paper-soft: #0b0f0b;
+  --mdr-line: #22301f;
+  --mdr-panel: #0e130e;
+  --mdr-panel-soft: #111811;
+  --mdr-panel-raised: #18221a;
+  --mdr-panel-line: #22301f;
+  --mdr-panel-muted: #7d8f7d;
+  --mdr-accent-gold: #33ff66;
+  --mdr-accent-teal: #33cccc;
+  --mdr-success: #2ecc71;
+  --mdr-danger: #ff5f5f;
+
+  /* 语义色：diff / 警告 / 遮罩（组件层收编硬编码） */
+  --diff-add: #2ecc71;
+  --diff-add-bg: rgba(46, 204, 113, 0.14);
+  --diff-remove: #ff5f5f;
+  --diff-remove-bg: rgba(255, 95, 95, 0.14);
+  --warn: #ffb000;
+  --search-hl-bg: rgba(255, 176, 0, 0.35);
+  --search-hl-fg: #0b0f0b;
+  --overlay: rgba(0, 0, 0, 0.55);
+
+  --critic-del-color: #ff5f5f;
+  --critic-del-bg: rgba(255, 95, 95, 0.14);
+  --critic-ins-color: #33ff66;
+  --critic-ins-bg: rgba(51, 255, 102, 0.14);
+  --critic-hl-bg: rgba(255, 176, 0, 0.18);
+  --critic-hl-fg: #ffd75e;
+  --critic-comment-color: #33cccc;
+  --critic-comment-bg: rgba(51, 204, 204, 0.14);
+  --critic-tooltip-bg: #18221a;
+  --critic-tooltip-fg: #c9d8c9;
+  --critic-tooltip-border: rgba(34, 48, 31, 0.9);
+  --critic-tooltip-shadow: 0 8px 24px rgba(0, 0, 0, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+
+  --bg: var(--mdr-paper-soft);
+  --bg-toolbar: var(--mdr-panel);
+  --bg-btn: var(--mdr-panel-soft);
+  --bg-btn-hover: var(--mdr-panel-raised);
+  --bg-active: rgba(51, 255, 102, 0.14);
+  --bg-code: #0f1410;
+  --fg: var(--mdr-ink);
+  --fg-muted: var(--mdr-muted);
+  --border: var(--mdr-line);
+  --link: #33ff66;
+  --editor-selection-bg: rgba(51, 255, 102, 0.25);
+  --editor-active-line-bg: rgba(255, 255, 255, 0.035);
+  --blockquote-border: #2ecc71;
+  --blockquote-fg: #8f9f8f;
+  --table-border: #22301f;
+  --table-stripe: #0f1410;
+  --scrollbar-track: #0b0f0b;
+  --scrollbar-thumb: #22301f;
+  --scrollbar-thumb-hover: #33ff66;
+
+  --shell-toolbar-bg: linear-gradient(180deg, var(--mdr-panel-soft), var(--mdr-panel));
+  --shell-toolbar-border: var(--mdr-panel-line);
+  --shell-sidebar-bg: var(--mdr-panel);
+  --shell-right-bg: var(--mdr-paper-soft);
+  --shell-sidebar-border: var(--mdr-panel-line);
+  --shell-filename-color: var(--mdr-panel-muted);
+  --shell-panel-header-color: var(--mdr-panel-muted);
+  --shell-panel-header-border: var(--mdr-panel-line);
+  --shell-tab-color: var(--mdr-panel-muted);
+  --shell-tab-hover-color: #d8f5d8;
+  --shell-tab-active-color: var(--mdr-accent-gold);
+  --shell-tab-active-border: var(--mdr-accent-gold);
+  --shell-export-bg: var(--mdr-paper);
+  --shell-export-hover-bg: color-mix(in srgb, var(--mdr-accent-gold) 12%, transparent);
+
+  /* 悬浮布局 — 浮层/窄条（暗色） */
+  --float-left-rail-bg: rgba(15, 20, 16, 0.6);
+  --float-rail-icon-color: var(--fg-muted);
+  --float-rail-icon-hover-bg: rgba(255, 255, 255, 0.06);
+  --float-rail-icon-active: var(--link);
+  --float-rail-icon-active-bg: rgba(51, 255, 102, 0.14);
+  --float-rail-separator: var(--border);
+  --float-marker-bookmark: var(--mdr-accent-gold);
+  --float-panel-header-fg: var(--fg-muted);
+  --float-panel-header-border: var(--border);
+
+  --tree-row-color: #c9d8c9;
+  --tree-row-hover-bg: var(--mdr-panel-soft);
+  --tree-row-active-bg: rgba(51, 255, 102, 0.12);
+  --tree-row-active-color: #d8f5d8;
+  --tree-row-active-shadow: inset 2px 0 0 var(--mdr-accent-gold);
+  --tree-dir-color: #d8f5d8;
+  --tree-file-color: #c9d8c9;
+  --tree-caret-color: var(--mdr-panel-muted);
+
+  --toc-item-color: var(--fg-muted);
+  --toc-hover-color: #d8f5d8;
+  --toc-hover-bg: rgba(51, 255, 102, 0.08);
+  --toc-active-color: #33ff66;
+  --toc-active-bg: rgba(51, 255, 102, 0.12);
+  --toc-active-line: #33ff66;
+  --toc-active-shadow: inset 2px 0 0 var(--toc-active-line);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
+}
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+body {
+  /* MUD 终端：UI 骨架统一等宽；正文由 .markdown-body 的 --reader-font-family 覆盖 */
+  font-family: var(--ui-font);
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}

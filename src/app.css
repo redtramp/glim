@@ -1,2 +1,109 @@
-/* Tailwind CSS 4 入口 — Task 2 完成主题映射 */
-@import "tailwindcss";
+/* Tailwind 4 核心：手动分层，排除 preflight。
+   原因（2026-09-28 执行期修订 Ruling 4）：tailwindcss/index.css 将完整 preflight
+   内联于 @layer base，会重置 UA 默认样式（html line-height→1.5、按钮字体 inherit、
+   ol/ul list-style→none、img/表单外壳），与 Step 6“亮/暗主题切换后必须无差异”冲突
+   （实测 137 元素行高变化、正文列表圆点消失，像素 diff 0.45%–7.10%）；且 reader.css
+   明文不转 Tailwind，该差异无法由后续组件任务修复。
+   theme.css/utilities.css 为 tailwindcss package.json 官方 exports 子路径，结构与
+   index.css 逐层一致，仅跳过 base 层（preflight）。验证：build 产物必须含 utility 类。 */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "./theme.css";
+
+/* 暗色变体：跟随现有 [data-theme="dark"] 切换 */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* 语义色 token — 值引用既有 CSS 变量，暗色自动继承 */
+@theme inline {
+  --color-ink: var(--mdr-ink);
+  --color-muted: var(--mdr-muted);
+  --color-faint: var(--mdr-faint);
+  --color-paper: var(--mdr-paper);
+  --color-paper-soft: var(--mdr-paper-soft);
+  --color-line: var(--mdr-line);
+  --color-panel: var(--mdr-panel);
+  --color-panel-soft: var(--mdr-panel-soft);
+  --color-panel-raised: var(--mdr-panel-raised);
+  --color-panel-line: var(--mdr-panel-line);
+  --color-accent: var(--mdr-accent-gold);
+  --color-teal: var(--mdr-accent-teal);
+  --color-success: var(--mdr-success);
+  --color-danger: var(--mdr-danger);
+  --color-fg: var(--fg);
+  --color-bg: var(--bg);
+  --color-bg-toolbar: var(--bg-toolbar);
+  --color-bg-btn: var(--bg-btn);
+  --color-bg-btn-hover: var(--bg-btn-hover);
+  --color-warn: var(--warn);
+  --color-overlay: var(--overlay);
+  --font-ui: var(--ui-font);
+
+  /* —— 执行者补齐：组件 grep 全集（brief Step 4 验收要求） —— */
+  /* 基础语义补充 */
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-border: var(--border);
+  --color-link: var(--link);
+  --color-bg-active: var(--bg-active);
+  --color-bg-elevated: var(--bg-elevated);
+  /* 滚动条（brief 点名登记） */
+  --color-scrollbar-thumb: var(--scrollbar-thumb);
+  --color-scrollbar-thumb-hover: var(--scrollbar-thumb-hover);
+  --color-scrollbar-track: var(--scrollbar-track);
+  /* critic 批注 */
+  --color-critic-comment-bg: var(--critic-comment-bg);
+  --color-critic-comment-color: var(--critic-comment-color);
+  --color-critic-del-bg: var(--critic-del-bg);
+  --color-critic-del-color: var(--critic-del-color);
+  --color-critic-hl-bg: var(--critic-hl-bg);
+  --color-critic-hl-fg: var(--critic-hl-fg);
+  --color-critic-ins-bg: var(--critic-ins-bg);
+  --color-critic-ins-color: var(--critic-ins-color);
+  /* diff 对照 */
+  --color-diff-add: var(--diff-add);
+  --color-diff-add-bg: var(--diff-add-bg);
+  --color-diff-remove: var(--diff-remove);
+  --color-diff-remove-bg: var(--diff-remove-bg);
+  /* 编辑器（CodeMirror 主题取色） */
+  --color-editor-active-line-bg: var(--editor-active-line-bg);
+  --color-editor-selection-bg: var(--editor-selection-bg);
+  /* 浮动布局 */
+  --color-float-left-rail-bg: var(--float-left-rail-bg);
+  --color-float-marker-bookmark: var(--float-marker-bookmark);
+  --color-float-panel-header-border: var(--float-panel-header-border);
+  --color-float-panel-header-fg: var(--float-panel-header-fg);
+  --color-float-rail-icon-active: var(--float-rail-icon-active);
+  --color-float-rail-icon-active-bg: var(--float-rail-icon-active-bg);
+  --color-float-rail-icon-color: var(--float-rail-icon-color);
+  --color-float-rail-icon-hover-bg: var(--float-rail-icon-hover-bg);
+  --color-float-rail-separator: var(--float-rail-separator);
+  /* 搜索高亮 */
+  --color-search-hl-bg: var(--search-hl-bg);
+  --color-search-hl-fg: var(--search-hl-fg);
+  /* 外壳标签与边框 */
+  --color-shell-sidebar-bg: var(--shell-sidebar-bg);
+  --color-shell-sidebar-border: var(--shell-sidebar-border);
+  --color-shell-tab-active-border: var(--shell-tab-active-border);
+  --color-shell-tab-active-color: var(--shell-tab-active-color);
+  --color-shell-tab-color: var(--shell-tab-color);
+  --color-shell-tab-hover-color: var(--shell-tab-hover-color);
+  --color-shell-toolbar-border: var(--shell-toolbar-border);
+  /* 目录胶囊 */
+  --color-toc-active-bg: var(--toc-active-bg);
+  --color-toc-active-color: var(--toc-active-color);
+  --color-toc-active-line: var(--toc-active-line);
+  --color-toc-hover-bg: var(--toc-hover-bg);
+  --color-toc-hover-color: var(--toc-hover-color);
+  --color-toc-item-color: var(--toc-item-color);
+  /* 文件树 */
+  --color-tree-caret-color: var(--tree-caret-color);
+  --color-tree-dir-color: var(--tree-dir-color);
+  --color-tree-file-color: var(--tree-file-color);
+  --color-tree-row-active-bg: var(--tree-row-active-bg);
+  --color-tree-row-active-color: var(--tree-row-active-color);
+  --color-tree-row-color: var(--tree-row-color);
+  --color-tree-row-hover-bg: var(--tree-row-hover-bg);
+  /* 阴影维度（非 color 命名空间） */
+  --shadow-tree-row-active: var(--tree-row-active-shadow);
+}
