@@ -1,9 +1,8 @@
 // @ts-check
 import js from "@eslint/js";
-import vue from "eslint-plugin-vue";
+import svelte from "eslint-plugin-svelte";
 import tsParser from "@typescript-eslint/parser";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
-import vueParser from "vue-eslint-parser";
 
 export default [
   {
@@ -16,7 +15,7 @@ export default [
     ],
   },
   js.configs.recommended,
-  ...vue.configs["flat/recommended"],
+  ...svelte.configs["flat/recommended"],
   {
     files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
@@ -33,19 +32,12 @@ export default [
     },
   },
   {
-    files: ["**/*.vue"],
+    files: ["**/*.svelte"],
     languageOptions: {
-      parser: vueParser,
-      parserOptions: {
-        parser: tsParser,
-        sourceType: "module",
-        ecmaVersion: 2022,
-      },
+      parserOptions: { parser: { ts: tsParser } },
     },
     rules: {
-      "vue/multi-word-component-names": "off",
-      "vue/no-v-html": "off",
-      "no-unused-vars": "off",
+      "svelte/no-at-html-tags": "off",
     },
   },
   {
@@ -105,13 +97,6 @@ export default [
         TextDecoder: "readonly",
       },
     },
-    rules: {
-      "vue/max-attributes-per-line": "off",
-      "vue/singleline-html-element-content-newline": "off",
-      "vue/html-self-closing": "off",
-      "vue/first-attribute-linebreak": "off",
-      "vue/html-closing-bracket-newline": "off",
-      "vue/attributes-order": "off",
-    },
+    rules: {},
   },
 ];

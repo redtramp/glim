@@ -29,7 +29,8 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "svelte-check --threshold error && vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
@@ -37,7 +38,7 @@
     "tauri": "tauri",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write \"src/**/*.{ts,vue,css,json}\""
+    "format": "prettier --write \"src/**/*.{ts,svelte,css,json}\""
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.4",
@@ -63,12 +64,14 @@
     "markdown-it-task-lists": "^2.1.1",
     "mermaid": "^11.16.0",
     "pinia": "^3.0.4",
+    "svelte": "^5.57.1",
     "vue": "^3.5.40",
     "vue-i18n": "^11.4.8",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "@tauri-apps/cli": "^2.11.4",
     "@types/jsdom": "^28.0.3",
     "@types/katex": "^0.16.8",
@@ -80,9 +83,12 @@
     "@vitest/coverage-v8": "^4.1.10",
     "@vue/test-utils": "^2.4.11",
     "eslint": "^10.8.0",
+    "eslint-plugin-svelte": "^3.23.0",
     "eslint-plugin-vue": "^10.10.0",
     "jsdom": "^29.1.1",
     "prettier": "^3.9.6",
+    "svelte-check": "^4.7.6",
+    "svelte-eslint-parser": "^1.8.1",
     "typescript": "^5.9.3",
     "vite": "^6.4.3",
     "vitest": "^4.1.10",
