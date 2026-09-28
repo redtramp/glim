@@ -99,4 +99,12 @@ export default [
     },
     rules: {},
   },
+  // Ruling 5: .svelte.ts 为 runes 文件，$state 等为编译期宏，
+  // no-undef 会误报未定义（TS 交给编译器检查），故仅对该后缀关闭 no-undef
+  {
+    files: ["**/*.svelte.ts"],
+    rules: {
+      "no-undef": "off",
+    },
+  },
 ];
