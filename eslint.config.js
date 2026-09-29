@@ -36,8 +36,16 @@ export default [
     languageOptions: {
       parserOptions: { parser: { ts: tsParser } },
     },
+    plugins: { "@typescript-eslint": tsPlugin },
     rules: {
       "svelte/no-at-html-tags": "off",
+      // 基础 no-unused-vars 不理解 TS 类型位置，会误报函数类型参数名（如
+      // onOpenPanel?: (id: LeftPanelID) => void 的 id）；改用 TS 感知版本
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
     },
   },
   {

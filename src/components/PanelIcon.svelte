@@ -1,7 +1,15 @@
-<script setup lang="ts">
-import type { LeftPanelID } from "../composables/useFloatLayout";
+<script lang="ts">
+/**
+ * 左侧栏图标集（纯 SVG 路径，无状态）
+ *
+ * Vue → Svelte 5 迁移要点:
+ * - defineProps<{ name: LeftPanelID }>() → $props()
+ * - <template v-for="d in ..."> → {#each ...}
+ * - import type 路径须写全后缀（Ruling 1）
+ */
+import type { LeftPanelID } from "../composables/useFloatLayout.svelte.ts";
 
-const props = defineProps<{ name: LeftPanelID }>();
+let { name }: { name: LeftPanelID } = $props();
 
 const ICON_PATHS: Record<LeftPanelID, string[]> = {
   filetree: [
@@ -69,20 +77,18 @@ const ICON_PATHS: Record<LeftPanelID, string[]> = {
 };
 </script>
 
-<template>
-  <svg
-    width="20"
-    height="20"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.8"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    aria-hidden="true"
-  >
-    <template v-for="d in ICON_PATHS[props.name]" :key="d">
-      <path :d="d" />
-    </template>
-  </svg>
-</template>
+<svg
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="1.8"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+>
+  {#each ICON_PATHS[name] as d (d)}
+    <path {d} />
+  {/each}
+</svg>
