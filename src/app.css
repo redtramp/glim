@@ -107,3 +107,16 @@
   /* 阴影维度（非 color 命名空间） */
   --shadow-tree-row-active: var(--tree-row-active-shadow);
 }
+
+/* Banner 滑入动画（Task 6:Banner 组件 <style> 按规则整体删除,
+   @keyframes 必须全局声明才能被组件上的 animate-[...] 工具类引用） */
+@keyframes bannerSlideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
