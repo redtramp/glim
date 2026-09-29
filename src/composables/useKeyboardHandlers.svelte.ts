@@ -1,7 +1,6 @@
-import { ref, computed, onMounted, onUnmounted } from "vue";
-import { useTabsStore } from "../stores/useTabsStore";
-import { useShortcutsStore } from "../stores/useShortcutsStore";
-import { useReadingSettingsStore } from "../stores/useReadingSettingsStore";
+import { useTabsStore } from "../stores/tabs.svelte.ts";
+import { useShortcutsStore } from "../stores/shortcuts.svelte.ts";
+import { useReadingSettingsStore } from "../stores/readingSettings.svelte.ts";
 
 export function useKeyboardHandlers(opts: {
   fileManager: {
@@ -23,10 +22,16 @@ export function useKeyboardHandlers(opts: {
   const shortcuts = useShortcutsStore();
   const reading = useReadingSettingsStore();
 
-  const showSettings = ref(false);
-  const showReviewPanel = ref(false);
+  // 保留 .value 访问形状：$state box 替代 vue ref
+  const showSettings = $state<{ value: boolean }>({ value: false });
+  const showReviewPanel = $state<{ value: boolean }>({ value: false });
 
-  const isEditing = computed(() => tabs.activeTab?.isEditing ?? false);
+  // 旧 computed：普通 getter 对象，保持 isEditing.value 访问形状（不随返回对象导出）
+  const isEditing = {
+    get value(): boolean {
+      return tabs.activeTab?.isEditing ?? false;
+    },
+  };
 
   function toggleEditorMode() {
     const tab = tabs.activeTab;
@@ -166,15 +171,16 @@ export function useKeyboardHandlers(opts: {
     zoomFont(e.deltaY < 0 ? 1 : -1);
   }
 
-  onMounted(() => {
+  // 旧 onMounted/onUnmounted → 显式 attach()/detach()（App.vue Task 5 负责调用）
+  function attach() {
     window.addEventListener("keydown", handleKeydown);
     window.addEventListener("wheel", handleWheel, { passive: false });
-  });
+  }
 
-  onUnmounted(() => {
+  function detach() {
     window.removeEventListener("keydown", handleKeydown);
     window.removeEventListener("wheel", handleWheel);
-  });
+  }
 
   return {
     showSettings,
@@ -183,5 +189,7 @@ export function useKeyboardHandlers(opts: {
     handleWheel,
     openSettings,
     openReviewPanel,
+    attach,
+    detach,
   };
 }

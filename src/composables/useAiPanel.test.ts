@@ -35,7 +35,7 @@ import {
   buildAiMessages,
   SELECTION_ACTIONS,
   currentLangName,
-} from "./useAiPanel";
+} from "./useAiPanel.svelte.ts";
 import { AiError, type AiSettings } from "./aiProvider";
 import type { AiMessage } from "./aiProvider";
 

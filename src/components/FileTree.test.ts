@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vite
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
 import FileTree from "../components/FileTree.vue";
-import type { TreeNode } from "../composables/useFileTree";
+import type { TreeNode } from "../composables/useFileTree.svelte.ts";
 
 // 全局 i18n 实例（FileTree 使用 t("app.goUp") 渲染 title）
 const i18n = createI18n({

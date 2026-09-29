@@ -1,10 +1,9 @@
-import { ref, Ref } from "vue";
-
+/** 参数由 vue Ref 改为 { value } box，内部 .value 访问形状不变 */
 export function useScrollSpy(
-  containerRef: Ref<HTMLElement | null>,
-  bodyRef: Ref<HTMLElement | null>
+  containerRef: { value: HTMLElement | null },
+  bodyRef: { value: HTMLElement | null }
 ) {
-  const activeId = ref<string>("");
+  const activeId = $state<{ value: string }>({ value: "" });
   let raf = 0;
 
   function onScroll() {

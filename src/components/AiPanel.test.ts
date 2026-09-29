@@ -10,7 +10,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
 import AiPanel from "./AiPanel.vue";
-import type { AiAction } from "../composables/useAiPanel";
+import type { AiAction } from "../composables/useAiPanel.svelte.ts";
 import { AiError } from "../composables/aiProvider";
 
 const i18n = createI18n({

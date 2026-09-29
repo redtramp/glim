@@ -3,22 +3,18 @@
  *
  * 新代码应直接使用 useFileTreeStore。
  */
-import { computed } from "vue";
-import { storeToRefs } from "pinia";
 import {
   useFileTreeStore,
   parentDirOf,
   type DirEntry,
   type TreeNode,
-} from "../stores/useFileTreeStore";
+} from "../stores/fileTree.svelte.ts";
 
 export type { DirEntry, TreeNode };
 export { parentDirOf };
 
 export function useFileTree() {
   const store = useFileTreeStore();
-  const { rootDir, tree, loading, error } = storeToRefs(store);
-  const canGoUp = computed(() => store.canGoUp);
 
   async function refresh() {
     await store.refresh();
@@ -53,11 +49,33 @@ export function useFileTree() {
   }
 
   return {
-    rootDir,
-    tree,
-    loading,
-    error,
-    canGoUp,
+    get rootDir() {
+      return store.rootDir;
+    },
+    set rootDir(v: string) {
+      store.rootDir = v;
+    },
+    get tree() {
+      return store.tree;
+    },
+    set tree(v: TreeNode[]) {
+      store.tree = v;
+    },
+    get loading() {
+      return store.loading;
+    },
+    set loading(v: boolean) {
+      store.loading = v;
+    },
+    get error() {
+      return store.error;
+    },
+    set error(v: string) {
+      store.error = v;
+    },
+    get canGoUp() {
+      return store.canGoUp;
+    },
     refresh,
     loadChildren,
     openFolder,

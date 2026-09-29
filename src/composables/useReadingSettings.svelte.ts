@@ -3,15 +3,11 @@
  *
  * 新代码应直接使用 useReadingSettingsStore。
  */
-import { computed } from "vue";
-import { storeToRefs } from "pinia";
-import { useReadingSettingsStore } from "../stores/useReadingSettingsStore";
+import { useReadingSettingsStore } from "../stores/readingSettings.svelte.ts";
+import type { ReadingSettings } from "../stores/readingSettings.svelte.ts";
 
 export function useReadingSettings() {
   const store = useReadingSettingsStore();
-  const { settings } = storeToRefs(store);
-  const fontOptions = computed(() => store.fontOptions);
-  const editorFontOptions = computed(() => store.editorFontOptions);
 
   function apply() {
     store.apply();
@@ -58,9 +54,18 @@ export function useReadingSettings() {
   }
 
   return {
-    settings,
-    fontOptions,
-    editorFontOptions,
+    get settings() {
+      return store.settings;
+    },
+    set settings(v: ReadingSettings) {
+      store.settings = v;
+    },
+    get fontOptions() {
+      return store.fontOptions;
+    },
+    get editorFontOptions() {
+      return store.editorFontOptions;
+    },
     apply,
     setFontSize,
     setLineHeight,

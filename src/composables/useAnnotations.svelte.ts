@@ -12,7 +12,6 @@
  * 唯一 / 歧义 / 失败三条路径;与 Vue 状态(tabs/draftContent)的接线
  * 通过 AnnotationContext 注入,由 App.vue 提供,保持本模块可独立测试。
  */
-import { reactive } from "vue";
 import type { CriticType } from "./criticMarkup";
 import { stripCriticMarkup } from "./criticMarkup";
 import { copyTextToClipboard } from "./clipboard";
@@ -289,7 +288,8 @@ function anchorOffsetHint(
 }
 
 export function useAnnotations() {
-  const toolbar = reactive<AnnotationToolbarState>({
+  // 旧 vue reactive() → $state（per-call 实例语义不变）
+  const toolbar = $state<AnnotationToolbarState>({
     visible: false,
     x: 0,
     y: 0,

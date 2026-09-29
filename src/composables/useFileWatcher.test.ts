@@ -9,10 +9,8 @@
  * - 事件分发: listen 回调携带 payload 传给 handler
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mount, type VueWrapper } from "@vue/test-utils";
-import { defineComponent, type Component } from "vue";
-import { useFileWatcher } from "./useFileWatcher";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { useFileWatcher } from "./useFileWatcher.svelte.ts";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
@@ -23,21 +21,7 @@ import { listen } from "@tauri-apps/api/event";
 const mockedInvoke = vi.mocked(invoke);
 const mockedListen = vi.mocked(listen);
 
-/** 在组件上下文中挂载 composable，使 onUnmounted 生命周期生效 */
-function mountWatcher() {
-  let watcher: ReturnType<typeof useFileWatcher> | null = null;
-  const Wrapper = defineComponent({
-    setup() {
-      watcher = useFileWatcher();
-      return () => null;
-    },
-  });
-  const wrapper = mount(Wrapper as Component);
-  return { wrapper: wrapper as VueWrapper, getWatcher: () => watcher! };
-}
-
 describe("useFileWatcher", () => {
-  let wrapper: VueWrapper;
   let watcher: ReturnType<typeof useFileWatcher>;
   let eventHandler: ((ev: { payload: string[] }) => void) | null;
   let unlistenCalls: number;
@@ -56,13 +40,7 @@ describe("useFileWatcher", () => {
         unlistenCalls += 1;
       };
     }) as never);
-    const m = mountWatcher();
-    wrapper = m.wrapper;
-    watcher = m.getWatcher();
-  });
-
-  afterEach(() => {
-    wrapper?.unmount();
+    watcher = useFileWatcher();
   });
 
   describe("start", () => {
@@ -136,16 +114,6 @@ describe("useFileWatcher", () => {
       await watcher.watchFile("/root/a.md");
       const watchPathCalls = mockedInvoke.mock.calls.filter(([name]) => name === "watch_path");
       expect(watchPathCalls).toHaveLength(1); // 只有 stop 前的那次
-    });
-  });
-
-  describe("组件卸载", () => {
-    it("unmount 时自动 stop 清理监听", async () => {
-      await watcher.start("/root", vi.fn());
-      wrapper.unmount();
-      wrapper = null as unknown as VueWrapper; // 已卸载,避免 afterEach 重复 unmount
-      expect(unlistenCalls).toBe(1);
-      expect(mockedInvoke).toHaveBeenCalledWith("stop_watch");
     });
   });
 });

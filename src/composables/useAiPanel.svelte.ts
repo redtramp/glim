@@ -12,7 +12,6 @@
  * 错误归一:所有失败以 AiError{code, detail} 呈现,面板按 code 映射 i18n 文案。
  */
 
-import { reactive } from "vue";
 import {
   chatComplete,
   getAiSettings,
@@ -24,6 +23,7 @@ import { i18n } from "../i18n";
 export type AiAction = "summarize" | "translate" | "explain" | "rewrite";
 
 /** 需要选区的动作（无选区时面板禁用这些按钮） */
+// eslint-disable-next-line svelte/prefer-svelte-reactivity -- 只读常量集合，永不变更，无需响应式
 export const SELECTION_ACTIONS: ReadonlySet<AiAction> = new Set([
   "summarize",
   "translate",
@@ -99,7 +99,8 @@ export function buildAiMessages(
 export function useAiPanel(opts: { chat?: typeof chatComplete } = {}) {
   const chatImpl = opts.chat ?? chatComplete;
 
-  const state = reactive<AiPanelState>({
+  // 旧 vue reactive() → $state（per-call 实例语义不变）
+  const state = $state<AiPanelState>({
     visible: false,
     selectionText: "",
     result: "",

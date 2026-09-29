@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
 import TabBar from "./TabBar.vue";
-import type { Tab } from "../composables/useTabs";
+import type { Tab } from "../composables/useTabs.svelte.ts";
 
 const i18n = createI18n({
   locale: "zh-CN",

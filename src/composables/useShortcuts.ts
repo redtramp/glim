@@ -3,16 +3,13 @@
  *
  * 新代码应直接使用 useShortcutsStore。
  */
-import { useShortcutsStore } from "../stores/useShortcutsStore";
-import type { ShortcutTarget, ShortcutCategory, ShortcutDef } from "../stores/useShortcutsStore";
+import { useShortcutsStore } from "../stores/shortcuts.svelte.ts";
+import type { ShortcutTarget, ShortcutCategory, ShortcutDef } from "../stores/shortcuts.svelte.ts";
 
 export type { ShortcutTarget, ShortcutCategory, ShortcutDef };
 
 export function useShortcuts() {
   const store = useShortcutsStore();
-
-  const defs = store.defs;
-  const overrides = store.overrides;
 
   function getBinding(id: string): string {
     return store.getBinding(id);
@@ -62,8 +59,12 @@ export function useShortcuts() {
   }
 
   return {
-    defs,
-    overrides,
+    get defs() {
+      return store.defs;
+    },
+    get overrides() {
+      return store.overrides;
+    },
     getBinding,
     getDef,
     setBinding,

@@ -1,5 +1,3 @@
-import { defineStore } from "pinia";
-import { computed, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 
@@ -66,105 +64,103 @@ export function parentDirOf(p: string): string | null {
   return parent;
 }
 
-export const useFileTreeStore = defineStore("fileTree", () => {
-  const rootDir = ref<string>("");
-  const tree = ref<TreeNode[]>([]);
-  const loading = ref<boolean>(false);
-  const error = ref<string>("");
+/**
+ * 由 Pinia defineStore 迁移为 Svelte 5 模块级 $state。
+ * 方法与 computed getter 内联在 state 字面量上，保持旧实例全量 surface。
+ */
+export const fileTreeState = $state({
+  rootDir: "",
+  tree: [] as TreeNode[],
+  loading: false,
+  error: "",
 
-  const canGoUp = computed<boolean>(
-    () => rootDir.value !== "" && parentDirOf(rootDir.value) !== null
-  );
+  get canGoUp(): boolean {
+    return (
+      fileTreeState.rootDir !== "" && parentDirOf(fileTreeState.rootDir) !== null
+    );
+  },
 
-  async function refresh(): Promise<void> {
-    if (!rootDir.value) {
-      tree.value = [];
+  async refresh(): Promise<void> {
+    if (!fileTreeState.rootDir) {
+      fileTreeState.tree = [];
       return;
     }
-    loading.value = true;
-    error.value = "";
+    fileTreeState.loading = true;
+    fileTreeState.error = "";
     try {
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- 局部过程集合，无响应式依赖（与原 vue 行为一致）
       const loaded = new Map<string, TreeNode>();
-      collectLoadedDirs(tree.value, loaded);
-      const list = await invoke<DirEntry[]>("list_dir", { root: rootDir.value });
+      collectLoadedDirs(fileTreeState.tree, loaded);
+      const list = await invoke<DirEntry[]>("list_dir", {
+        root: fileTreeState.rootDir,
+      });
       const fresh = toNodes(list);
       await refreshLoadedDirs(fresh, loaded);
-      tree.value = fresh;
+      fileTreeState.tree = fresh;
     } catch (e: unknown) {
-      error.value = String((e as Error)?.message ?? e);
-      tree.value = [];
+      fileTreeState.error = String((e as Error)?.message ?? e);
+      fileTreeState.tree = [];
     } finally {
-      loading.value = false;
+      fileTreeState.loading = false;
     }
-  }
+  },
 
-  async function loadChildren(dir: TreeNode): Promise<void> {
+  async loadChildren(dir: TreeNode): Promise<void> {
     if (dir.loaded) return;
     try {
       const list = await invoke<DirEntry[]>("list_dir", { root: dir.path });
       dir.children = toNodes(list);
       dir.loaded = true;
     } catch (e: unknown) {
-      error.value = String((e as Error)?.message ?? e);
+      fileTreeState.error = String((e as Error)?.message ?? e);
       dir.children = [];
       dir.loaded = true;
     }
-  }
+  },
 
-  async function openFolder(): Promise<string | null> {
+  async openFolder(): Promise<string | null> {
     const selected = await open({ multiple: false, directory: true });
     if (typeof selected === "string") {
-      await changeRootDir(selected);
+      await fileTreeState.changeRootDir(selected);
       return selected;
     }
     return null;
-  }
+  },
 
-  async function changeRootDir(newDir: string) {
-    if (!newDir || newDir === rootDir.value) return;
-    rootDir.value = newDir;
-    await refresh();
-  }
+  async changeRootDir(newDir: string) {
+    if (!newDir || newDir === fileTreeState.rootDir) return;
+    fileTreeState.rootDir = newDir;
+    await fileTreeState.refresh();
+  },
 
-  async function setRootFromFile(filePath: string) {
+  async setRootFromFile(filePath: string) {
     const dir = parentDirOf(filePath);
-    if (dir) await changeRootDir(dir);
-  }
+    if (dir) await fileTreeState.changeRootDir(dir);
+  },
 
-  async function setHomeRoot() {
+  async setHomeRoot() {
     try {
       const home = await invoke<string>("get_home_dir");
-      if (home) await changeRootDir(home);
+      if (home) await fileTreeState.changeRootDir(home);
     } catch (e: unknown) {
-      error.value = String((e as Error)?.message ?? e);
+      fileTreeState.error = String((e as Error)?.message ?? e);
     }
-  }
+  },
 
-  function clearRoot(): void {
-    rootDir.value = "";
-    tree.value = [];
-  }
+  clearRoot(): void {
+    fileTreeState.rootDir = "";
+    fileTreeState.tree = [];
+  },
 
-  async function goUp(): Promise<string | null> {
-    if (!canGoUp.value) return null;
-    const parent = parentDirOf(rootDir.value)!;
-    await changeRootDir(parent);
+  async goUp(): Promise<string | null> {
+    if (!fileTreeState.canGoUp) return null;
+    const parent = parentDirOf(fileTreeState.rootDir)!;
+    await fileTreeState.changeRootDir(parent);
     return parent;
-  }
-
-  return {
-    rootDir,
-    tree,
-    loading,
-    error,
-    canGoUp,
-    refresh,
-    loadChildren,
-    openFolder,
-    changeRootDir,
-    setRootFromFile,
-    setHomeRoot,
-    clearRoot,
-    goUp,
-  };
+  },
 });
+
+/** 兼容旧调用形状: const store = useFileTreeStore(); store.canGoUp */
+export function useFileTreeStore() {
+  return fileTreeState;
+}

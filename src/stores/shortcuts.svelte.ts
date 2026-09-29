@@ -1,5 +1,3 @@
-import { defineStore } from "pinia";
-import { ref } from "vue";
 import { i18n } from "../i18n";
 import { loadJson, saveJson } from "../utils/storage";
 
@@ -63,61 +61,66 @@ const STORAGE = "glim-reader-shortcuts";
 
 const MODIFIER_KEYS = new Set(["Control", "Shift", "Alt", "Meta"]);
 
-export const useShortcutsStore = defineStore("shortcuts", () => {
-  const overrides = ref<Record<string, string>>(loadJson(STORAGE, {}));
+/**
+ * 由 Pinia defineStore 迁移为 Svelte 5 模块级 $state。
+ * 方法内联在 state 字面量上，保持旧实例全量 surface。
+ */
+export const shortcutsState = $state({
+  defs: DEFS,
+  overrides: loadJson<Record<string, string>>(STORAGE, {}),
 
-  function persist() {
-    saveJson(STORAGE, overrides.value);
-  }
+  persist() {
+    saveJson(STORAGE, shortcutsState.overrides);
+  },
 
-  function getBinding(id: string): string {
-    return overrides.value[id] ?? DEFAULTS[id] ?? "";
-  }
+  getBinding(id: string): string {
+    return shortcutsState.overrides[id] ?? DEFAULTS[id] ?? "";
+  },
 
-  function getDef(id: string): ShortcutDef | undefined {
+  getDef(id: string): ShortcutDef | undefined {
     return DEFS.find((d) => d.id === id);
-  }
+  },
 
-  function setBinding(
+  setBinding(
     id: string,
     combo: string
   ): { ok: boolean; conflict?: string } {
     const normalized = normalizeComboKey(combo);
     for (const def of DEFS) {
       if (def.readonly || def.id === id) continue;
-      if (getBinding(def.id) === normalized) {
+      if (shortcutsState.getBinding(def.id) === normalized) {
         return { ok: false, conflict: i18n.global.t(`shortcuts.${def.descKey}`) };
       }
     }
-    const next = { ...overrides.value };
+    const next = { ...shortcutsState.overrides };
     if (normalized === DEFAULTS[id]) {
       delete next[id];
     } else {
       next[id] = normalized;
     }
-    overrides.value = next;
-    persist();
+    shortcutsState.overrides = next;
+    shortcutsState.persist();
     return { ok: true };
-  }
+  },
 
-  function resetBinding(id: string) {
-    if (!(id in overrides.value)) return;
-    const next = { ...overrides.value };
+  resetBinding(id: string) {
+    if (!(id in shortcutsState.overrides)) return;
+    const next = { ...shortcutsState.overrides };
     delete next[id];
-    overrides.value = next;
-    persist();
-  }
+    shortcutsState.overrides = next;
+    shortcutsState.persist();
+  },
 
-  function resetAll() {
-    overrides.value = {};
-    persist();
-  }
+  resetAll() {
+    shortcutsState.overrides = {};
+    shortcutsState.persist();
+  },
 
-  function isCustom(id: string): boolean {
-    return id in overrides.value;
-  }
+  isCustom(id: string): boolean {
+    return id in shortcutsState.overrides;
+  },
 
-  function normalizeEvent(e: KeyboardEvent): string {
+  normalizeEvent(e: KeyboardEvent): string {
     const parts: string[] = [];
     if (e.ctrlKey || e.metaKey) parts.push("Ctrl");
     if (e.shiftKey) parts.push("Shift");
@@ -126,49 +129,38 @@ export const useShortcutsStore = defineStore("shortcuts", () => {
     if (key.length === 1) key = key.toLowerCase();
     parts.push(key);
     return parts.join("+");
-  }
+  },
 
-  function toCodeMirror(combo: string): string {
+  toCodeMirror(combo: string): string {
     return combo
       .split("+")
       .map((p) => (p === "Ctrl" ? "Mod" : p))
       .join("-");
-  }
+  },
 
-  function formatBinding(combo: string): string {
+  formatBinding(combo: string): string {
     const parts = combo.split("+");
     const last = parts[parts.length - 1];
     if (last.length === 1 && /[a-z]/.test(last)) {
       parts[parts.length - 1] = last.toUpperCase();
     }
     return parts.join("+");
-  }
+  },
 
-  function isValidCombo(combo: string): boolean {
+  isValidCombo(combo: string): boolean {
     if (!combo.includes("Ctrl")) return false;
     const parts = combo.split("+");
     const last = parts[parts.length - 1];
     if (MODIFIER_KEYS.has(last)) return false;
     return true;
-  }
+  },
 
-  function isModifierKey(key: string): boolean {
+  isModifierKey(key: string): boolean {
     return MODIFIER_KEYS.has(key);
-  }
-
-  return {
-    defs: DEFS,
-    overrides,
-    getBinding,
-    getDef,
-    setBinding,
-    resetBinding,
-    resetAll,
-    isCustom,
-    normalizeEvent,
-    toCodeMirror,
-    formatBinding,
-    isValidCombo,
-    isModifierKey,
-  };
+  },
 });
+
+/** 兼容旧调用形状: const store = useShortcutsStore(); store.overrides */
+export function useShortcutsStore() {
+  return shortcutsState;
+}

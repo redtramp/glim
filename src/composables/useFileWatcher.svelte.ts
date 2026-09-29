@@ -1,12 +1,13 @@
-import { onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 
 export type FileChangeHandler = (paths: string[]) => void;
 
 export function useFileWatcher() {
-  const watching = ref<string>("");
+  // 保留 .value 访问形状：$state box 替代 vue ref
+  const watching = $state<{ value: string }>({ value: "" });
   /** 当前 watcher 会话内已注册的额外监听目录（watch_path），避免同一目录重复 IPC */
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- 过程内注册去重集合，无响应式依赖（与原 vue 行为一致）
   const registeredPaths = new Set<string>();
   let unlisten: UnlistenFn | null = null;
 
@@ -55,9 +56,7 @@ export function useFileWatcher() {
     }
   }
 
-  onUnmounted(() => {
-    void stop();
-  });
+  // 旧 onUnmounted → 调用方显式调用 stop()（单测直接调用 stop）
 
   return { watching, start, stop, watchFile };
 }

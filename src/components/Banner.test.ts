@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
 import Banner from "./Banner.vue";
-import type { Tab } from "../composables/useTabs";
+import type { Tab } from "../composables/useTabs.svelte.ts";
 
 // 全局 i18n 实例
 const i18n = createI18n({

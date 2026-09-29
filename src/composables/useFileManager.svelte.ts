@@ -1,12 +1,11 @@
-import { ref, watch, computed } from "vue";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { i18n } from "../i18n";
-import { useTabsStore, samePath } from "../stores/useTabsStore";
-import { useAppStore } from "../stores/useAppStore";
-import { useHistoryStore } from "../stores/useHistoryStore";
-import { useFileTreeStore } from "../stores/useFileTreeStore";
-import { useUnsavedDialog } from "./useUnsavedDialog";
+import { useTabsStore, samePath } from "../stores/tabs.svelte.ts";
+import { useAppStore } from "../stores/app.svelte.ts";
+import { useHistoryStore } from "../stores/history.svelte.ts";
+import { useFileTreeStore } from "../stores/fileTree.svelte.ts";
+import { useUnsavedDialog } from "./useUnsavedDialog.svelte.ts";
 import { extractHeadings } from "./useMarkdown";
 
 export function useFileManager() {
@@ -16,10 +15,12 @@ export function useFileManager() {
   const fileTree = useFileTreeStore();
   const unsavedDialog = useUnsavedDialog();
 
-  const editorRef = ref<any>(null);
-  const isInitDone = ref(false);
+  // 保留 .value 访问形状：$state box 替代 vue ref
+  const editorRef = $state<{ value: any }>({ value: null });
+  const isInitDone = $state<{ value: boolean }>({ value: false });
 
-  const suppressed = ref(new Set<string>());
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- 仅事件回调读取，无 effect 依赖（与原 vue ref(Set) 行为一致）
+  const suppressed = $state<{ value: Set<string> }>({ value: new Set<string>() });
   function addSuppress(p: string) {
     suppressed.value.add(p.replace(/\\/g, "/").toLowerCase());
   }
@@ -360,14 +361,18 @@ export function useFileManager() {
     }
   }
 
-  watch(
-    () => editorRef.value?.file,
-    () => {
+  // 旧 watch（非立即）→ $effect.root 包裹 + 首次运行跳过；dispose 随返回对象导出
+  const disposeEffects = $effect.root(() => {
+    let first = true;
+    $effect(() => {
+      void editorRef.value?.file;
+      if (first) {
+        first = false;
+        return;
+      }
       void startWatching("");
-    }
-  );
-
-  const canClose = computed(() => tabs.tabs.length > 0);
+    });
+  });
 
   async function init() {
     if (isInitDone.value) return;
@@ -415,6 +420,9 @@ export function useFileManager() {
     onFilesChanged,
     stopWatching,
     init,
-    canClose,
+    get canClose() {
+      return tabs.tabs.length > 0;
+    },
+    dispose: disposeEffects,
   };
 }

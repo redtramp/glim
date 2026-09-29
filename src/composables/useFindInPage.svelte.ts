@@ -1,17 +1,21 @@
-import { ref, computed, Ref } from "vue";
-
 const HL = "find-highlight";
 const HL_ACTIVE = "find-highlight-active";
 /** 单次查找最大高亮数：避免常见词在大文档中产生海量 span 导致 DOM 爆炸/卡死 */
 const MAX_MATCHES = 1000;
 
-export function useFindInPage(bodyRef: Ref<HTMLElement | null>) {
-  const visible = ref(false);
-  const query = ref("");
-  const caseSensitive = ref(false);
-  const matches = ref<HTMLElement[]>([]);
-  const activeIndex = ref(0);
-  const total = computed(() => matches.value.length);
+/** 参数由 vue Ref 改为 { value } box，内部 .value 访问形状不变 */
+export function useFindInPage(bodyRef: { value: HTMLElement | null }) {
+  const visible = $state<{ value: boolean }>({ value: false });
+  const query = $state<{ value: string }>({ value: "" });
+  const caseSensitive = $state<{ value: boolean }>({ value: false });
+  const matches = $state<{ value: HTMLElement[] }>({ value: [] });
+  const activeIndex = $state<{ value: number }>({ value: 0 });
+  // 旧 computed → 普通 getter 对象，保持 total.value 访问形状
+  const total = {
+    get value(): number {
+      return matches.value.length;
+    },
+  };
 
   function clearHighlights() {
     const body = bodyRef.value;

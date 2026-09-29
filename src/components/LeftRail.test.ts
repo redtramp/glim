@@ -35,7 +35,7 @@ vi.mock("vue-i18n", () => ({
   }),
 }));
 
-function createWrapper(props: { activePanel: import("../composables/useFloatLayout").LeftPanelID | null }) {
+function createWrapper(props: { activePanel: import("../composables/useFloatLayout.svelte.ts").LeftPanelID | null }) {
   return mount(LeftRail, {
     props,
   });

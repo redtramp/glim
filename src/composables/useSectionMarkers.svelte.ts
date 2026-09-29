@@ -1,11 +1,3 @@
-import {
-  ref,
-  computed,
-  watch,
-  onUnmounted,
-  getCurrentInstance,
-  type Ref,
-} from "vue";
 import type { Heading } from "./useMarkdown";
 
 const SCROLL_OFFSET = 16;
@@ -20,11 +12,6 @@ function escapeCssId(id: string): string {
     : id;
 }
 
-/** 组件外调用（单元测试等）时跳过生命周期注册，避免 Vue 警告 */
-function tryOnUnmounted(fn: () => void): void {
-  if (getCurrentInstance()) onUnmounted(fn);
-}
-
 /**
  * 章节标记：追踪当前阅读到的标题，并提供平滑跳转。
  *
@@ -32,15 +19,22 @@ function tryOnUnmounted(fn: () => void): void {
  *   标题 / 视图容器变化或滚动停止后重建。
  * - 渲染时序安全：jumpTo 在目标位置尚未缓存时会先重建一次，
  *   保证「打开文档 → 立即跳转到锚点」在首次渲染后也能生效。
+ *
+ * 迁移说明（Svelte 5）：
+ * - 参数由 vue Ref 改为 { value } box，内部 .value 访问形状不变；
+ * - 旧 immediate watch → 同步初始化一次 + $effect（对基线变化才触发）；
+ * - 旧非 immediate deep watch → $effect 首次运行跳过；
+ * - 旧 tryOnUnmounted → 显式 dispose()。
  */
 export function useSectionMarkers(
-  headings: Ref<Heading[]>,
-  viewerEl: Ref<HTMLElement | null>,
-  bodyRef: Ref<HTMLElement | null>,
+  headings: { value: Heading[] },
+  viewerEl: { value: HTMLElement | null },
+  bodyRef: { value: HTMLElement | null },
 ) {
-  const activeId = ref("");
+  const activeId = $state<{ value: string }>({ value: "" });
 
   /** 标题 id → 滚动位置（缓存）；scrollMapDirty 时在下次读取前重建 */
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- 过程内滚动位置缓存（dirty 标记驱动重建），无响应式依赖
   const scrollMap = new Map<string, number>();
   let scrollMapDirty = true;
   /** 跳转序列号：用于防竞态，确保只有最新的 jumpTo 调用才能执行滚动 */
@@ -134,40 +128,68 @@ export function useSectionMarkers(
   }
 
   let scrollTarget: HTMLElement | null = null;
-  watch(
-    () => [viewerEl.value, bodyRef.value],
-    (next, prev) => {
-      // 注意：immediate 首次回调时 prev 为 undefined
-      const [el] = next;
-      const [prevEl] = prev ?? [null];
-      if (prevEl && prevEl !== el) prevEl.removeEventListener("scroll", onScroll);
-      if (el && el !== scrollTarget) {
-        el.addEventListener("scroll", onScroll, { passive: true });
-        scrollTarget = el;
+
+  /** 旧 immediate watch 回调（prev 缺省视为 [null]） */
+  function handleViewerChange(
+    next: [HTMLElement | null, HTMLElement | null],
+    prev: [HTMLElement | null, HTMLElement | null] | null,
+  ): void {
+    const [el] = next;
+    const [prevEl] = prev ?? [null];
+    if (prevEl && prevEl !== el) prevEl.removeEventListener("scroll", onScroll);
+    if (el && el !== scrollTarget) {
+      el.addEventListener("scroll", onScroll, { passive: true });
+      scrollTarget = el;
+    }
+    scrollMapDirty = true;
+    updateActiveId();
+  }
+
+  // 旧 immediate watch：同步初始化一次，随后 $effect 只在相对基线变化时触发
+  const baselineEls: [HTMLElement | null, HTMLElement | null] = [
+    viewerEl.value,
+    bodyRef.value,
+  ];
+  handleViewerChange(baselineEls, null);
+  let lastEls = baselineEls;
+
+  const disposeEffects = $effect.root(() => {
+    $effect(() => {
+      const next: [HTMLElement | null, HTMLElement | null] = [
+        viewerEl.value,
+        bodyRef.value,
+      ];
+      if (next[0] !== lastEls[0] || next[1] !== lastEls[1]) {
+        handleViewerChange(next, lastEls);
+        lastEls = next;
+      }
+    });
+
+    // 旧非 immediate deep watch：首次运行跳过
+    let firstHeadings = true;
+    $effect(() => {
+      void headings.value;
+      void headings.value.length;
+      if (firstHeadings) {
+        firstHeadings = false;
+        return;
       }
       scrollMapDirty = true;
       updateActiveId();
-    },
-    { immediate: true }
-  );
+    });
+  });
 
-  watch(
-    () => headings.value,
-    () => {
-      scrollMapDirty = true;
-      updateActiveId();
-    },
-    { deep: true }
-  );
-
-  tryOnUnmounted(() => {
+  /** 旧 tryOnUnmounted：显式清理（事件 / rAF / 定时器 / effect root） */
+  function dispose(): void {
     if (scrollTarget) scrollTarget.removeEventListener("scroll", onScroll);
     if (rafId !== null) cancelAnimationFrame(rafId);
     if (layoutTimer !== null) clearTimeout(layoutTimer);
-  });
+    disposeEffects();
+  }
 
   return {
-    activeId: computed(() => activeId.value),
+    activeId,
     jumpTo,
+    dispose,
   };
 }

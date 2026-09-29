@@ -1,5 +1,3 @@
-import { reactive } from "vue";
-
 export type LeftPanelID =
   | "filetree"
   | "history"
@@ -43,6 +41,7 @@ export const LEFT_PANEL_META: LeftPanelMeta[] = [
 ];
 
 /** 动作类面板 ID（不展开浮层，直接执行动作） */
+// eslint-disable-next-line svelte/prefer-svelte-reactivity -- 只读常量集合，永不变更，无需响应式
 export const ACTION_PANEL_IDS: ReadonlySet<LeftPanelID> = new Set([
   "locale-toggle",
   "theme-toggle",
@@ -57,14 +56,17 @@ const CLOSE_EXEMPT_SELECTORS =
   ".floating-panel, .left-rail, .menu-overlay, .context-menu, .context-menu-overlay, .annotation-toolbar, .search-overlay";
 
 export function useFloatLayout() {
-  const state = reactive({
+  // 旧 vue reactive() → 函数级 $state（保留 per-call 实例语义）
+  const state = $state({
     activeLeftPanel: null as LeftPanelID | null,
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- 初始值；后续写入走整体重赋值，字段赋值可触发依赖
     leftPanelLoaded: new Set<LeftPanelID>(),
   });
 
   let globalClickHandler: ((e: MouseEvent) => void) | null = null;
 
   function openPanel(id: LeftPanelID): void {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- 整体重赋值可触发字段依赖，无需 SvelteSet
     state.leftPanelLoaded = new Set(state.leftPanelLoaded).add(id);
     state.activeLeftPanel = state.activeLeftPanel === id ? null : id;
   }

@@ -6,7 +6,6 @@
  * 为该目录追加会话级读写授权，再自动重试一次打开。
  * 非授权类错误原样抛出，不打断既有错误提示逻辑。
  */
-import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { dirOf } from "../utils/path";
@@ -21,8 +20,9 @@ export function isForbiddenError(err: unknown): boolean {
 }
 
 export function useFsAuthorize() {
-  const showGrantDialog = ref(false);
-  const grantDir = ref("");
+  // 保留 .value 访问形状：$state box 替代 vue ref
+  const showGrantDialog = $state<{ value: boolean }>({ value: false });
+  const grantDir = $state<{ value: string }>({ value: "" });
   let grantResolve: ((allowed: boolean) => void) | null = null;
 
   /** 显示授权提示，返回用户是否授权（已有提示在等待时直接拒绝） */

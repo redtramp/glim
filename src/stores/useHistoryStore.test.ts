@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { createPinia, setActivePinia } from "pinia";
-import { useHistoryStore } from "./useHistoryStore";
+import { useHistoryStore } from "./history.svelte.ts";
 
 const STORAGE_RECENT = "glim-reader-recent";
 
@@ -29,7 +28,10 @@ Object.defineProperty(globalThis, "localStorage", {
 
 describe("useHistoryStore", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
+    // 模块级单例：直接清空状态（不经 clearRecent，避免写入计数被污染）
+    const s = useHistoryStore();
+    s.recent = [];
+    s.scrollMap = {};
     for (const k in mockStorage) delete mockStorage[k];
     recentWrites = 0;
   });

@@ -4,22 +4,18 @@
  * 所有导入 useTabs 的组件无需修改即可继续工作。
  * 新代码应直接使用 useTabsStore。
  */
-import { computed } from "vue";
-import { storeToRefs } from "pinia";
 import {
   useTabsStore,
   normalizePath,
   samePath,
   type Tab,
-} from "../stores/useTabsStore";
+} from "../stores/tabs.svelte.ts";
 
 export type { Tab };
 export { normalizePath, samePath };
 
 export function useTabs() {
   const store = useTabsStore();
-  const { tabs, activeTabId } = storeToRefs(store);
-  const activeTab = computed(() => store.activeTab);
 
   function findTabByPath(path: string): Tab | undefined {
     return store.findTabByPath(path);
@@ -62,9 +58,21 @@ export function useTabs() {
   }
 
   return {
-    tabs,
-    activeTabId,
-    activeTab,
+    get tabs() {
+      return store.tabs;
+    },
+    set tabs(v: Tab[]) {
+      store.tabs = v;
+    },
+    get activeTabId() {
+      return store.activeTabId;
+    },
+    set activeTabId(v: string) {
+      store.activeTabId = v;
+    },
+    get activeTab() {
+      return store.activeTab;
+    },
     findTabByPath,
     activateTab,
     removeTab,

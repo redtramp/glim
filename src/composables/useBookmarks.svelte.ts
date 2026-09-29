@@ -9,7 +9,6 @@
  *   bookmarks.remove(id);
  *   const list = bookmarks.forFile(currentPath);
  */
-import { ref } from "vue";
 
 export interface Bookmark {
   /** 唯一标识 */
@@ -42,8 +41,10 @@ function saveAll(entries: Bookmark[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 }
 
+// Ruling 6：模块级共享状态（不导出），保持 .value 访问形状
+const bookmarks = $state<{ value: Bookmark[] }>({ value: loadAll() });
+
 export function useBookmarks() {
-  const bookmarks = ref<Bookmark[]>(loadAll());
 
   function persist(): void {
     saveAll(bookmarks.value);
@@ -89,6 +90,7 @@ export function useBookmarks() {
 
   /** 获取所有书签，按文件路径分组 */
   function groupedByFile(): Map<string, Bookmark[]> {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- 局部过程集合，无响应式依赖（与原 vue 行为一致）
     const map = new Map<string, Bookmark[]>();
     for (const bm of bookmarks.value) {
       const list = map.get(bm.filePath);

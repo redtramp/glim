@@ -5,10 +5,9 @@
  * 重试仍失败时抛出、提示未决期间的并发请求直接拒绝。
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { nextTick } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { readTextFile } from "@tauri-apps/plugin-fs";
-import { useFsAuthorize, isForbiddenError } from "./useFsAuthorize";
+import { useFsAuthorize, isForbiddenError } from "./useFsAuthorize.svelte.ts";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/plugin-fs", () => ({ readTextFile: vi.fn() }));
@@ -22,8 +21,8 @@ const DIR = "/opt/app/.config";
 
 /** 让被拒绝的 Promise 与后续微任务链推进到弹窗状态 */
 async function settle() {
-  await nextTick();
-  await nextTick();
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 beforeEach(() => {

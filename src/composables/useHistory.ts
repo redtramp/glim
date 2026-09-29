@@ -3,15 +3,13 @@
  *
  * 新代码应直接使用 useHistoryStore。
  */
-import { storeToRefs } from "pinia";
-import { useHistoryStore } from "../stores/useHistoryStore";
-import type { RecentItem } from "../stores/useHistoryStore";
+import { useHistoryStore } from "../stores/history.svelte.ts";
+import type { RecentItem } from "../stores/history.svelte.ts";
 
 export type { RecentItem };
 
 export function useHistory() {
   const store = useHistoryStore();
-  const { recent } = storeToRefs(store);
 
   function pushRecent(path: string) {
     store.pushRecent(path);
@@ -34,7 +32,9 @@ export function useHistory() {
   }
 
   return {
-    recent,
+    get recent() {
+      return store.recent;
+    },
     pushRecent,
     pushRecentBatch,
     clearRecent,

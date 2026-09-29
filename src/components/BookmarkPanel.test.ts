@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
 import BookmarkPanel from "./BookmarkPanel.vue";
-import type { Bookmark } from "../composables/useBookmarks";
+import type { Bookmark } from "../composables/useBookmarks.svelte.ts";
 
 const STORAGE_KEY = "glim-reader-bookmarks";
 
