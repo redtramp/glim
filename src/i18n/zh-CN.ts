@@ -258,6 +258,7 @@ const zhCN = {
   },
   review: {
     title: "审阅批注",
+    close: "关闭",
     accept: "接受",
     reject: "拒绝",
     acceptAll: "全部接受",

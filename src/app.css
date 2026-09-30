@@ -120,3 +120,25 @@
     opacity: 1;
   }
 }
+
+/* Task 7：ShortcutsDialog 录制态呼吸 / AiPanelInline 加载态呼吸
+   （原组件内 @keyframes pulse / ai-pulse，<style> 删除后必须全局声明） */
+@keyframes scPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes aiPulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}

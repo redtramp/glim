@@ -263,6 +263,7 @@ const enUS = {
   },
   review: {
     title: "Review annotations",
+    close: "Close",
     accept: "Accept",
     reject: "Reject",
     acceptAll: "Accept all",

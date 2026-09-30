@@ -1,5 +1,5 @@
 /**
- * FileTree 组件测试
+ * FileTree 组件测试（Vue test-utils → @testing-library/svelte 迁移）
  *
  * 测试目标：
  * - 默认全部折叠（懒加载：点击三角才加载并展开下一级，仅下一级）
@@ -9,22 +9,22 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
-import { mount, type VueWrapper } from "@vue/test-utils";
-import { createI18n } from "vue-i18n";
-import FileTree from "../components/FileTree.vue";
+import { render, fireEvent, cleanup } from "@testing-library/svelte";
+import { tick } from "svelte";
+import FileTree from "./FileTree.svelte";
 import type { TreeNode } from "../composables/useFileTree.svelte.ts";
 
-// 全局 i18n 实例（FileTree 使用 t("app.goUp") 渲染 title）
-const i18n = createI18n({
-  locale: "zh-CN",
-  messages: {
-    "zh-CN": {
-      app: {
-        goUp: "上一级目录",
-      },
-    },
+// Mock 自研 i18n（FileTree 使用 t("app.goUp") 渲染 title）
+vi.mock("../i18n/locale.svelte.ts", () => ({
+  t: (key: string) => {
+    const map: Record<string, string> = { "app.goUp": "上一级目录" };
+    return map[key] ?? key;
   },
-});
+  locale: { value: "zh-CN" },
+  setLocale: vi.fn(),
+  persistLocale: vi.fn(),
+  detectLocale: vi.fn(() => "zh-CN"),
+}));
 
 // ─── Mock TreeNode 工厂 ───────────────────────────────────────
 // loaded=true 表示子级已加载（children 存在）；false 表示尚未懒加载
@@ -60,32 +60,39 @@ const sampleNodes: TreeNode[] = [
 ];
 
 // 目录行是否处于折叠状态（.row.dir 上的 is-collapsed class）
-function isCollapsed(wrapper: VueWrapper, idx: number): boolean {
-  return Boolean(wrapper.findAll(".dir")[idx]?.classes("is-collapsed"));
+function isCollapsed(container: HTMLElement, idx: number): boolean {
+  return Boolean(
+    container.querySelectorAll(".dir")[idx]?.classList.contains("is-collapsed")
+  );
 }
 
 // ─── 测试 ─────────────────────────────────────────────────────
 
 describe("FileTree", () => {
-  let wrapper: VueWrapper;
   let mockScrollIntoView: ReturnType<typeof vi.fn>;
   let mockScrollContainer: HTMLElement;
   let loadChildrenMock: Mock<(node: TreeNode) => Promise<void>>;
 
-  function renderTree(nodes: TreeNode[], currentPath = "", extra: object = {}) {
-    const w = mount(FileTree, {
+  function renderTree(
+    nodes: TreeNode[],
+    currentPath = "",
+    extra: Record<string, unknown> = {}
+  ) {
+    const onOpen = vi.fn();
+    const onGoUp = vi.fn();
+    const result = render(FileTree, {
       props: {
         nodes,
         currentPath,
         scrollContainer: mockScrollContainer,
         loadChildren: loadChildrenMock,
+        onOpen,
+        onGoUp,
         ...extra,
       },
-      global: { plugins: [i18n] },
-      attachTo: document.body,
     });
-    mockScrollContainer.appendChild(w.element);
-    return w;
+    mockScrollContainer.appendChild(result.container);
+    return { ...result, onOpen, onGoUp };
   }
 
   beforeEach(() => {
@@ -101,7 +108,7 @@ describe("FileTree", () => {
   });
 
   afterEach(() => {
-    wrapper?.unmount();
+    cleanup();
     mockScrollContainer.remove();
     delete (window.HTMLElement.prototype as any).scrollIntoView;
   });
@@ -110,15 +117,15 @@ describe("FileTree", () => {
 
   describe("rendering", () => {
     it("renders root-level files, keeping directories collapsed by default", () => {
-      wrapper = renderTree(sampleNodes, "");
-      expect(wrapper.find(".tree.root").exists()).toBe(true);
+      const { container } = renderTree(sampleNodes, "");
+      expect(container.querySelector(".tree.root")).not.toBeNull();
       // 目录默认折叠：docs 的子文件不可见，只有根层 README.md
-      expect(wrapper.findAll(".file").length).toBe(1);
-      expect(wrapper.findAll(".file")[0].find(".name").text()).toBe(
-        "README.md"
-      );
+      expect(container.querySelectorAll(".file").length).toBe(1);
+      expect(
+        container.querySelectorAll(".file")[0].querySelector(".name")!.textContent
+      ).toBe("README.md");
       // 所有可见目录默认折叠
-      expect(isCollapsed(wrapper, 0)).toBe(true);
+      expect(isCollapsed(container, 0)).toBe(true);
     });
   });
 
@@ -126,18 +133,18 @@ describe("FileTree", () => {
 
   describe("toggle & lazy load", () => {
     it("expands a loaded directory on click and collapses on second click", async () => {
-      wrapper = renderTree(sampleNodes, "");
-      expect(isCollapsed(wrapper, 0)).toBe(true);
+      const { container } = renderTree(sampleNodes, "");
+      expect(isCollapsed(container, 0)).toBe(true);
 
-      await wrapper.findAll(".dir")[0].trigger("click");
-      await wrapper.vm.$nextTick();
-      expect(isCollapsed(wrapper, 0)).toBe(false);
+      await fireEvent.click(container.querySelectorAll(".dir")[0]);
+      await tick();
+      expect(isCollapsed(container, 0)).toBe(false);
       // 展开后 docs 的子文件可见（guide.md + README.md）
-      expect(wrapper.findAll(".file").length).toBe(2);
+      expect(container.querySelectorAll(".file").length).toBe(2);
 
-      await wrapper.findAll(".dir")[0].trigger("click");
-      await wrapper.vm.$nextTick();
-      expect(isCollapsed(wrapper, 0)).toBe(true);
+      await fireEvent.click(container.querySelectorAll(".dir")[0]);
+      await tick();
+      expect(isCollapsed(container, 0)).toBe(true);
     });
 
     it("lazy-loads children via loadChildren when clicking an unloaded directory", async () => {
@@ -149,16 +156,16 @@ describe("FileTree", () => {
         node.children = [makeFile("guide.md", "/root/docs/guide.md")];
         node.loaded = true;
       });
-      wrapper = renderTree(unloaded, "");
+      const { container } = renderTree(unloaded, "");
 
-      await wrapper.findAll(".dir")[0].trigger("click");
+      await fireEvent.click(container.querySelectorAll(".dir")[0]);
       expect(loadChildrenMock).toHaveBeenCalledWith(unloaded[0]);
-      await wrapper.vm.$nextTick();
+      await tick();
 
-      expect(isCollapsed(wrapper, 0)).toBe(false);
-      const names = wrapper
-        .findAll(".file")
-        .map((f) => f.find(".name").text());
+      expect(isCollapsed(container, 0)).toBe(false);
+      const names = Array.from(container.querySelectorAll(".file")).map(
+        (f) => f.querySelector(".name")!.textContent
+      );
       expect(names).toContain("guide.md");
       expect(names).toContain("README.md");
     });
@@ -168,11 +175,11 @@ describe("FileTree", () => {
         makeDir("docs", "/root/docs", undefined, false),
       ];
       loadChildrenMock.mockRejectedValue(new Error("boom"));
-      wrapper = renderTree(unloaded, "");
+      const { container } = renderTree(unloaded, "");
 
-      await wrapper.findAll(".dir")[0].trigger("click");
-      await wrapper.vm.$nextTick();
-      expect(isCollapsed(wrapper, 0)).toBe(true);
+      await fireEvent.click(container.querySelectorAll(".dir")[0]);
+      await tick();
+      expect(isCollapsed(container, 0)).toBe(true);
     });
   });
 
@@ -180,25 +187,25 @@ describe("FileTree", () => {
 
   describe("active highlighting", () => {
     it("marks the current file as active once its directory is expanded", async () => {
-      wrapper = renderTree(sampleNodes, "/root/docs/guide.md");
+      const { container } = renderTree(sampleNodes, "/root/docs/guide.md");
       // 目录默认折叠，active 文件不可见
-      expect(wrapper.find(".row.file.active").exists()).toBe(false);
+      expect(container.querySelector(".row.file.active")).toBeNull();
 
-      await wrapper.findAll(".dir")[0].trigger("click");
-      await wrapper.vm.$nextTick();
-      const active = wrapper.find(".row.file.active");
-      expect(active.exists()).toBe(true);
-      expect(active.find(".name").text()).toBe("guide.md");
+      await fireEvent.click(container.querySelectorAll(".dir")[0]);
+      await tick();
+      const active = container.querySelector(".row.file.active");
+      expect(active).not.toBeNull();
+      expect(active!.querySelector(".name")!.textContent).toBe("guide.md");
     });
 
     it("does not mark non-current files as active", async () => {
-      wrapper = renderTree(sampleNodes, "/root/docs/guide.md");
-      await wrapper.findAll(".dir")[0].trigger("click");
-      await wrapper.vm.$nextTick();
-      const readmeFile = wrapper
-        .findAll(".row.file")
-        .find((el) => el.find(".name").text() === "README.md");
-      expect(readmeFile?.classes("active")).toBe(false);
+      const { container } = renderTree(sampleNodes, "/root/docs/guide.md");
+      await fireEvent.click(container.querySelectorAll(".dir")[0]);
+      await tick();
+      const readmeFile = Array.from(
+        container.querySelectorAll(".row.file")
+      ).find((el) => el.querySelector(".name")!.textContent === "README.md");
+      expect(readmeFile!.classList.contains("active")).toBe(false);
     });
   });
 
@@ -206,16 +213,16 @@ describe("FileTree", () => {
 
   describe("scroll on currentPath change", () => {
     it("scrolls the active file into view without auto-expanding collapsed dirs", async () => {
-      wrapper = renderTree(sampleNodes, "");
-      await wrapper.findAll(".dir")[0].trigger("click");
-      await wrapper.vm.$nextTick();
+      const { container, rerender } = renderTree(sampleNodes, "");
+      await fireEvent.click(container.querySelectorAll(".dir")[0]);
+      await tick();
 
-      await wrapper.setProps({ currentPath: "/root/docs/guide.md" });
+      await rerender({ currentPath: "/root/docs/guide.md" });
       await new Promise((r) => setTimeout(r, 100));
 
       expect(mockScrollIntoView).toHaveBeenCalled();
       // 保持展开状态：当前文件所在目录由用户手动控制，不自动摊开其他目录
-      expect(isCollapsed(wrapper, 0)).toBe(false);
+      expect(isCollapsed(container, 0)).toBe(false);
     });
   });
 
@@ -223,26 +230,32 @@ describe("FileTree", () => {
 
   describe("reset on root change", () => {
     it("collapses all directories when rootDir changes", async () => {
-      wrapper = renderTree(sampleNodes, "/root/docs/guide.md");
-      await wrapper.findAll(".dir")[0].trigger("click");
-      await wrapper.vm.$nextTick();
-      expect(isCollapsed(wrapper, 0)).toBe(false);
+      const { container, rerender } = renderTree(
+        sampleNodes,
+        "/root/docs/guide.md"
+      );
+      await fireEvent.click(container.querySelectorAll(".dir")[0]);
+      await tick();
+      expect(isCollapsed(container, 0)).toBe(false);
 
-      await wrapper.setProps({ rootDir: "/other" });
-      await wrapper.vm.$nextTick();
+      await rerender({ rootDir: "/other" });
+      await tick();
       // 新树按折叠状态渲染，避免旧展开状态残留
-      expect(isCollapsed(wrapper, 0)).toBe(true);
+      expect(isCollapsed(container, 0)).toBe(true);
     });
 
     it("collapses all directories when focusKey changes", async () => {
-      wrapper = renderTree(sampleNodes, "/root/docs/guide.md");
-      await wrapper.findAll(".dir")[0].trigger("click");
-      await wrapper.vm.$nextTick();
-      expect(isCollapsed(wrapper, 0)).toBe(false);
+      const { container, rerender } = renderTree(
+        sampleNodes,
+        "/root/docs/guide.md"
+      );
+      await fireEvent.click(container.querySelectorAll(".dir")[0]);
+      await tick();
+      expect(isCollapsed(container, 0)).toBe(false);
 
-      await wrapper.setProps({ focusKey: 1 });
-      await wrapper.vm.$nextTick();
-      expect(isCollapsed(wrapper, 0)).toBe(true);
+      await rerender({ focusKey: 1 });
+      await tick();
+      expect(isCollapsed(container, 0)).toBe(true);
     });
   });
 
@@ -250,20 +263,24 @@ describe("FileTree", () => {
 
   describe("go up navigation", () => {
     it("renders .. entry at root level when canGoUp is true", () => {
-      wrapper = renderTree(sampleNodes, "", { canGoUp: true });
-      expect(wrapper.find(".go-up").exists()).toBe(true);
-      expect(wrapper.find(".go-up .name").text()).toBe("..");
+      const { container } = renderTree(sampleNodes, "", { canGoUp: true });
+      expect(container.querySelector(".go-up")).not.toBeNull();
+      expect(
+        container.querySelector(".go-up .name")!.textContent
+      ).toBe("..");
     });
 
     it("does not render .. entry when canGoUp is false", () => {
-      wrapper = renderTree(sampleNodes, "");
-      expect(wrapper.find(".go-up").exists()).toBe(false);
+      const { container } = renderTree(sampleNodes, "");
+      expect(container.querySelector(".go-up")).toBeNull();
     });
 
-    it("emits go-up when .. is clicked", async () => {
-      wrapper = renderTree(sampleNodes, "", { canGoUp: true });
-      await wrapper.find(".go-up").trigger("click");
-      expect(wrapper.emitted("go-up")).toBeTruthy();
+    it("triggers go-up when .. is clicked", async () => {
+      const { container, onGoUp } = renderTree(sampleNodes, "", {
+        canGoUp: true,
+      });
+      await fireEvent.click(container.querySelector(".go-up")!);
+      expect(onGoUp).toHaveBeenCalled();
     });
   });
 
@@ -271,13 +288,13 @@ describe("FileTree", () => {
 
   describe("edge cases", () => {
     it("does not crash when currentPath is empty", () => {
-      wrapper = renderTree(sampleNodes, "");
-      expect(wrapper.find(".row.file.active").exists()).toBe(false);
+      const { container } = renderTree(sampleNodes, "");
+      expect(container.querySelector(".row.file.active")).toBeNull();
     });
 
     it("does not crash when currentPath points to a non-existent file", () => {
-      wrapper = renderTree(sampleNodes, "/nonexistent/file.md");
-      expect(wrapper.find(".row.file.active").exists()).toBe(false);
+      const { container } = renderTree(sampleNodes, "/nonexistent/file.md");
+      expect(container.querySelector(".row.file.active")).toBeNull();
     });
 
     it("handles flat file list without directories", () => {
@@ -285,10 +302,12 @@ describe("FileTree", () => {
         makeFile("a.md", "/root/a.md"),
         makeFile("b.md", "/root/b.md"),
       ];
-      wrapper = renderTree(flatNodes, "/root/a.md");
-      expect(wrapper.find(".row.file.active").find(".name").text()).toBe(
-        "a.md"
-      );
+      const { container } = renderTree(flatNodes, "/root/a.md");
+      expect(
+        container
+          .querySelector(".row.file.active")!
+          .querySelector(".name")!.textContent
+      ).toBe("a.md");
     });
   });
 });
