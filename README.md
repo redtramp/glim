@@ -36,7 +36,7 @@
 
 ## 简介
 
-Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与编辑器，基于 **Tauri 2 + Vue 3 + Rust** 构建。
+Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与编辑器，基于 **Tauri 2 + Svelte 5 + Rust** 构建。
 
 体积小（约 10 MB），启动快，支持多标签页、源码编辑、公式、图表、代码高亮、懒加载文件树、全文搜索，以及 PDF / HTML / DOCX 导出与打印。
 
@@ -215,7 +215,7 @@ pnpm tauri build
 
 ## 技术栈
 
-Tauri 2 · Vue 3 · TypeScript · Vite · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · vue-i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / http / window-state / system-fonts
+Tauri 2 · Svelte 5 · TypeScript · Vite · Tailwind CSS 4 · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · Svelte 5 runes 自研 i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / http / window-state / system-fonts
 
 ---
 

@@ -57,7 +57,7 @@
 </script>
 
 <div
-  class={"top-trigger pointer-events-auto fixed top-0 right-0 left-0 z-[39] cursor-default transition-[height] duration-150 ease-[ease] " +
+  class={"top-trigger pointer-events-auto fixed top-0 right-0 left-0 z-[39] cursor-default transition-[height] duration-150 ease-[ease] max-lg:hidden " +
     (hovered ? "h-3" : "h-2")}
   role="presentation"
   onmouseenter={onMouseEnter}

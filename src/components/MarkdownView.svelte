@@ -637,14 +637,17 @@
 
 <!--
   容器样式（原 .markdown-body scoped 规则，reader.css 未拥有）译为工具类；
-  .markdown-body 类名保留供 legacy 后代选择器与测试查询。
+  .markdown-body 类名保留供测试与 JS 查询（原 legacy 后代选择器已于 Task 12 删除，
+  响应式留白改由工具类承载（注：v4 内建 max-xl=<1280px 与 legacy 1199px 断点不符，
+  故用 max-[1199px] 任意变体——它与 max-lg/max-md 同族按宽度降序排列保证级联；
+  唯一边界差：v4 语义为 <1199px，恰好 1199px 宽时停用 56px 留白，差 1px 量级）。
   role="presentation"：正文区整体可点（图片/Mermaid 进预览），Svelte a11y
   对静态/非交互元素挂交互事件会编译告警，仓库既有惯例以 presentation 消除。
 -->
 <article
   bind:this={rootEl}
   role="presentation"
-  class="markdown-body mx-auto max-w-[var(--reader-max-width,900px)] px-12 pt-8 pb-20 text-fg [font-family:var(--reader-font-family,inherit)] [font-size:var(--reader-font-size,16px)] [line-height:var(--reader-line-height,1.75)] dark:rounded-none dark:border-0 dark:bg-transparent dark:shadow-none"
+  class="markdown-body mx-auto max-w-[var(--reader-max-width,900px)] px-12 pt-8 pb-20 text-fg max-[1199px]:px-14 max-lg:px-12 max-md:px-5 [font-family:var(--reader-font-family,inherit)] [font-size:var(--reader-font-size,16px)] [line-height:var(--reader-line-height,1.75)] dark:rounded-none dark:border-0 dark:bg-transparent dark:shadow-none"
   oncontextmenu={onContextMenu}
   onclick={onContentClick}
 >

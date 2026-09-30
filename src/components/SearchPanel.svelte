@@ -191,7 +191,7 @@ const icActive = icBase + " active bg-active text-link";
       {#if loading}
         <span>{t("search.searching")}</span>
       {:else if error}
-        <span class="error">{error}</span>
+        <span class="error cursor-pointer px-4 py-2 text-xs text-danger bg-[rgba(207,34,46,0.08)]">{error}</span>
       {:else if query.trim() && results.length === 0}
         <span>{t("search.noMatches")}</span>
       {:else if results.length > 0}
@@ -199,7 +199,7 @@ const icActive = icBase + " active bg-active text-link";
           {results.length} {t("search.matches")} · {grouped.length} {t("search.files")}
         </span>
       {:else}
-        <span class="muted">{t("search.typeToSearch")}</span>
+        <span class="muted text-fg-muted">{t("search.typeToSearch")}</span>
       {/if}
     </div>
     <div class="results min-h-0 flex-1 overflow-auto text-[12px]">

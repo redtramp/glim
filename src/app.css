@@ -168,3 +168,78 @@
     transform: none;
   }
 }
+
+/* ================= Task 12：自 legacy-components.css 迁入的真全局规则 =================
+   这些规则作用于全局元素/伪元素（非组件局部），无法用单个工具类表达；
+   迁入时保持未分层原样，保证与迁移前优先级一致（零行为差）。 */
+
+/* CRT 扫描线：全屏细线叠加，仅暗色主题生效，pointer-events 穿透 */
+.app::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.028) 0px,
+    rgba(255, 255, 255, 0.028) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  display: none;
+}
+:root[data-theme="dark"] .app::after {
+  display: block;
+}
+
+/* 全局键盘焦点环（无障碍） */
+:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* 交互元素平滑过渡（原 legacy 全局规则，保持未分层以免与组件 transition 工具类争优先级） */
+button,
+a,
+[role="button"],
+input,
+select,
+textarea,
+.cursor-pointer {
+  transition: color 0.15s ease, background-color 0.15s ease,
+    border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 关闭 CRT 扫描线（游标闪烁改由 .caret 的 motion-reduce:hidden 工具类承担） */
+  .app::after {
+    display: none !important;
+  }
+}
+
+/* 导出成功提示浮出（.toast 的 animate-[toastSlideUp_...] 引用；transform 与居中
+   共用同一属性，动画期间接管、结束后回落到 [transform:translateX(-50%)] 工具类） */
+@keyframes toastSlideUp {
+  from {
+    transform: translate(-50%, 100%);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+/* 顶栏品牌磷光游标闪烁（.toolbar-brand .caret 的 animate-[mdr-caret-blink_...] 引用） */
+@keyframes mdr-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}

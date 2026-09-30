@@ -5,8 +5,9 @@
  * - Vue `defineProps`（16 个）/ `defineEmits`（18 个）→ `$props()` + `onXxx` 回调 props
  * - 8 个子组件 import 全部指向已迁移的 `.svelte`（Ruling 1）
  * - `ref<HTMLElement>("treeScrollEl")` → `$state` + `bind:this`
- * - 无 `<style>` 块：`float-panel-header/body`、`tree-scroll`、`empty-tip` 均为
- *   legacy-components.css 的全局类，按 Ruling 11 保留原样（App 侧未引用，纯本组件渲染）
+ * - 无 `<style>` 块：Task 12 已将原 legacy-components.css 的
+ *   `float-panel-header/body`、`tree-scroll`、`empty-tip` 逐条译为工具类
+ *   （类名 token 保留，供 JS/测试查询；FileTree 测试 mock 依赖 .tree-scroll）
  */
 import FloatingPanel from "./FloatingPanel.svelte";
 import FileTree from "./FileTree.svelte";
@@ -107,8 +108,8 @@ let treeScrollEl = $state<HTMLElement | null>(null);
   onClose={floatState.closePanel}
 >
   {#if floatState.activeLeftPanel === "filetree"}
-    <div class="float-panel-header">{t("float.filetree")}</div>
-    <div class="float-panel-body tree-scroll" bind:this={treeScrollEl}>
+    <div class="float-panel-header flex-none px-4 pt-3 pb-2 text-xs uppercase tracking-[0.6px] text-float-panel-header-fg border-b border-float-panel-header-border">{t("float.filetree")}</div>
+    <div class="float-panel-body tree-scroll flex-1 min-h-0 overflow-auto flex flex-col" bind:this={treeScrollEl}>
       {#if rootDir}
         <FileTree
           nodes={tree}
@@ -122,7 +123,7 @@ let treeScrollEl = $state<HTMLElement | null>(null);
           onGoUp={onGoUp}
         />
       {:else}
-        <div class="empty-tip">{t("app.openFolderHint")}</div>
+        <div class="empty-tip p-4 text-xs text-fg-muted text-center">{t("app.openFolderHint")}</div>
       {/if}
     </div>
   {:else if floatState.activeLeftPanel === "history"}

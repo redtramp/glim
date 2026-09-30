@@ -57,7 +57,7 @@ const groupBoundaries = new Set(
 </script>
 
 <nav
-  class="left-rail fixed left-0 top-0 bottom-0 z-[45] flex w-10 flex-col items-center border-r-[0.5px] border-black/[0.04] bg-[var(--float-left-rail-bg)] backdrop-blur-[8px] select-none transition-[opacity,background-color] duration-200 ease-out hover:opacity-100 {dimmed
+  class="left-rail fixed left-0 top-0 bottom-0 z-[45] flex w-10 flex-col items-center border-r-[0.5px] border-black/[0.04] bg-[var(--float-left-rail-bg)] backdrop-blur-[8px] select-none transition-[opacity,background-color] duration-200 ease-out hover:opacity-100 max-md:hidden {dimmed
     ? 'dimmed opacity-25'
     : 'opacity-100'} dark:border-white/[0.04]"
   aria-label="toolbar"

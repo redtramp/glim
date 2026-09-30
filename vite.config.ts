@@ -1,5 +1,4 @@
 import { defineConfig } from "vite";
-import vue from "@vitejs/plugin-vue";
 // v6.2.4 仅提供具名导出 svelte(),无 default 导出
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
@@ -10,7 +9,7 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   // svelte({ hot: false }):vitest(jsdom)下 HMR 依赖 window,必须关闭
   // tailwindcss() 必须置于 svelte 之前,保证样式管线先于组件管线处理
-  plugins: [tailwindcss(), svelte({ hot: false }), vue()],
+  plugins: [tailwindcss(), svelte({ hot: false })],
   // vitest 运行时需要 browser 条件解析 Svelte 包
   resolve: process.env.VITEST ? { conditions: ["browser"] } : undefined,
   clearScreen: false,
@@ -41,7 +40,7 @@ export default defineConfig(async () => ({
             if (id.includes("markdown-it") || id.includes("dompurify"))
               return "vendor-markdown";
             if (id.includes("@tauri-apps")) return "vendor-tauri";
-            if (id.includes("vue")) return "vendor-vue";
+            if (id.includes("svelte")) return "vendor-svelte";
           }
         },
       },

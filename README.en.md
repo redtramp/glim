@@ -36,7 +36,7 @@ Modification copyright: © 2026 redtramp
 
 ## Introduction
 
-Glim is a lightweight, fast, WYSIWYG Markdown desktop reader and editor, built with **Tauri 2 + Vue 3 + Rust**.
+Glim is a lightweight, fast, WYSIWYG Markdown desktop reader and editor, built with **Tauri 2 + Svelte 5 + Rust**.
 
 Small footprint (~10 MB), fast startup, with support for multi-tabs, source editing, formulas, diagrams, code highlighting, a lazy-loading file tree, full-text search, and PDF / HTML / DOCX export plus printing.
 
@@ -216,7 +216,7 @@ Requirements: Node.js ≥ 18, pnpm ≥ 8, Rust ≥ 1.77, WebView2 Runtime, VS Bu
 
 ## Tech Stack
 
-Tauri 2 · Vue 3 · TypeScript · Vite · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · vue-i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / http / window-state / system-fonts
+Tauri 2 · Svelte 5 · TypeScript · Vite · Tailwind CSS 4 · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · Svelte 5 runes in-house i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / http / window-state / system-fonts
 
 ---
 

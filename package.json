@@ -4,7 +4,7 @@
   "version": "0.8.3",
   "type": "module",
   "packageManager": "pnpm@11.17.0",
-  "description": "A lightweight, fast, WYSIWYG Markdown desktop reader built with Tauri 2 + Vue 3. Supports KaTeX, Mermaid, full-text search, and PDF/DOCX export.",
+  "description": "A lightweight, fast, WYSIWYG Markdown desktop reader built with Tauri 2 + Svelte 5. Supports KaTeX, Mermaid, full-text search, and PDF/DOCX export.",
   "author": "Neilooo",
   "license": "MIT",
   "homepage": "https://github.com/redtramp/glim#readme",
@@ -21,7 +21,8 @@
     "viewer",
     "desktop",
     "tauri",
-    "vue3",
+    "svelte5",
+    "tailwindcss",
     "rust",
     "katex",
     "mermaid",
@@ -63,10 +64,7 @@
     "markdown-it-footnote": "^4.0.0",
     "markdown-it-task-lists": "^2.1.1",
     "mermaid": "^11.16.0",
-    "pinia": "^3.0.4",
     "svelte": "^5.57.1",
-    "vue": "^3.5.40",
-    "vue-i18n": "^11.4.8",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
@@ -82,12 +80,9 @@
     "@types/markdown-it-emoji": "^3.0.1",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",
-    "@vitejs/plugin-vue": "^5.2.4",
     "@vitest/coverage-v8": "^4.1.10",
-    "@vue/test-utils": "^2.4.11",
     "eslint": "^10.8.0",
     "eslint-plugin-svelte": "^3.23.0",
-    "eslint-plugin-vue": "^10.10.0",
     "jsdom": "^29.1.1",
     "prettier": "^3.9.6",
     "svelte-check": "^4.7.6",
@@ -95,8 +90,6 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vite": "^6.4.3",
-    "vitest": "^4.1.10",
-    "vue-eslint-parser": "^10.4.1",
-    "vue-tsc": "^2.2.12"
+    "vitest": "^4.1.10"
   }
 }

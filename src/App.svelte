@@ -815,7 +815,7 @@ $effect(() => {
 window.addEventListener("resize", recalcSearchPosition, { passive: true });
 </script>
 
-  <div class="app">
+  <div class="app flex h-full flex-col overflow-hidden">
     {#if !enableFloatLayout}
       <Toolbar
         {isEditing}
@@ -867,27 +867,27 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
               onCloseAll={() => fileManager.closeAllTabs()}
               onCloseOthers={(id) => void fileManager.closeTabOthers(id)} />
     {/if}
-    <main class="layout">
+    <main class="layout flex min-h-0 flex-1 overflow-hidden">
       <!-- tabindex="-1"（原 Vue 为 "0"）：Svelte a11y 禁止非交互元素挂非负 tabindex，
            内容内链接/按钮仍可 Tab 到达，点击本区仍可聚焦滚动 -->
-      <section bind:this={viewerElState} class="viewer" data-scroll-root class:editing={isEditing} tabindex="-1" onscroll={onViewerScroll}>
+      <section bind:this={viewerElState} class="viewer relative flex-1 max-[1199px]:[--reader-max-width:100%] {isEditing ? 'overflow-hidden' : 'overflow-auto'}" data-scroll-root class:editing={isEditing} tabindex="-1" onscroll={onViewerScroll}>
         {#if appStore.errorMsg}
-          <div class="error" role="presentation" onclick={() => (appStore.errorMsg = "")}>{appStore.errorMsg}</div>
+          <div class="error cursor-pointer px-4 py-2 text-xs text-danger bg-[rgba(207,34,46,0.08)]" role="presentation" onclick={() => (appStore.errorMsg = "")}>{appStore.errorMsg}</div>
         {/if}
         {#if !hasActiveFile}
-          <div class="empty">
-            <div class="empty-title">{t('app.emptyTitle')}</div>
-            <div class="empty-hint">{t('app.emptyHint')}</div>
-            <div class="shortcut-hint">{t('app.shortcutHint')}</div>
+          <div class="empty flex h-full flex-col items-center justify-center p-8 text-center">
+            <div class="empty-title mb-2 text-xl font-semibold text-fg">{t('app.emptyTitle')}</div>
+            <div class="empty-hint mb-4 text-sm text-fg-muted">{t('app.emptyHint')}</div>
+            <div class="shortcut-hint mb-6 text-xs text-fg-muted">{t('app.shortcutHint')}</div>
             {#if recentFiltered.length}
-              <div class="recent-files">
-                <div class="recent-title">{t('app.recentFiles')}</div>
+              <div class="recent-files w-full max-w-[400px] text-left">
+                <div class="recent-title mb-2 text-xs text-fg-muted">{t('app.recentFiles')}</div>
                 {#each recentFiltered as item (item.path)}
-                  <div class="recent-item" role="presentation" onclick={() => void loadFile(item.path)} title={item.path}>
-                    <span class="recent-name">{item.name}</span><span class="recent-path">{dirOf(item.path)}</span>
+                  <div class="recent-item flex justify-between px-3 py-1.5 rounded cursor-pointer hover:bg-bg-btn-hover" role="presentation" onclick={() => void loadFile(item.path)} title={item.path}>
+                    <span class="recent-name text-[13px] text-fg truncate">{item.name}</span><span class="recent-path text-[11px] text-fg-muted truncate">{dirOf(item.path)}</span>
                   </div>
                 {/each}
-                <button class="recent-clear" onclick={() => { clearRecent(); recentFiltered = []; }}>{t('app.clearRecent')}</button>
+                <button class="recent-clear mt-3 px-2 py-1 text-[11px] text-fg-muted border-none bg-transparent rounded cursor-pointer hover:bg-bg-btn hover:text-fg" onclick={() => { clearRecent(); recentFiltered = []; }}>{t('app.clearRecent')}</button>
               </div>
             {/if}
           </div>
@@ -952,22 +952,25 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
                        onAllow={() => fsAuthorize.resolveDialog(true)} onDeny={() => fsAuthorize.resolveDialog(false)} />
     <Banner tab={bannerTab} visible={showBanner} onReload={onBannerReload} onViewDiff={onBannerViewDiff} onIgnore={onBannerIgnore} onAutoReload={onBannerAutoReload} />
     {#if appStore.exportToast}
-      <div class="toast" role="presentation" onclick={() => (appStore.exportToast = '')}>✓ {appStore.exportToast}</div>
+      <div class="toast fixed bottom-6 left-1/2 z-50 px-5 py-2.5 text-[13px] text-white bg-success rounded-md cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.15)] [transform:translateX(-50%)] animate-[toastSlideUp_0.25s_ease-out]" role="presentation" onclick={() => (appStore.exportToast = '')}>✓ {appStore.exportToast}</div>
     {/if}
     {#if annotationToast}
-      <div class="toast" role="presentation" onclick={() => (annotationToast = '')}>✓ {annotationToast}</div>
+      <div class="toast fixed bottom-6 left-1/2 z-50 px-5 py-2.5 text-[13px] text-white bg-success rounded-md cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.15)] [transform:translateX(-50%)] animate-[toastSlideUp_0.25s_ease-out]" role="presentation" onclick={() => (annotationToast = '')}>✓ {annotationToast}</div>
     {/if}
     <DiffView oldContent={diffOldContent} newContent={diffNewContent} fileName={diffFileName} visible={showDiffView} onClose={closeDiffView} />
     <ReviewPanel visible={showReviewPanel} source={draftContent} fileName={currentFile} onApply={onReviewApply} onApplyAll={onReviewApplyAll} onFocus={onReviewFocus} onClose={() => (showReviewPanel = false)} />
     <AiPanel visible={aiPanel.state.visible} selectionText={aiPanel.state.selectionText} result={aiPanel.state.result} loading={aiPanel.state.loading} error={aiPanel.state.error} activeAction={aiPanel.state.activeAction} onRunAction={(a) => void aiPanel.runAction(a)} onApplyResult={() => void aiPanel.applyResultToDoc()} onClose={aiPanel.close} />
     {#if showExportMenu}
-      <div class="menu-overlay" role="presentation" onclick={closeExportMenu}></div>
+      <div class="menu-overlay fixed inset-0 z-[29]" role="presentation" onclick={closeExportMenu}></div>
     {/if}
     <ExportMenu visible={showExportMenu} {pandocInfo} {pdfEnginePath}
                 onExportHtml={exportHtml} onExportDocx={exportDocx} onExportPdf={exportPdf}
                 onPrint={doPrint} onClose={closeExportMenu} />
   </div>
 
+<!-- 转换规则 8：search-overlay 由「.is-visible 状态类 + :root 暗色祖先变体 + 媒体查询 +
+     left 过渡动画」复合驱动，拆成工具类无法保持同一元素上的状态切换与 left 动画语义，
+     故保留组件内 <style> 块（Svelte 原生 scoped） -->
 <style>
 .search-overlay {
   position: fixed; width: 320px; z-index: 60;

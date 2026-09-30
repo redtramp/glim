@@ -10,6 +10,7 @@
 
 ### 工程
 - 新增 `useFsAuthorize`（8）与 `GrantAccessDialog`（5）单测，覆盖授权错误识别、拒绝/授权后重试、提示未决期并发拒绝、弹窗渲染与 emit；全量 561 个用例通过
+- Svelte 5 + Tailwind 4 迁移完成：前端全量迁移至 Svelte 5（runes）+ Tailwind CSS 4 工具类；移除 Vue 工具链依赖（`vue`/`pinia`/`vue-i18n`/`@vitejs/plugin-vue`/`@vue/test-utils`/`eslint-plugin-vue` 等 -86 包）与 `src/legacy-components.css` 遗留样式表，i18n 改为 Svelte 5 runes 自研实现；`pnpm check` 全绿（svelte-check 0/0、eslint 0、vitest 32 文件 569 用例、vite build ✓）
 
 ### 文档
 - README（中/英）新增「文件访问与授权」：13 个预置授权根、隐藏目录覆盖范围、运行时授权提示、会话级生效说明
