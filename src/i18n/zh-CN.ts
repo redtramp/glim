@@ -194,6 +194,8 @@ const zhCN = {
     zoomIn: "放大",
     zoomOut: "缩小",
     reset: "重置",
+    fullscreen: "全屏",
+    exitFullscreen: "退出全屏",
     close: "关闭",
     hint: "滚轮缩放 · 拖拽平移 · 双击切换 1x/3x · ESC 关闭",
   },

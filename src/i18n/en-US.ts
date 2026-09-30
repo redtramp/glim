@@ -198,6 +198,8 @@ const enUS = {
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
     reset: "Reset",
+    fullscreen: "Fullscreen",
+    exitFullscreen: "Exit fullscreen",
     close: "Close",
     hint: "Wheel to zoom · Drag to pan · Double-click 1x/3x · ESC to close",
   },
