@@ -285,6 +285,7 @@ const zhCN = {
     apply: "应用到文档",
     applyConfirm: "将 AI 改写结果应用到当前文档（替换全部内容），是否继续？",
     retry: "重试",
+    close: "关闭",
     error: {
       configMissing: "请先在设置中启用 AI 面板并填写服务配置（服务地址与模型）",
       authFailed: "API key 无效或没有权限，请检查设置",

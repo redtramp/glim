@@ -291,6 +291,7 @@ const enUS = {
     applyConfirm:
       "Replace the whole current document with the AI-rewritten result. Continue?",
     retry: "Retry",
+    close: "Close",
     error: {
       configMissing: "Enable the AI panel and fill in the service settings (base URL and model) in Settings first",
       authFailed: "Invalid API key or insufficient permission. Check Settings",

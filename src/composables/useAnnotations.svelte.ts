@@ -15,7 +15,7 @@
 import type { CriticType } from "./criticMarkup";
 import { stripCriticMarkup } from "./criticMarkup";
 import { copyTextToClipboard } from "./clipboard";
-import type { AnnotationToolbarMode } from "../components/AnnotationToolbar.vue";
+import type { AnnotationToolbarMode } from "../components/AnnotationToolbar.svelte";
 
 /** App.vue 注入的上下文:读写当前文件的草稿并给出用户提示 */
 export interface AnnotationContext {

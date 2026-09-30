@@ -142,3 +142,29 @@
     opacity: 1;
   }
 }
+
+/* Task 8：AnnotationToolbar 浮层弹出（原组件内 @keyframes at-pop，
+   <style> 删除后必须全局声明才能被根浮层 animate-[atPop_...] 引用） */
+@keyframes atPop {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Task 8：SettingsDialog Tab 面板淡入（原组件内 @keyframes panel-in，
+   <style> 删除后必须全局声明才能被面板 animate-[panelIn_...] 工具类引用） */
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
