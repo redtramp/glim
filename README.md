@@ -205,6 +205,7 @@ Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与�
 
 ```bash
 pnpm install
+pnpm check
 pnpm tauri dev
 pnpm tauri build
 ```

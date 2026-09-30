@@ -206,6 +206,7 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 
 ```bash
 pnpm install
+pnpm check
 pnpm tauri dev
 pnpm tauri build
 ```
