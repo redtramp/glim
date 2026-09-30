@@ -1,6 +1,6 @@
 /**
  * 自研 i18n 模块测试
- * 覆盖: key 命中/缺失回退、插值、locale 响应式、持久化
+ * 覆盖: key 命中/缺失回退、插值、locale 响应式、持久化、点号下探与 en-US 回退链
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 // 预热(实测缺陷修复): 并行全量跑时测试 1 内的首次冷 transform >5s 默认 testTimeout
@@ -8,8 +8,18 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 // beforeEach 的 vi.resetModules 只清模块注册表, transform 缓存保留, 各测试动态 import 仍走缓存
 import "./locale.svelte.ts";
 
-vi.mock("./zh-CN", () => ({ default: { "a.b": "你好", "greet": "你好，{name}" } }));
-vi.mock("./en-US", () => ({ default: { "a.b": "hello", "greet": "hi, {name}" } }));
+// flat key 与嵌套消息并存：前者走直查，后者走点号下探（Ruling 8）
+vi.mock("./zh-CN", () => ({
+  default: { "a.b": "你好", greet: "你好，{name}", panel: { title: { deep: "深层中文" } } },
+}));
+vi.mock("./en-US", () => ({
+  default: {
+    "a.b": "hello",
+    greet: "hi, {name}",
+    panel: { title: { deep: "deep english" } },
+    enOnly: "english only",
+  },
+}));
 
 describe("i18n locale 模块", () => {
   beforeEach(() => {
@@ -31,6 +41,21 @@ describe("i18n locale 模块", () => {
   it("缺失 key 原样返回（与 vue-i18n 行为一致）", async () => {
     const { t } = await import("./locale.svelte.ts");
     expect(t("not.exist")).toBe("not.exist");
+  });
+
+  it("嵌套消息按点号逐段下探（Ruling 8）", async () => {
+    const { t } = await import("./locale.svelte.ts");
+    expect(t("panel.title.deep")).toBe("深层中文");
+    // 命中中间对象（非字符串）视为 miss，原样返回 key
+    expect(t("panel.title")).toBe("panel.title");
+  });
+
+  it("当前语言缺失时回退 en-US，再缺失才原样返回 key", async () => {
+    const { t, setLocale } = await import("./locale.svelte.ts");
+    // zh-CN mock 无 enOnly → 落 en-US
+    expect(t("enOnly")).toBe("english only");
+    setLocale("en-US");
+    expect(t("never.defined")).toBe("never.defined");
   });
 
   it("插值替换 {name}", async () => {

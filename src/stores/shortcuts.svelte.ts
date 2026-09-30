@@ -1,4 +1,4 @@
-import { i18n } from "../i18n";
+import { t } from "../i18n/locale.svelte.ts";
 import { loadJson, saveJson } from "../utils/storage";
 
 export type ShortcutTarget = "app" | "editor" | "both" | "readonly";
@@ -89,7 +89,7 @@ export const shortcutsState = $state({
     for (const def of DEFS) {
       if (def.readonly || def.id === id) continue;
       if (shortcutsState.getBinding(def.id) === normalized) {
-        return { ok: false, conflict: i18n.global.t(`shortcuts.${def.descKey}`) };
+        return { ok: false, conflict: t(`shortcuts.${def.descKey}`) };
       }
     }
     const next = { ...shortcutsState.overrides };

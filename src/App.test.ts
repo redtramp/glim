@@ -1,5 +1,5 @@
 /**
- * App.vue 集成测试 — 外部文件变化处理
+ * App.svelte 集成测试 — 外部文件变化处理
  *
  * 测试目标:
  * - onFilesChanged 标记 stale 而非直接 forceReload
@@ -7,10 +7,9 @@
  * - auto-reload 白名单中的 tab 直接 reload
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createPinia, setActivePinia } from "pinia";
+import { describe, it, expect, vi } from "vitest";
 
-// Mock localStorage for Pinia stores
+// Mock localStorage（标签单例持久化依赖）
 const mockStorage: Record<string, string> = {};
 Object.defineProperty(globalThis, "localStorage", {
   value: {
@@ -31,11 +30,7 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
   exists: vi.fn(),
 }));
 
-describe("App.vue 外部文件变化处理", () => {
-  beforeEach(() => {
-    setActivePinia(createPinia());
-  });
-
+describe("App.svelte 外部文件变化处理", () => {
   describe("onFilesChanged 标记 stale", () => {
     it("onFilesChanged 标记 tab.staleSince 而非直接 forceReload", async () => {
       const api = useTabs();

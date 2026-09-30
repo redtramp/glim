@@ -18,7 +18,7 @@ import {
   AiError,
   type AiMessage,
 } from "./aiProvider";
-import { i18n } from "../i18n";
+import { locale } from "../i18n/locale.svelte.ts";
 
 export type AiAction = "summarize" | "translate" | "explain" | "rewrite";
 
@@ -48,7 +48,7 @@ export interface AiPanelContext {
 
 /** 当前界面语言名(中文 / English),用于摘要/翻译/解释的输出语言 */
 export function currentLangName(): string {
-  return i18n.global.locale.value === "zh-CN" ? "中文" : "English";
+  return locale.value === "zh-CN" ? "中文" : "English";
 }
 
 /**

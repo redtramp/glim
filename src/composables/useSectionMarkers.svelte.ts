@@ -5,13 +5,6 @@ const SCROLL_TOLERANCE = 1;
 /** 滚动停止后延迟重建位置缓存，吸收图片/mermaid 加载带来的布局变化 */
 const LAYOUT_REBUILD_DELAY = 300;
 
-/** CSS.escape 的降级实现：jsdom / 旧 WebView 未实现时直接返回 id */
-function escapeCssId(id: string): string {
-  return typeof CSS !== "undefined" && typeof CSS.escape === "function"
-    ? CSS.escape(id)
-    : id;
-}
-
 /**
  * 章节标记：追踪当前阅读到的标题，并提供平滑跳转。
  *
@@ -49,7 +42,10 @@ export function useSectionMarkers(
     if (!body) return;
     const container = viewerEl.value;
     for (const h of headings.value) {
-      const el = body.querySelector(`#${escapeCssId(h.id)}`);
+      // 标题 id 由 encodeURIComponent 生成（中日韩等字符为 %XX 形式），裸 `#id` 拼接：
+      // 有 CSS.escape 时需转义，无 CSS.escape（jsdom / 旧 WebView）时 `%` 开头直接
+      // SyntaxError。改用带引号的属性选择器按字符串精确匹配，两种环境同构且不依赖 CSS.escape。
+      const el = body.querySelector(`[id="${h.id}"]`);
       if (!el) continue;
       const rect = el.getBoundingClientRect();
       const top = container

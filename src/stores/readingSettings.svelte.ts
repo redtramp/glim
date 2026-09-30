@@ -1,4 +1,4 @@
-import { i18n } from "../i18n";
+import { t } from "../i18n/locale.svelte.ts";
 import { invoke } from "@tauri-apps/api/core";
 import { loadJson, saveJson } from "../utils/storage";
 
@@ -55,14 +55,14 @@ export const readingSettingsState = $state({
 
   get fontOptions() {
     return FONT_KEYS.map((key) => ({
-      label: i18n.global.t(`settings.${key}`),
+      label: t(`settings.${key}`),
       value: key,
     }));
   },
 
   get editorFontOptions() {
     return FONT_KEYS.map((key) => ({
-      label: i18n.global.t(`settings.${key}`),
+      label: t(`settings.${key}`),
       value: key,
     }));
   },

@@ -116,7 +116,7 @@ function nameState(active: boolean, isDir: boolean): string {
 }
 </script>
 
-<ul class="tree {depth ? '' : 'root'} m-0 list-none p-0 text-[13px]">
+<ul class="tree {depth ? '' : 'root'} m-0 list-none {depth ? 'p-0' : 'py-1'} text-[13px]">
   {#if depth === 0 && canGoUp}
     <li class="tree-item" title={t("app.goUp")}>
       <div

@@ -1,8 +1,9 @@
 /**
- * useTabs — 向后兼容薄包装层，核心状态已迁移到 useTabsStore
+ * useTabs — 向后兼容薄包装层，核心状态在 useTabsStore
  *
- * 所有导入 useTabs 的组件无需修改即可继续工作。
- * 新代码应直接使用 useTabsStore。
+ * 返回的状态是解包访问器（tabs / activeTabId 等，带 setter），不再返回 Ref：
+ * 消费方按 `api.tabs`、`api.activeTabId` 读写，不能用 `.value`。
+ * 新代码可直接使用 useTabsStore。
  */
 import {
   useTabsStore,

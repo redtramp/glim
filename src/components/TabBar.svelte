@@ -101,7 +101,7 @@ const rootClass = $derived(
     "shrink-0 items-stretch [scrollbar-width:thin]",
     menuState.visible ? "menu-open" : "",
     floating
-      ? "floating fixed inset-x-0 top-0 z-[60] h-8 border-b-[0.5px] border-black/[0.06] bg-white/[0.72] shadow-[0_2px_12px_rgba(0,0,0,0.06)] backdrop-blur-[16px] backdrop-saturate-[120%] pointer-events-auto transition-transform duration-150 ease-out dark:border-white/[0.06] dark:bg-[rgba(24,24,24,0.78)] dark:shadow-[0_2px_12px_rgba(0,0,0,0.2)] " +
+      ? "floating fixed inset-x-0 top-0 z-[60] h-8 border-b-[0.5px] border-black/[0.06] bg-white/[0.72] shadow-[0_2px_12px_rgba(0,0,0,0.06)] backdrop-blur-[16px] backdrop-saturate-[120%] pointer-events-auto transition-transform duration-150 ease-out dark:border-white/[0.06] dark:bg-[rgba(24,24,24,0.78)] dark:shadow-[0_2px_12px_rgba(0,0,0,0.2)] dark:backdrop-saturate-[1.1] " +
         (visible
           ? "visible translate-y-0"
           : "hidden -translate-y-full duration-200 ease-in pointer-events-none")

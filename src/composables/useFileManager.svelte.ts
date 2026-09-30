@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { i18n } from "../i18n";
+import { t } from "../i18n/locale.svelte.ts";
 import { useTabsStore, samePath } from "../stores/tabs.svelte.ts";
 import { useAppStore } from "../stores/app.svelte.ts";
 import { useHistoryStore } from "../stores/history.svelte.ts";
@@ -81,7 +81,7 @@ export function useFileManager() {
       tabs.tabs.push(tab);
       tabs.activateTab(tab.id);
     } catch (e: unknown) {
-      app.errorMsg = `${i18n.global.t("errors.readFailed")}: ${(e as Error)?.message || e}`;
+      app.errorMsg = `${t("errors.readFailed")}: ${(e as Error)?.message || e}`;
     }
   }
 
@@ -89,7 +89,7 @@ export function useFileManager() {
     const path = await open({
       filters: [
         {
-          name: i18n.global.t("fileTypes.markdown"),
+          name: t("fileTypes.markdown"),
           extensions: ["md", "markdown", "mdown", "mkd", "txt"],
         },
       ],
@@ -100,7 +100,7 @@ export function useFileManager() {
   async function saveCurrentFile(): Promise<boolean> {
     const tab = tabs.activeTab;
     if (!tab || !tab.path) {
-      app.showError(i18n.global.t("error.selectFile"));
+      app.showError(t("error.selectFile"));
       return false;
     }
     return saveTab(tab);
@@ -115,12 +115,12 @@ export function useFileManager() {
       tab.content = tab.draftContent;
       tab.isDirty = false;
       tab.headings = extractHeadings(tab.draftContent);
-      app.exportToast = i18n.global.t("editor.saved");
+      app.exportToast = t("editor.saved");
       scheduleSuppressClear(tab.path);
       return true;
     } catch (e: unknown) {
       clearSuppress(tab.path);
-      app.errorMsg = `${i18n.global.t("editor.saveFailed")}: ${(e as Error)?.message ?? e}`;
+      app.errorMsg = `${t("editor.saveFailed")}: ${(e as Error)?.message ?? e}`;
       return false;
     } finally {
       app.saving = false;
@@ -133,7 +133,7 @@ export function useFileManager() {
     const targetPath = await save({
       filters: [
         {
-          name: i18n.global.t("fileTypes.markdown"),
+          name: t("fileTypes.markdown"),
           extensions: ["md", "markdown"],
         },
       ],
@@ -148,13 +148,13 @@ export function useFileManager() {
       tab.isDirty = false;
       tab.headings = extractHeadings(tab.draftContent);
       history.pushRecent(targetPath);
-      app.exportToast = `${i18n.global.t("editor.saved")}: ${targetPath}`;
+      app.exportToast = `${t("editor.saved")}: ${targetPath}`;
       scheduleSuppressClear(targetPath);
       tabs.persist();
       return true;
     } catch (e: unknown) {
       clearSuppress(targetPath);
-      app.errorMsg = `${i18n.global.t("editor.saveFailed")}: ${(e as Error)?.message ?? e}`;
+      app.errorMsg = `${t("editor.saveFailed")}: ${(e as Error)?.message ?? e}`;
       return false;
     } finally {
       app.saving = false;
@@ -165,7 +165,7 @@ export function useFileManager() {
     const dest = await save({
       defaultPath: "untitled.md",
       filters: [
-        { name: i18n.global.t("fileTypes.markdown"), extensions: ["md", "markdown", "mdx", "txt"] },
+        { name: t("fileTypes.markdown"), extensions: ["md", "markdown", "mdx", "txt"] },
       ],
     });
     if (!dest) return false;
@@ -194,13 +194,13 @@ export function useFileManager() {
       }
       history.pushRecent(path);
       app.errorMsg = "";
-      app.exportToast = `${i18n.global.t("editor.created")}: ${path}`;
+      app.exportToast = `${t("editor.created")}: ${path}`;
       scheduleSuppressClear(path);
       tabs.persist();
       return true;
     } catch (e: unknown) {
       clearSuppress(path);
-      app.errorMsg = `${i18n.global.t("editor.createFailed")}: ${(e as Error)?.message ?? e}`;
+      app.errorMsg = `${t("editor.createFailed")}: ${(e as Error)?.message ?? e}`;
       return false;
     } finally {
       app.saving = false;

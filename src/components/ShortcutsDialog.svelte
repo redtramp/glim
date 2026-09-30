@@ -109,7 +109,7 @@ const BTN_BASE =
   "sc-btn cursor-pointer rounded-md border border-border bg-bg-btn px-3.5 " +
   "py-[5px] text-[13px] text-fg transition-[background-color] duration-150 ease-[ease] hover:bg-bg-btn-hover";
 const BTN_PRIMARY =
-  "sc-btn rounded-md border border-link bg-link px-3.5 py-[5px] text-[13px] text-white";
+  "sc-btn cursor-pointer rounded-md border border-link bg-link px-3.5 py-[5px] text-[13px] text-white";
 
 function onOverlayClick(e: MouseEvent): void {
   if (e.target === e.currentTarget) onClose?.();
