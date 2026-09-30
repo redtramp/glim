@@ -49,6 +49,9 @@ export default defineConfig(async () => ({
   },
   test: {
     environment: "jsdom",
+    // Node 26 内置实验性 localStorage 全局会遮蔽 jsdom 的实现,
+    // 使 vitest 跳过复制 jsdom 的 localStorage;关闭该全局交还 jsdom
+    execArgv: ["--no-experimental-webstorage"],
     exclude: [...configDefaults.exclude, "src-tauri/**"],
     include: ["src/**/*.test.ts", "src/**/*.spec.ts"],
     coverage: {
