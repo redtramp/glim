@@ -6,6 +6,7 @@
 - 授权根之外的目录：打开其中文档时弹出**授权提示**，确认后为该目录追加会话级读写授权（Rust `allow_dir` → `fs_scope().allow_directory(dir, true)`）并自动重试，拒绝则维持原错误提示；i18n 新增 `grant.*` 中英文案
 
 ### 修复
+- 修复 release 启动后窗口卡顿/白屏的问题：窗口配置 `visible:false`（本意为避免渲染前白屏闪烁），但前端从未显式 `show()`，且 `window-state` 插件会记住上次的隐藏态，导致 release 下窗口持续不可见，体感为启动卡住。现于前端 `main.ts` 挂载完成后 `getCurrentWebview().show()` 显式显示，并在 Rust `setup` 中兜底 `window.show()`，双重保险防止前端异常或隐藏态残留
 - 修复 `~/.config`、`~/.local` 等隐藏目录中的文档无法打开的问题：Tauri fs 插件 Unix 默认 `requireLiteralLeadingDot=true`，ACL 模式 `$HOME/**` 的通配符不能匹配以 `.` 开头的路径分量，导致 `readTextFile` 报 `PathForbidden`。现于 `tauri.conf.json` 设置 `plugins.fs.requireLiteralLeadingDot: false`，实测授权根内任意深度隐藏目录（含隐藏子目录）均可读取
 
 ### 工程
