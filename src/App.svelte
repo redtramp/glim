@@ -639,6 +639,19 @@ async function restoreTabs(initialPath = "") {
 let unlistenDrop: (() => void) | null = null, unlistenOpen: (() => void) | null = null, unlistenClose: (() => void) | null = null;
 let appWindow: import("@tauri-apps/api/window").Window | null = null;
 
+/** 淡出并移除启动 splash（index.html 中的 #splash）。
+ *  主窗口 visible:true 首帧即显示 splash，首屏内容就绪后调用本函数平滑过渡。
+ *  元素不存在（测试/预览环境）时静默忽略。 */
+function dismissSplash(): void {
+  const el = document.getElementById("splash");
+  if (!el) return;
+  el.classList.add("glim-splash-hidden");
+  const remove = () => el.remove();
+  el.addEventListener("transitionend", remove, { once: true });
+  // 兜底：若 transitionend 未触发（如 reduced-motion 禁用过渡），定时移除
+  setTimeout(remove, 600);
+}
+
 onMount(() => {
   // Task 4 遗留缺口：Vue 版从未调用 attach()，Svelte 版接上键盘/滚轮监听（行为变更，见报告）
   keyboardHandlers.attach();
@@ -647,6 +660,9 @@ onMount(() => {
     const initialPath = await (async () => { try { return await invoke<string | null>("initial_open_file"); } catch { return ""; } })();
     await restoreTabs(typeof initialPath === "string" ? initialPath : "");
     if (currentFile) await syncRootDir(currentFile); else await setHomeRoot();
+    // 首屏内容（激活标签 markdown）已挂载、即将渲染，淡出并移除启动 splash
+    // （splash 在 index.html 中，主窗口 visible:true 首帧即显示，消除空白停顿体感）。
+    dismissSplash();
     // syncRootDir 已启动监听时跳过，避免重复 stop/start
     if (fileTree.rootDir && watcher.watching.value !== fileTree.rootDir) await startWatching(fileTree.rootDir);
     // 探测导出能力：pandoc（DOCX）与 Edge（PDF）

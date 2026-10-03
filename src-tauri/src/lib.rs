@@ -568,10 +568,6 @@ pub fn run() {
             app.manage(WatcherState::default());
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_theme(None);
-                // 兜底显示：窗口配置 visible:false（防渲染前白屏闪烁），
-                // 正常由前端挂载后显式 show；此处防止 window-state 记住隐藏态
-                // 或前端异常导致窗口持续不可见（release 下体感为启动卡顿）。
-                let _ = window.show();
                 apply_windows_frame_theme(&window, false);
             }
             let _ = app;
