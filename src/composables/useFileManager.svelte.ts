@@ -46,7 +46,7 @@ export function useFileManager() {
     tab.content = content;
     tab.draftContent = content;
     tab.isDirty = false;
-    tab.headings = extractHeadings(content);
+    tab.headings = await extractHeadings(content);
     tabs.tabs.push(tab);
     tabs.activateTab(tab.id);
     history.pushRecent(filePath);
@@ -71,7 +71,7 @@ export function useFileManager() {
       tab.draftContent = text;
       tab.isDirty = false;
       tab.isEditing = false;
-      tab.headings = extractHeadings(text);
+      tab.headings = await extractHeadings(text);
       tab.pendingHash = "";
       tab.pendingScrollTop = 0;
       tab.pendingSourceLine = sourceLine;
@@ -114,7 +114,7 @@ export function useFileManager() {
       await writeFile(tab.path, new TextEncoder().encode(tab.draftContent));
       tab.content = tab.draftContent;
       tab.isDirty = false;
-      tab.headings = extractHeadings(tab.draftContent);
+      tab.headings = await extractHeadings(tab.draftContent);
       app.exportToast = t("editor.saved");
       scheduleSuppressClear(tab.path);
       return true;
@@ -146,7 +146,7 @@ export function useFileManager() {
       tab.content = tab.draftContent;
       tab.path = targetPath;
       tab.isDirty = false;
-      tab.headings = extractHeadings(tab.draftContent);
+      tab.headings = await extractHeadings(tab.draftContent);
       history.pushRecent(targetPath);
       app.exportToast = `${t("editor.saved")}: ${targetPath}`;
       scheduleSuppressClear(targetPath);

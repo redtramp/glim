@@ -17,7 +17,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import katex from "katex";
 import mermaid from "mermaid";
-import { renderMarkdownOffThread } from "./markdownWorkerClient";
+import { renderMarkdownOffThread, extractHeadingsOffThread } from "./markdownWorkerClient";
 import {
   renderMarkdown,
   extractHeadings,
@@ -28,7 +28,10 @@ import {
 } from "./useMarkdown";
 import { markdownHtmlCache, mermaidSvgCache } from "./renderCache";
 
-vi.mock("./markdownWorkerClient", () => ({ renderMarkdownOffThread: vi.fn() }));
+vi.mock("./markdownWorkerClient", () => ({
+  renderMarkdownOffThread: vi.fn(),
+  extractHeadingsOffThread: vi.fn(),
+}));
 vi.mock("katex", () => ({ default: { render: vi.fn() } }));
 vi.mock("mermaid", () => ({ default: { initialize: vi.fn(), render: vi.fn() } }));
 
@@ -129,10 +132,22 @@ describe("renderMarkdown", () => {
 });
 
 describe("extractHeadings", () => {
-  it("提取标题大纲", () => {
-    const hs = extractHeadings("# 一\n\n## 二");
+  it("委托 markdownWorkerClient.extractHeadingsOffThread 提取大纲（Worker 优先）", async () => {
+    vi.mocked(extractHeadingsOffThread).mockResolvedValue([
+      { level: 1, text: "一", id: "一" },
+      { level: 2, text: "二", id: "二" },
+    ]);
+    const hs = await extractHeadings("# 一\n\n## 二");
+    expect(extractHeadingsOffThread).toHaveBeenCalledWith("# 一\n\n## 二");
     expect(hs.map((h) => h.level)).toEqual([1, 2]);
     expect(hs[0].text).toBe("一");
+  });
+
+  it("提取失败时返回空大纲（不向上抛出，不阻断文件打开/恢复）", async () => {
+    vi.mocked(extractHeadingsOffThread).mockRejectedValue(new Error("boom"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(extractHeadings("# x")).resolves.toEqual([]);
+    warn.mockRestore();
   });
 });
 

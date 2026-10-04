@@ -60,6 +60,12 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
   exists: vi.fn(async () => false),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
+// 编辑器按需加载：用轻量替身替换真实 MarkdownEditor（避免在 jsdom 加载/初始化 CodeMirror），
+// 同时可验证 App 首次进入编辑模式时动态 import 并渲染编辑器。
+// 注意：app.css 上的运行时样式不依赖该 mock；路径须与 App 内动态 import 一致。
+vi.mock("./components/MarkdownEditor.svelte", () =>
+  import("./components/MarkdownEditorStub.svelte")
+);
 
 import { invoke } from "@tauri-apps/api/core";
 import { readTextFile } from "@tauri-apps/plugin-fs";
@@ -109,10 +115,18 @@ function mountApp(): MountedApp {
   };
 }
 
-/** 宏任务排空微任务链 + 刷新 Svelte 渲染（setImmediate 不被假计时器伪造） */
+/** 宏任务排空微任务链 + 刷新 Svelte 渲染（setImmediate 不被假计时器伪造）。
+ *  多轮推进：markdown-it 兜底引擎现经动态 import 加载，需跨多个宏任务才 settle。 */
 async function flushPromises(): Promise<void> {
-  await new Promise<void>((r) => setImmediate(r));
-  await tick();
+  // 动态 import（markdown-it 兜底引擎 / 编辑器模块）由定时器宏任务驱动，
+  // 需用真实 setTimeout 才能 settle；假计时器（仅伪造 setTimeout）下退回 setImmediate。
+  const wait = vi.isFakeTimers()
+    ? () => new Promise<void>((r) => setImmediate(r))
+    : () => new Promise<void>((r) => setTimeout(r, 0));
+  for (let i = 0; i < 20; i++) {
+    await wait();
+    await tick();
+  }
 }
 
 /** 假计时器下的推进：先刷新 Svelte 效果（rAF/结算计时已调度），再推时钟，再刷新 DOM */
@@ -298,6 +312,48 @@ describe("App.svelte 挂载", () => {
       m?.unmount();
       vi.useRealTimers();
     }
+  });
+});
+
+describe("编辑器按需加载", () => {
+  function seedActiveTab(): void {
+    mockStorage["glim-reader-tabs"] = JSON.stringify({
+      paths: ["/docs/a.md"],
+      activePath: "/docs/a.md",
+    });
+    readTextFileMock.mockImplementation(async () => "# 标题\n\n正文内容。");
+  }
+
+  it("首次进入编辑模式时动态加载并渲染编辑器（之前为预览）", async () => {
+    seedActiveTab();
+    const m = mountApp();
+    await flushPromises();
+
+    // 初始为预览态，编辑器尚未加载/渲染
+    expect(m.target.querySelector(".viewer article.markdown-body")).toBeTruthy();
+    expect(m.target.querySelector(".markdown-editor-stub")).toBeNull();
+
+    // LeftRail 第 9 个按钮 = 编辑（LEFT_PANEL_META 顺序：filetree..export,edit）
+    clickRailBtn(m.target, 9);
+    await flushPromises();
+
+    // 动态 import 完成后渲染编辑器替身
+    expect(m.target.querySelector(".markdown-editor-stub")).toBeTruthy();
+    m.unmount();
+  });
+
+  it("快速进入→退出编辑：加载续体不误触发定位且不崩溃，回到预览", async () => {
+    seedActiveTab();
+    const m = mountApp();
+    await flushPromises();
+
+    clickRailBtn(m.target, 9); // 进入编辑
+    clickRailBtn(m.target, 9); // 立即退回预览（模块尚未加载完成）
+    await flushPromises();
+
+    expect(m.target.querySelector(".markdown-editor-stub")).toBeNull();
+    expect(m.target.querySelector(".viewer article.markdown-body")).toBeTruthy();
+    m.unmount();
   });
 });
 

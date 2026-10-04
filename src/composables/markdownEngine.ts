@@ -17,8 +17,10 @@ import mathPlugin from "./mathPlugin";
 import { createCriticMarkupPlugin } from "./criticMarkup";
 
 // 仅在类型层引用 highlight.js，避免主线程静态/动态依赖。hljs 实例由 Worker 线程
-// 动态加载后注入（见 markdown.worker.ts），主线程 createMarkdownIt() 不传 → 代码块
+// 动态加载后注入（见 markdown.worker.ts），兜底实例 createMarkdownIt() 不传 → 代码块
 // 走纯转义兜底，从而把 ~983KB hljs 移出主线程首屏，消除启动同步阻塞。
+// 本模块（含 markdown-it）现仅由 Worker 与主线程兜底经**动态 import** 加载，
+// 主线程启动路径只保留 DOMPurify 净化。
 export type HljsModule = typeof import("highlight.js").default;
 
 export interface Heading {
@@ -82,8 +84,8 @@ export function renderFrontMatter(block: FrontMatterBlock): string {
 }
 
 /** 构建与旧 useMarkdown 完全一致的 markdown-it 实例(纯字符串能力)。
- *  hljs 可选注入：Worker 渲染代码块时传入已加载的 hljs 实例；主线程不传，
- *  代码块回退纯转义（主线程只做 extractHeadings / DOMPurify，无需高亮）。 */
+ *  hljs 可选注入：Worker 渲染代码块时传入已加载的 hljs 实例；兜底路径不传，
+ *  代码块回退纯转义（兜底只做渲染/大纲提取，无需高亮）。 */
 export function createMarkdownIt(hljsInst?: HljsModule): MarkdownIt {
   const md: MarkdownIt = new MarkdownIt({
     html: true,

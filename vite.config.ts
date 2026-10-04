@@ -37,8 +37,11 @@ export default defineConfig(async () => ({
             if (id.includes("@codemirror") || id.includes("codemirror"))
               return "vendor-codemirror";
             if (id.includes("highlight.js")) return "vendor-hljs";
-            if (id.includes("markdown-it") || id.includes("dompurify"))
-              return "vendor-markdown";
+            // dompurify 需在主线程净化渲染结果，保持静态可达；单独拆块，
+            // 使 markdown-it 及其插件（markdownEngine）可随 Worker/兜底动态加载，
+            // 不再进入启动主线程包。
+            if (id.includes("dompurify")) return "vendor-dompurify";
+            if (id.includes("markdown-it")) return "vendor-markdown";
             if (id.includes("@tauri-apps")) return "vendor-tauri";
             if (id.includes("svelte")) return "vendor-svelte";
           }

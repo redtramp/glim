@@ -43,6 +43,7 @@ import { useKeyboardHandlers } from "./composables/useKeyboardHandlers.svelte.ts
 import { useUnsavedDialog } from "./composables/useUnsavedDialog.svelte.ts";
 import { useFsAuthorize } from "./composables/useFsAuthorize.svelte.ts";
 import { useFloatLayout, ACTION_PANEL_IDS } from "./composables/useFloatLayout.svelte.ts";
+import { createLazyLoader } from "./composables/lazyComponent";
 import { useSectionMarkers } from "./composables/useSectionMarkers.svelte.ts";
 import { useBookmarks } from "./composables/useBookmarks.svelte.ts";
 import { basename, dirOf } from "./utils/path";
@@ -98,24 +99,14 @@ let editorState = $state<MarkdownEditorHandle | null>(null);
 let searchPanelState = $state<SearchPanelHandle | null>(null);
 /** 按需加载的编辑器组件（CodeMirror 重块）；未加载完成时模板显示占位 */
 let EditorComponent = $state<MarkdownEditorComponent | null>(null);
-/** 编辑器模块 in-flight Promise：并发调用共享，加载成功/失败都只发起一次真实 import */
-let editorModulePromise: Promise<void> | null = null;
-
-/** 确保编辑器模块已加载（幂等）。失败时重置 Promise 以便下次重试，避免编辑功能永久不可用。 */
-function ensureEditorModule(): Promise<void> {
-  if (EditorComponent) return Promise.resolve();
-  if (!editorModulePromise) {
-    editorModulePromise = import("./components/MarkdownEditor.svelte")
-      .then((mod) => {
-        EditorComponent = mod.default;
-      })
-      .catch((e) => {
-        editorModulePromise = null;
-        console.error("load markdown editor module failed:", e);
-      });
+/** 编辑器模块加载器：幂等、并发去重、失败可重试（逻辑与单测见 composables/lazyComponent） */
+const editorLoader = createLazyLoader(
+  () => import("./components/MarkdownEditor.svelte"),
+  (component) => {
+    EditorComponent = component;
   }
-  return editorModulePromise;
-}
+);
+const ensureEditorModule = editorLoader.ensure;
 const viewerEl = { get value() { return viewerElState; } };
 const bodyRef = { get value() { return markdownState?.root ?? null; } };
 
@@ -223,7 +214,7 @@ async function readFileIntoTab(tab: Tab, path: string, hash = "", sourceLine = 0
   try {
     const text = await fsAuthorize.readTextFileAuthorized(path);
     tab.path = path; tab.content = text; tab.draftContent = text;
-    tab.isDirty = false; tab.isEditing = false; tab.headings = extractHeadings(text);
+    tab.isDirty = false; tab.isEditing = false; tab.headings = await extractHeadings(text);
     tab.pendingHash = hash; tab.pendingScrollTop = hash ? 0 : getScroll(path);
     tab.pendingSourceLine = sourceLine; tab.scrollTop = tab.pendingScrollTop;
     pushRecent(path); void watcher.watchFile(dirOf(path));
@@ -253,7 +244,7 @@ async function forceReloadTab(tab: Tab) {
   fileManager.addSuppress(tab.path);
   try {
     const text = await fsAuthorize.readTextFileAuthorized(tab.path);
-    tab.content = text; tab.draftContent = text; tab.isDirty = false; tab.headings = extractHeadings(text);
+    tab.content = text; tab.draftContent = text; tab.isDirty = false; tab.headings = await extractHeadings(text);
     if (tab.id === activeTabId) { tab.pendingHash = ""; tab.pendingScrollTop = tab.scrollTop; tab.pendingSourceLine = 0; find.clearHighlights(); }
     fileManager.scheduleSuppressClear(tab.path);
   } catch (e: any) { fileManager.clearSuppress(tab.path); appStore.errorMsg = `${t("errors.readFailed")}: ${e?.message || e}`; }
@@ -296,7 +287,7 @@ function onDraftUpdate(value: string) {
   const tab = activeTab; if (!tab) return;
   tab.draftContent = value; tab.isDirty = value !== tab.content;
   if (headingTimer) clearTimeout(headingTimer);
-  headingTimer = setTimeout(() => { tab.headings = extractHeadings(value); }, 200);
+  headingTimer = setTimeout(() => { void extractHeadings(value).then((hs) => { tab.headings = hs; }); }, 200);
 }
 
 let scrollSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -641,7 +632,7 @@ async function restoreTabs(initialPath = "") {
         tab.path = path; tab.content = text; tab.draftContent = text;
         tab.isDirty = false; tab.isEditing = false;
         // 仅对本次激活的标签同步提取大纲，其余延迟到激活时（显著加快多文档启动）
-        tab.headings = samePath(path, activePath) ? extractHeadings(text) : [];
+        tab.headings = samePath(path, activePath) ? await extractHeadings(text) : [];
         tab.pendingHash = ""; tab.pendingScrollTop = getScroll(path);
         tab.pendingSourceLine = 0; tab.scrollTop = tab.pendingScrollTop;
         tabs.push(tab);
@@ -654,7 +645,7 @@ async function restoreTabs(initialPath = "") {
       // activePath 为空（默认取第一个标签）时补一次大纲提取
       const activated = tabs.find(tb => tb.id === activeId);
       if (activated && !activated.headings.length && activated.draftContent) {
-        activated.headings = extractHeadings(activated.draftContent);
+        activated.headings = await extractHeadings(activated.draftContent);
       }
       // 最近打开列表批量写入一次，避免每文件一次 localStorage 序列化
       if (recentPaths.length) pushRecentBatch(recentPaths);
@@ -683,6 +674,26 @@ function dismissSplash(): void {
   setTimeout(remove, 600);
 }
 
+/** 空闲预加载编辑器模块的句柄，供 onDestroy 取消以防卸载后跳回 */
+let editorPreloadIdle: number | null = null;
+let editorPreloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** 首屏就绪后利用空闲时段预加载编辑器（CodeMirror）模块，让首次进入编辑模式零等待。
+ *  不抢占启动关键路径：requestIdleCallback 在浏览器空闲时执行（3s 超时兜底）；
+ *  不支持时退回 2s 定时器。卸载时取消，避免在已销毁实例上继续加载。 */
+function scheduleEditorPreload(): void {
+  const preload = () => {
+    editorPreloadIdle = null;
+    editorPreloadTimer = null;
+    void editorLoader.ensure();
+  };
+  if (typeof window.requestIdleCallback === "function") {
+    editorPreloadIdle = window.requestIdleCallback(preload, { timeout: 3000 });
+  } else {
+    editorPreloadTimer = setTimeout(preload, 2000);
+  }
+}
+
 onMount(() => {
   // Task 4 遗留缺口：Vue 版从未调用 attach()，Svelte 版接上键盘/滚轮监听（行为变更，见报告）
   keyboardHandlers.attach();
@@ -694,6 +705,8 @@ onMount(() => {
     // 首屏内容（激活标签 markdown）已挂载、即将渲染，淡出并移除启动 splash
     // （splash 在 index.html 中，主窗口 visible:true 首帧即显示，消除空白停顿体感）。
     dismissSplash();
+    // 启动关键路径结束后，空闲时预加载编辑器模块（不阻塞首屏）
+    scheduleEditorPreload();
     // syncRootDir 已启动监听时跳过，避免重复 stop/start
     if (fileTree.rootDir && watcher.watching.value !== fileTree.rootDir) await startWatching(fileTree.rootDir);
     // 探测导出能力：pandoc（DOCX）与 Edge（PDF）
@@ -715,6 +728,8 @@ onDestroy(() => {
   unlistenDrop?.(); unlistenOpen?.(); unlistenClose?.();
   if (headingTimer) clearTimeout(headingTimer);
   if (searchPosSettleTimer !== null) clearTimeout(searchPosSettleTimer);
+  if (editorPreloadIdle !== null) window.cancelIdleCallback(editorPreloadIdle);
+  if (editorPreloadTimer !== null) clearTimeout(editorPreloadTimer);
   void watcher.stop(); annotations.dispose(); floatLayout.unbindGlobalClick();
   window.removeEventListener("resize", recalcSearchPosition);
   sectionMarkers.dispose();
@@ -790,7 +805,7 @@ $effect(() => {
     requestAnimationFrame(() => {
       const cur = tabsApi.activeTab;
       if (!cur || cur.id !== tabId || cur.headings.length) return;
-      cur.headings = extractHeadings(cur.draftContent);
+      void extractHeadings(cur.draftContent).then((hs) => { cur.headings = hs; });
     });
   }
   if (!searchVisible || newPath !== prevTabPath) {

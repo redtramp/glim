@@ -87,12 +87,14 @@ function mountPanel(
   return { ...result, onRunAction, onApplyResult, onClose };
 }
 
-/** 让 renderMarkdown 异步渲染 settle（effect + microtask + macrotask） */
-async function settleRender(): Promise<void> {
-  await new Promise((r) => setTimeout(r, 0));
-  await tick();
-  await new Promise((r) => setTimeout(r, 0));
-  await tick();
+/** 轮询直到条件满足：markdown-it 兜底引擎现经动态 import 加载，settle 时机受并发负载影响，
+ *  固定轮数不可靠，故轮询（每次让出宏任务并刷新 Svelte 渲染）。 */
+async function waitFor(cond: () => boolean, tries = 200): Promise<void> {
+  for (let i = 0; i < tries; i++) {
+    if (cond()) return;
+    await new Promise((r) => setTimeout(r, 1));
+    await tick();
+  }
 }
 
 describe("AiPanel - 渲染与禁用", () => {
@@ -229,8 +231,8 @@ describe("AiPanel - 结果", () => {
   it("有结果时显示结果区(markdown 渲染)", async () => {
     const { container } = mountPanel({ result: "**加粗** 与 `code`" });
     expect(container.querySelector('[data-test="result"]')).not.toBeNull();
-    await settleRender();
     // markdown 渲染成功(主线程回退)后应出现渲染区
+    await waitFor(() => container.querySelector(".ai-result-html") !== null);
     expect(container.querySelector(".ai-result-html")).not.toBeNull();
     expect(container.querySelector(".ai-result-html")!.innerHTML).toContain("<strong>");
   });

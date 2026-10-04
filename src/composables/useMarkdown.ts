@@ -6,10 +6,11 @@
  *   主线程只做 DOMPurify 净化;结果按源内容哈希缓存,命中时零开销。
  * - renderMermaid:带 SVG 结果缓存 + 全局串行渲染队列 + 可视区域懒渲染
  *   (IntersectionObserver),避免打开文档即全量渲染造成首屏卡顿。
- * - renderMath / extractHeadings:保持同步/近同步语义,供各处调用。
+ * - renderMath:保持同步/近同步语义,供各处调用。
+ * - extractHeadings:异步,Worker 优先执行(主线程不再持有 markdown-it 实例),
+ *   避免启动期在主线程同步 tokenize 大文档。
  */
 import DOMPurify from "dompurify";
-import { createMarkdownIt, extractHeadingsWith } from "./markdownEngine";
 import type { Heading } from "./markdownEngine";
 import {
   markdownHtmlCache,
@@ -17,11 +18,9 @@ import {
   markdownCacheKey,
   mermaidCacheKey,
 } from "./renderCache";
-import { renderMarkdownOffThread } from "./markdownWorkerClient";
+import { renderMarkdownOffThread, extractHeadingsOffThread } from "./markdownWorkerClient";
 
 export type { Heading };
-
-const md = createMarkdownIt();
 
 /**
  * 异步渲染 markdown → 净化后 HTML。
@@ -51,9 +50,21 @@ function sanitizeHtml(raw: string): string {
   });
 }
 
-/** 提取标题大纲(同步;大文件自动走 fallback,避免全量 token 化) */
-export function extractHeadings(source: string): Heading[] {
-  return extractHeadingsWith(md, source);
+let headingsErrorLogged = false;
+
+/** 提取标题大纲(异步:Worker 优先,主线程兜底;大文件在引擎内自动走 fallback)。
+ *  失败返回空大纲并仅首次记录警告:大纲非关键路径(仅目录/章节标记),
+ *  不应因一次提取失败而阻断文件打开/会话恢复。 */
+export async function extractHeadings(source: string): Promise<Heading[]> {
+  try {
+    return await extractHeadingsOffThread(source);
+  } catch (e) {
+    if (!headingsErrorLogged) {
+      headingsErrorLogged = true;
+      console.warn("extract headings failed:", e);
+    }
+    return [];
+  }
 }
 
 let katexLoading: Promise<any> | null = null;
