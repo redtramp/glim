@@ -7,10 +7,12 @@
 
 ### 修复
 - 修复 release 启动卡顿/空白停顿的问题：原窗口配置 `visible:false` 且从未显式 `show()`，叠加 `window-state` 记住隐藏态，release 下窗口持续不可见；先改为显式 show 后又存在「窗口先显示空白、再等恢复渲染」的停顿体感。现引入**启动 splash** 方案——`index.html` 内联纯静态 splash（品牌名 + 旋转指示器，零 JS/外部依赖，主窗口首帧即渲染），`tauri.conf.json` 窗口恢复 `visible:true`，前端 `App.svelte` 在首屏内容（激活标签 markdown）挂载就绪后淡出并移除 splash（`dismissSplash`）。点击即见反馈、内容就绪平滑过渡，彻底消除空窗期
+- 修复启动卡顿的剩余主线程阻塞——**CodeMirror 编辑器随首屏静态加载**：`App.svelte` 原先静态 `import MarkdownEditor`，使其依赖的 CodeMirror 全量（`vendor-codemirror` ~613KB / gzip ~210KB，是体积最大的启动期主线程依赖）在启动时即被解析并执行，抢占首帧渲染与 splash 动画的 CPU。现改为**按需动态加载**：`App.svelte` 移除静态 import，由 `ensureEditorModule()` 在首次进入编辑模式时 `import()` 编辑器组件（并发调用共享同一 in-flight Promise，加载失败可重试），加载完成前显示占位。实测 Vite 产物入口 `index` chunk 的静态依赖不再包含 `vendor-codemirror`，启动主线程静态 JS 减少约 613KB（gzip 约 210KB），CodeMirror 拆为进入编辑模式时才拉取的独立 chunk
 - 修复「转 Svelte 5 后启动变慢」的根因——**主线程启动期同步阻塞 highlight.js**：原 `markdownEngine.ts` 顶层 `import hljs from "highlight.js"`（注册全部语言，全量 ~983KB）被主线程可达模块（useMarkdown / 文件树等）静态引用，导致主线程首屏同步加载并执行 hljs，阻塞首帧绘制。现改为**仅 Worker 线程加载**：`createMarkdownIt(hljs?)` 接收可选 hljs 实例，主线程不传（代码块回退纯转义，主线程只做大纲提取 / DOMPurify 无需高亮），Worker（`markdown.worker.ts`）内部静态 import hljs 并注入——hljs 完全移出主线程启动路径，首屏不再同步执行该重块
 - 修复 `~/.config`、`~/.local` 等隐藏目录中的文档无法打开的问题：Tauri fs 插件 Unix 默认 `requireLiteralLeadingDot=true`，ACL 模式 `$HOME/**` 的通配符不能匹配以 `.` 开头的路径分量，导致 `readTextFile` 报 `PathForbidden`。现于 `tauri.conf.json` 设置 `plugins.fs.requireLiteralLeadingDot: false`，实测授权根内任意深度隐藏目录（含隐藏子目录）均可读取
 
 ### 工程
+- 修正 `markdownEngine` 陈旧单测：hljs 高亮迁至 Worker 后，该用例仍按无 hljs 注入的主线程实例断言高亮，导致失败；现按 Worker 路径注入 hljs，并新增「主线程无注入时代码块回退纯转义」的独立断言，防止主线程回退路径静默回归（全量 570 用例通过）
 - 新增 `useFsAuthorize`（8）与 `GrantAccessDialog`（5）单测，覆盖授权错误识别、拒绝/授权后重试、提示未决期并发拒绝、弹窗渲染与 emit；全量 561 个用例通过
 - Svelte 5 + Tailwind 4 迁移完成：前端全量迁移至 Svelte 5（runes）+ Tailwind CSS 4 工具类；移除 Vue 工具链依赖（`vue`/`pinia`/`vue-i18n`/`@vitejs/plugin-vue`/`@vue/test-utils`/`eslint-plugin-vue` 等 -86 包）与 `src/legacy-components.css` 遗留样式表，i18n 改为 Svelte 5 runes 自研实现；`pnpm check` 全绿（svelte-check 0/0、eslint 0、vitest 32 文件 569 用例、vite build ✓）
 

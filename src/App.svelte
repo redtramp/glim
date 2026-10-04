@@ -63,7 +63,11 @@ import DiffView from "./components/DiffView.svelte";
 import ReviewPanel from "./components/ReviewPanel.svelte";
 import AiPanel from "./components/AiPanel.svelte";
 import MarkdownView from "./components/MarkdownView.svelte";
-import MarkdownEditor from "./components/MarkdownEditor.svelte";
+// MarkdownEditor 仅编辑模式需要，其依赖的 CodeMirror（vendor-codemirror ~613KB / gzip 210KB）
+// 是全应用最重的启动期主线程依赖。此处不做静态 import，改由 ensureEditorModule() 动态按需加载，
+// 把 CodeMirror 移出启动关键路径（详见 toggleEditorMode 与模板中的 {#if EditorComponent}）。
+// 仅类型层引用组件，不产生运行时依赖。
+type MarkdownEditorComponent = typeof import("./components/MarkdownEditor.svelte")["default"];
 import AnnotationToolbar from "./components/AnnotationToolbar.svelte";
 import ExportMenu from "./components/ExportMenu.svelte";
 import MobileBottomBar from "./components/MobileBottomBar.svelte";
@@ -92,6 +96,26 @@ let viewerElState = $state<HTMLElement | null>(null);
 let markdownState = $state<{ root: HTMLElement | null } | null>(null);
 let editorState = $state<MarkdownEditorHandle | null>(null);
 let searchPanelState = $state<SearchPanelHandle | null>(null);
+/** 按需加载的编辑器组件（CodeMirror 重块）；未加载完成时模板显示占位 */
+let EditorComponent = $state<MarkdownEditorComponent | null>(null);
+/** 编辑器模块 in-flight Promise：并发调用共享，加载成功/失败都只发起一次真实 import */
+let editorModulePromise: Promise<void> | null = null;
+
+/** 确保编辑器模块已加载（幂等）。失败时重置 Promise 以便下次重试，避免编辑功能永久不可用。 */
+function ensureEditorModule(): Promise<void> {
+  if (EditorComponent) return Promise.resolve();
+  if (!editorModulePromise) {
+    editorModulePromise = import("./components/MarkdownEditor.svelte")
+      .then((mod) => {
+        EditorComponent = mod.default;
+      })
+      .catch((e) => {
+        editorModulePromise = null;
+        console.error("load markdown editor module failed:", e);
+      });
+  }
+  return editorModulePromise;
+}
 const viewerEl = { get value() { return viewerElState; } };
 const bodyRef = { get value() { return markdownState?.root ?? null; } };
 
@@ -314,7 +338,14 @@ function toggleEditorMode() {
   const tab = activeTab; if (!tab) return;
   if (tab.isEditing) { tab.pendingSourceLine = editorRef.value?.getTopVisibleLine() ?? 1; tab.pendingScrollTop = 0; tab.isEditing = false; find.reset(); return; }
   tab.pendingSourceLine = 0; tab.isEditing = true;
-  void (async () => { await tick(); editorRef.value?.scrollToLine(getPreviewTopSourceLine()); })();
+  // 先确保编辑器模块加载完成，再渲染定位；否则首次进入编辑模式时编辑器尚未挂载，滚动定位会丢失。
+  // 续体再次校验仍处于编辑模式：模块加载期间用户可能已切回预览，此时不再定位。
+  void (async () => {
+    await ensureEditorModule();
+    await tick();
+    if (!activeTab?.isEditing) return;
+    editorRef.value?.scrollToLine(getPreviewTopSourceLine());
+  })();
 }
 
 let autoReloadWhitelist = $state<string[]>(JSON.parse(localStorage.getItem("glim-reader-auto-reload-whitelist") || "[]"));
@@ -908,7 +939,12 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
             {/if}
           </div>
         {:else if isEditing}
-          <MarkdownEditor bind:this={editorState} modelValue={draftContent} theme={appStore.theme} currentFile={currentFile} onUpdateModelValue={onDraftUpdate} onToggleMode={toggleEditorMode} />
+          {#if EditorComponent}
+            <EditorComponent bind:this={editorState} modelValue={draftContent} theme={appStore.theme} currentFile={currentFile} onUpdateModelValue={onDraftUpdate} onToggleMode={toggleEditorMode} />
+          {:else}
+            <!-- 编辑器模块（CodeMirror）按需加载中的占位：通常瞬间完成，避免首屏静态加载重块 -->
+            <div class="flex h-full items-center justify-center text-sm text-fg-muted" aria-busy="true"></div>
+          {/if}
         {:else}
           <MarkdownView bind:this={markdownState} source={draftContent} {currentFile} {rootDir} renderTick={renderTick} onRendered={handleOnRendered} onInternalLink={(p) => void loadFile(p)} />
         {/if}
