@@ -10,6 +10,7 @@
  * - extractHeadingsWith:常规提取、front matter 偏移、>200k 大文件 fallback 与 500 行限制
  */
 import { describe, it, expect } from "vitest";
+import hljs from "highlight.js";
 import {
   createMarkdownIt,
   splitFrontMatter,
@@ -20,7 +21,9 @@ import {
 } from "./markdownEngine";
 
 function md() {
-  return createMarkdownIt();
+  // 代码高亮已移至 Web Worker（主线程不注入 hljs，代码块回退纯转义）。
+  // 本套件按 Worker 渲染路径注入 hljs，验证引擎的高亮能力与其余渲染规则。
+  return createMarkdownIt(hljs);
 }
 
 describe("splitFrontMatter", () => {
@@ -132,6 +135,13 @@ describe("createMarkdownIt + renderMarkdownRaw", () => {
     // hljs 将关键字/数字包装为语义 span
     expect(html).toContain('<span class="hljs-keyword">const</span>');
     expect(html).toContain('<span class="hljs-number">1</span>');
+  });
+
+  it("主线程（无 hljs 注入）代码块回退纯转义，不产生高亮 span", () => {
+    const html = renderMarkdownRaw(createMarkdownIt(), "```js\nconst a = 1;\n```");
+    expect(html).toContain('<pre class="hljs">');
+    expect(html).toContain("const a = 1;");
+    expect(html).not.toContain("hljs-keyword");
   });
 
   it("未知语言代码块转义原样输出", () => {
