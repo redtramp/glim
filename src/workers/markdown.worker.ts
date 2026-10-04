@@ -9,8 +9,11 @@
  */
 /// <reference lib="webworker" />
 import { createMarkdownIt, renderMarkdownOnce } from "../composables/markdownEngine";
+// highlight.js 静态引入进 Worker chunk（仅 Worker 线程加载，不阻塞主线程首屏）；
+// 主线程的 markdownEngine 不再引用 hljs，从而把 ~983KB hljs 移出主线程启动路径。
+import hljs from "highlight.js";
 
-const md = createMarkdownIt();
+const md = createMarkdownIt(hljs);
 
 self.onmessage = (e: MessageEvent<{ id: number; source: string }>) => {
   const { id, source } = e.data;

@@ -7,6 +7,7 @@
 
 ### 修复
 - 修复 release 启动卡顿/空白停顿的问题：原窗口配置 `visible:false` 且从未显式 `show()`，叠加 `window-state` 记住隐藏态，release 下窗口持续不可见；先改为显式 show 后又存在「窗口先显示空白、再等恢复渲染」的停顿体感。现引入**启动 splash** 方案——`index.html` 内联纯静态 splash（品牌名 + 旋转指示器，零 JS/外部依赖，主窗口首帧即渲染），`tauri.conf.json` 窗口恢复 `visible:true`，前端 `App.svelte` 在首屏内容（激活标签 markdown）挂载就绪后淡出并移除 splash（`dismissSplash`）。点击即见反馈、内容就绪平滑过渡，彻底消除空窗期
+- 修复「转 Svelte 5 后启动变慢」的根因——**主线程启动期同步阻塞 highlight.js**：原 `markdownEngine.ts` 顶层 `import hljs from "highlight.js"`（注册全部语言，全量 ~983KB）被主线程可达模块（useMarkdown / 文件树等）静态引用，导致主线程首屏同步加载并执行 hljs，阻塞首帧绘制。现改为**仅 Worker 线程加载**：`createMarkdownIt(hljs?)` 接收可选 hljs 实例，主线程不传（代码块回退纯转义，主线程只做大纲提取 / DOMPurify 无需高亮），Worker（`markdown.worker.ts`）内部静态 import hljs 并注入——hljs 完全移出主线程启动路径，首屏不再同步执行该重块
 - 修复 `~/.config`、`~/.local` 等隐藏目录中的文档无法打开的问题：Tauri fs 插件 Unix 默认 `requireLiteralLeadingDot=true`，ACL 模式 `$HOME/**` 的通配符不能匹配以 `.` 开头的路径分量，导致 `readTextFile` 报 `PathForbidden`。现于 `tauri.conf.json` 设置 `plugins.fs.requireLiteralLeadingDot: false`，实测授权根内任意深度隐藏目录（含隐藏子目录）均可读取
 
 ### 工程

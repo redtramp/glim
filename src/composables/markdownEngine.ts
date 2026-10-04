@@ -9,13 +9,17 @@ import MarkdownIt from "markdown-it";
 import type Token from "markdown-it/lib/token.mjs";
 import type Renderer from "markdown-it/lib/renderer.mjs";
 import type { Options } from "markdown-it";
-import hljs from "highlight.js";
 import anchor from "markdown-it-anchor";
 import footnote from "markdown-it-footnote";
 import taskLists from "markdown-it-task-lists";
 import { full as emoji } from "markdown-it-emoji";
 import mathPlugin from "./mathPlugin";
 import { createCriticMarkupPlugin } from "./criticMarkup";
+
+// 仅在类型层引用 highlight.js，避免主线程静态/动态依赖。hljs 实例由 Worker 线程
+// 动态加载后注入（见 markdown.worker.ts），主线程 createMarkdownIt() 不传 → 代码块
+// 走纯转义兜底，从而把 ~983KB hljs 移出主线程首屏，消除启动同步阻塞。
+export type HljsModule = typeof import("highlight.js").default;
 
 export interface Heading {
   level: number;
@@ -77,8 +81,10 @@ export function renderFrontMatter(block: FrontMatterBlock): string {
   return `<section class="front-matter" data-source-line="1"><div class="front-matter-title">YAML Front Matter</div><table><tbody>${rows.join("")}</tbody></table></section>`;
 }
 
-/** 构建与旧 useMarkdown 完全一致的 markdown-it 实例(纯字符串能力) */
-export function createMarkdownIt(): MarkdownIt {
+/** 构建与旧 useMarkdown 完全一致的 markdown-it 实例(纯字符串能力)。
+ *  hljs 可选注入：Worker 渲染代码块时传入已加载的 hljs 实例；主线程不传，
+ *  代码块回退纯转义（主线程只做 extractHeadings / DOMPurify，无需高亮）。 */
+export function createMarkdownIt(hljsInst?: HljsModule): MarkdownIt {
   const md: MarkdownIt = new MarkdownIt({
     html: true,
     linkify: true,
@@ -88,11 +94,11 @@ export function createMarkdownIt(): MarkdownIt {
       if (lang === "mermaid") {
         return `<div class="mermaid-block">${md.utils.escapeHtml(str)}</div>`;
       }
-      if (lang && hljs.getLanguage(lang)) {
+      if (lang && hljsInst && hljsInst.getLanguage(lang)) {
         try {
           return (
             '<pre class="hljs"><code>' +
-            hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+            hljsInst.highlight(str, { language: lang, ignoreIllegals: true }).value +
             "</code></pre>"
           );
         } catch {
