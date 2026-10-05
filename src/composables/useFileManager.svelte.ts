@@ -6,7 +6,7 @@ import { useAppStore } from "../stores/app.svelte.ts";
 import { useHistoryStore } from "../stores/history.svelte.ts";
 import { useFileTreeStore } from "../stores/fileTree.svelte.ts";
 import { useUnsavedDialog } from "./useUnsavedDialog.svelte.ts";
-import { extractHeadings } from "./useMarkdown";
+import { extractHeadingsWithRender } from "./useMarkdown";
 
 export function useFileManager() {
   const tabs = useTabsStore();
@@ -46,7 +46,7 @@ export function useFileManager() {
     tab.content = content;
     tab.draftContent = content;
     tab.isDirty = false;
-    tab.headings = await extractHeadings(content);
+    tab.headings = await extractHeadingsWithRender(content);
     tabs.tabs.push(tab);
     tabs.activateTab(tab.id);
     history.pushRecent(filePath);
@@ -71,7 +71,7 @@ export function useFileManager() {
       tab.draftContent = text;
       tab.isDirty = false;
       tab.isEditing = false;
-      tab.headings = await extractHeadings(text);
+      tab.headings = await extractHeadingsWithRender(text);
       tab.pendingHash = "";
       tab.pendingScrollTop = 0;
       tab.pendingSourceLine = sourceLine;
@@ -114,7 +114,7 @@ export function useFileManager() {
       await writeFile(tab.path, new TextEncoder().encode(tab.draftContent));
       tab.content = tab.draftContent;
       tab.isDirty = false;
-      tab.headings = await extractHeadings(tab.draftContent);
+      tab.headings = await extractHeadingsWithRender(tab.draftContent);
       app.exportToast = t("editor.saved");
       scheduleSuppressClear(tab.path);
       return true;
@@ -146,7 +146,7 @@ export function useFileManager() {
       tab.content = tab.draftContent;
       tab.path = targetPath;
       tab.isDirty = false;
-      tab.headings = await extractHeadings(tab.draftContent);
+      tab.headings = await extractHeadingsWithRender(tab.draftContent);
       history.pushRecent(targetPath);
       app.exportToast = `${t("editor.saved")}: ${targetPath}`;
       scheduleSuppressClear(targetPath);

@@ -139,6 +139,13 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - Simplified Chinese / English UI switching (🌐 button in left floating menu, current language dynamically shown)
 - Update checking with one-click navigation to the download page
 
+### Performance & Startup
+- **Startup splash**: a fully static splash screen inlined in `index.html` renders on the very first frame and fades out once the main content (active tab Markdown) is ready, eliminating the startup blank window
+- **Highlighting & parsing in a Worker**: highlight.js is loaded only in a Web Worker; markdown-it and its plugins are lazily loaded and stay out of the main-thread startup bundle
+- **Off-thread outline extraction**: heading outlines of large documents are extracted in a Worker, never blocking the main thread
+- **On-demand editor**: CodeMirror (~613KB) is not in the startup bundle and is fetched on first use; users who have edited before get it idle-preloaded after the first paint for zero-wait re-entry, while read-only users never load it
+- **Single-pass render reuse**: opening/activating a document renders once to produce both the outline and HTML, caching both so the view render hits the cache and avoids the previous double parse
+
 ---
 
 ## Keyboard Shortcuts

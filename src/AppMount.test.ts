@@ -357,6 +357,33 @@ describe("编辑器按需加载", () => {
   });
 });
 
+describe("浮层 AI 面板接线", () => {
+  function seedActiveTab(): void {
+    mockStorage["glim-reader-tabs"] = JSON.stringify({
+      paths: ["/docs/a.md"],
+      activePath: "/docs/a.md",
+    });
+    readTextFileMock.mockImplementation(async () => "# 标题\n\n正文内容。");
+  }
+
+  it("点击左栏 AI 打开浮层内嵌面板（动作按钮已接线、无选区时选区动作禁用）", async () => {
+    seedActiveTab();
+    const m = mountApp();
+    await flushPromises();
+
+    // LeftRail 第 11 个按钮 = ai（LEFT_PANEL_META 顺序：…, edit, ai, …）
+    clickRailBtn(m.target, 10);
+    await flushPromises();
+
+    expect(m.target.querySelector(".ai-inline")).toBeTruthy();
+    expect(m.target.querySelector('[data-action="rewrite"]')).toBeTruthy();
+    // 无选区时选区类动作禁用（选区经 setSelection 带入且为空）
+    const summarize = m.target.querySelector<HTMLButtonElement>('[data-action="summarize"]');
+    expect(summarize?.disabled).toBe(true);
+    m.unmount();
+  });
+});
+
 describe("restoreTabs 并发基准", () => {
   it("8 文件按 4 并发读取：结构性验证并发上限，读取耗时显著低于串行", async () => {
     const paths = Array.from({ length: 8 }, (_, i) => `/docs/f${i}.md`);

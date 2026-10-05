@@ -83,6 +83,16 @@ describe("LeftRail", () => {
     expect(onOpenPanel).toHaveBeenCalledWith("filetree");
   });
 
+  it("悬停按钮触发 onPanelHover（供 App 做编辑意图预取）", async () => {
+    const onPanelHover = vi.fn();
+    const { container } = render(LeftRail, { props: { activePanel: null, onPanelHover } });
+    const buttons = container.querySelectorAll<HTMLButtonElement>(".left-rail-btn");
+    // 悬停（jsdom 无 PointerEvent，直接派发同类型事件触发 Svelte onpointerenter）
+    buttons[9].dispatchEvent(new Event("pointerenter"));
+    expect(onPanelHover).toHaveBeenCalledWith("edit");
+    expect(onPanelHover).toHaveBeenCalledTimes(1);
+  });
+
   it("每个图标触发正确的 panel id", async () => {
     const { container, onOpenPanel } = renderLeftRail({ activePanel: null });
     const buttons = container.querySelectorAll<HTMLButtonElement>(".left-rail-btn");

@@ -111,17 +111,26 @@ export function useAiPanel(opts: { chat?: typeof chatComplete } = {}) {
 
   let getCtx: () => AiPanelContext | null = () => null;
   let abortCtrl: AbortController | null = null;
+  // 由 close() 显式置位:区分「用户关闭导致的中止」与「超时/失败」。不能复用
+  // state.visible 判断——浮层内嵌 AI 面板不置 visible(避免弹模态面板),可见性恒 false。
+  let closedByUser = false;
 
   function configure(ctx: () => AiPanelContext | null): void {
     getCtx = ctx;
   }
 
-  /** 工具栏「AI」触发:记录选区并打开面板 */
-  function openWithSelection(selection: string): void {
+  /** 仅更新选区并清态(不改 visible):供浮层内嵌 AI 面板在打开时带入当前选区,
+   *  不触发模态 AiPanel(其 visible 与本状态共用,故此处刻意不置 true)。 */
+  function setSelection(selection: string): void {
     state.selectionText = selection;
     state.result = "";
     state.error = null;
     state.activeAction = null;
+  }
+
+  /** 工具栏「AI」触发:记录选区并打开模态面板 */
+  function openWithSelection(selection: string): void {
+    setSelection(selection);
     state.visible = true;
   }
 
@@ -134,6 +143,7 @@ export function useAiPanel(opts: { chat?: typeof chatComplete } = {}) {
     state.loading = true;
     state.error = null;
     state.activeAction = action;
+    closedByUser = false;
     // 切换动作时清掉上一个动作的结果,避免旧结果显示在新动作下
     state.result = "";
     abortCtrl = new AbortController();
@@ -151,10 +161,10 @@ export function useAiPanel(opts: { chat?: typeof chatComplete } = {}) {
     try {
       state.result = await chatImpl(settings, messages, undefined, signal);
     } catch (e) {
-      // 面板关闭触发的中止:忽略错误,不覆盖已展示内容。
+      // close() 触发的中止:忽略错误,不覆盖已展示内容。
       // 不能用 signal.aborted 判断——超时也会 abort 同一信号,会把超时错误吞掉;
-      // 按面板可见性区分:close() 同步置 visible=false,超时时面板仍可见。
-      if (!state.visible) return;
+      // 改用 close() 显式置位的 closedByUser 区分(与面板可见性解耦,兼容浮层内嵌面板)。
+      if (closedByUser) return;
       state.error = e instanceof AiError ? e : new AiError("network", String(e));
     } finally {
       state.loading = false;
@@ -170,6 +180,7 @@ export function useAiPanel(opts: { chat?: typeof chatComplete } = {}) {
 
   /** 关闭面板:中止进行中请求并清态 */
   function close(): void {
+    closedByUser = true;
     abortCtrl?.abort();
     abortCtrl = null;
     state.visible = false;
@@ -180,6 +191,7 @@ export function useAiPanel(opts: { chat?: typeof chatComplete } = {}) {
   return {
     state,
     configure,
+    setSelection,
     openWithSelection,
     runAction,
     applyResultToDoc,

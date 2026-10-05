@@ -18,7 +18,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { t, locale, persistLocale, type AppLocale } from "./i18n/locale.svelte.ts";
 import { useFileTree } from "./composables/useFileTree.svelte.ts";
 import { useFileWatcher } from "./composables/useFileWatcher.svelte.ts";
-import { extractHeadings } from "./composables/useMarkdown";
+import { extractHeadings, extractHeadingsWithRender } from "./composables/useMarkdown";
 import { useScrollSpy } from "./composables/useScrollSpy.svelte.ts";
 import { useFindInPage } from "./composables/useFindInPage.svelte.ts";
 import { useHistory, type RecentItem } from "./composables/useHistory";
@@ -44,6 +44,7 @@ import { useUnsavedDialog } from "./composables/useUnsavedDialog.svelte.ts";
 import { useFsAuthorize } from "./composables/useFsAuthorize.svelte.ts";
 import { useFloatLayout, ACTION_PANEL_IDS } from "./composables/useFloatLayout.svelte.ts";
 import { createLazyLoader } from "./composables/lazyComponent";
+import { markEditorUsed, hasEditorIntent } from "./composables/editorPreload";
 import { useSectionMarkers } from "./composables/useSectionMarkers.svelte.ts";
 import { useBookmarks } from "./composables/useBookmarks.svelte.ts";
 import { basename, dirOf } from "./utils/path";
@@ -214,7 +215,7 @@ async function readFileIntoTab(tab: Tab, path: string, hash = "", sourceLine = 0
   try {
     const text = await fsAuthorize.readTextFileAuthorized(path);
     tab.path = path; tab.content = text; tab.draftContent = text;
-    tab.isDirty = false; tab.isEditing = false; tab.headings = await extractHeadings(text);
+    tab.isDirty = false; tab.isEditing = false; tab.headings = await extractHeadingsWithRender(text);
     tab.pendingHash = hash; tab.pendingScrollTop = hash ? 0 : getScroll(path);
     tab.pendingSourceLine = sourceLine; tab.scrollTop = tab.pendingScrollTop;
     pushRecent(path); void watcher.watchFile(dirOf(path));
@@ -244,7 +245,7 @@ async function forceReloadTab(tab: Tab) {
   fileManager.addSuppress(tab.path);
   try {
     const text = await fsAuthorize.readTextFileAuthorized(tab.path);
-    tab.content = text; tab.draftContent = text; tab.isDirty = false; tab.headings = await extractHeadings(text);
+    tab.content = text; tab.draftContent = text; tab.isDirty = false; tab.headings = await extractHeadingsWithRender(text);
     if (tab.id === activeTabId) { tab.pendingHash = ""; tab.pendingScrollTop = tab.scrollTop; tab.pendingSourceLine = 0; find.clearHighlights(); }
     fileManager.scheduleSuppressClear(tab.path);
   } catch (e: any) { fileManager.clearSuppress(tab.path); appStore.errorMsg = `${t("errors.readFailed")}: ${e?.message || e}`; }
@@ -328,7 +329,7 @@ async function syncRootDir(path: string) {
 function toggleEditorMode() {
   const tab = activeTab; if (!tab) return;
   if (tab.isEditing) { tab.pendingSourceLine = editorRef.value?.getTopVisibleLine() ?? 1; tab.pendingScrollTop = 0; tab.isEditing = false; find.reset(); return; }
-  tab.pendingSourceLine = 0; tab.isEditing = true;
+  tab.pendingSourceLine = 0; tab.isEditing = true; markEditorUsed();
   // 先确保编辑器模块加载完成，再渲染定位；否则首次进入编辑模式时编辑器尚未挂载，滚动定位会丢失。
   // 续体再次校验仍处于编辑模式：模块加载期间用户可能已切回预览，此时不再定位。
   void (async () => {
@@ -481,6 +482,8 @@ async function onAnnotationPaste() {
   if (!text.trim()) return; onAnnotationApply("ins", text);
 }
 function openAiPanel() { annotations.hide(); const container = bodyRef.value, range = container && resolveSelectionRange(container, window.getSelection()); aiPanel.openWithSelection(range ? range.toString().trim() : ""); }
+/** 打开浮层内嵌 AI 面板(🤖):带入当前选区并展示浮层,不弹模态面板 */
+function openInlineAiPanel() { annotations.hide(); aiPanel.close(); const container = bodyRef.value, range = container && resolveSelectionRange(container, window.getSelection()); aiPanel.setSelection(range ? range.toString().trim() : ""); floatLayout.openPanel("ai"); }
 function onAiApplyResult(text: string) {
   const tab = activeTab; if (!tab) return;
   if (!window.confirm(t("ai.applyConfirm"))) return;
@@ -632,7 +635,7 @@ async function restoreTabs(initialPath = "") {
         tab.path = path; tab.content = text; tab.draftContent = text;
         tab.isDirty = false; tab.isEditing = false;
         // 仅对本次激活的标签同步提取大纲，其余延迟到激活时（显著加快多文档启动）
-        tab.headings = samePath(path, activePath) ? await extractHeadings(text) : [];
+        tab.headings = samePath(path, activePath) ? await extractHeadingsWithRender(text) : [];
         tab.pendingHash = ""; tab.pendingScrollTop = getScroll(path);
         tab.pendingSourceLine = 0; tab.scrollTop = tab.pendingScrollTop;
         tabs.push(tab);
@@ -645,7 +648,7 @@ async function restoreTabs(initialPath = "") {
       // activePath 为空（默认取第一个标签）时补一次大纲提取
       const activated = tabs.find(tb => tb.id === activeId);
       if (activated && !activated.headings.length && activated.draftContent) {
-        activated.headings = await extractHeadings(activated.draftContent);
+        activated.headings = await extractHeadingsWithRender(activated.draftContent);
       }
       // 最近打开列表批量写入一次，避免每文件一次 localStorage 序列化
       if (recentPaths.length) pushRecentBatch(recentPaths);
@@ -682,6 +685,9 @@ let editorPreloadTimer: ReturnType<typeof setTimeout> | null = null;
  *  不抢占启动关键路径：requestIdleCallback 在浏览器空闲时执行（3s 超时兜底）；
  *  不支持时退回 2s 定时器。卸载时取消，避免在已销毁实例上继续加载。 */
 function scheduleEditorPreload(): void {
+  // 仅当用户此前使用过编辑模式时才空闲预加载:纯阅读用户不拉取 CodeMirror(~613KB)。
+  // 首次编辑由左侧编辑按钮的悬停/聚焦预取(onPanelHover)或进入编辑时的按需 import 兜底。
+  if (!hasEditorIntent()) return;
   const preload = () => {
     editorPreloadIdle = null;
     editorPreloadTimer = null;
@@ -692,6 +698,12 @@ function scheduleEditorPreload(): void {
   } else {
     editorPreloadTimer = setTimeout(preload, 2000);
   }
+}
+
+/** 编辑意图预取:悬停/聚焦左侧「编辑」按钮即提前拉取编辑器模块,
+ *  让首次编辑（尚未有过编辑记录的用户）也尽量零等待;ensure() 幂等,重复调用无副作用。 */
+function prefetchEditorOnIntent(id: string): void {
+  if (id === "edit") void editorLoader.ensure();
 }
 
 onMount(() => {
@@ -805,7 +817,7 @@ $effect(() => {
     requestAnimationFrame(() => {
       const cur = tabsApi.activeTab;
       if (!cur || cur.id !== tabId || cur.headings.length) return;
-      void extractHeadings(cur.draftContent).then((hs) => { cur.headings = hs; });
+      void extractHeadingsWithRender(cur.draftContent).then((hs) => { cur.headings = hs; });
     });
   }
   if (!searchVisible || newPath !== prevTabPath) {
@@ -971,7 +983,8 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
     </main>
     {#if enableFloatLayout}
       <LeftRail activePanel={floatLayout.state.activeLeftPanel} {dynamicIcons}
-                onOpenPanel={(id) => (id === 'search' ? toggleSearchPanel() : ACTION_PANEL_IDS.has(id) ? onFloatPanelAction(id) : floatLayout.openPanel(id))} />
+                onOpenPanel={(id) => (id === 'search' ? toggleSearchPanel() : id === 'ai' ? openInlineAiPanel() : ACTION_PANEL_IDS.has(id) ? onFloatPanelAction(id) : floatLayout.openPanel(id))}
+                onPanelHover={prefetchEditorOnIntent} />
       <TopTrigger enabled onShow={() => (topTabBarVisible = true)} />
     {/if}
     {#if enableFloatLayout && tabs.length}
@@ -984,7 +997,7 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
     {/if}
     {#if enableFloatLayout && !isEditing}
       <MobileBottomBar activePanel={floatLayout.state.activeLeftPanel}
-                       onOpenPanel={(id) => (id === 'search' ? toggleSearchPanel() : ACTION_PANEL_IDS.has(id) ? onFloatPanelAction(id) : floatLayout.openPanel(id))} />
+                       onOpenPanel={(id) => (id === 'search' ? toggleSearchPanel() : id === 'ai' ? openInlineAiPanel() : ACTION_PANEL_IDS.has(id) ? onFloatPanelAction(id) : floatLayout.openPanel(id))} />
       <FloatPanelContent
         floatState={{ activeLeftPanel: floatLayout.state.activeLeftPanel, closePanel: () => floatLayout.closePanel() }}
         isMobile={isMobileViewport} {rootDir} {tree} {currentFile}
@@ -995,6 +1008,9 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
         onOpenFile={onFloatPanelOpenFile} onGoUp={() => void goUp()} onOpen={onFloatPanelOpenFile}
         onRefreshRecent={refreshRecent} onAnnotationFocus={onReviewFocus}
         onOpenReview={openReviewPanel} onBookmarkJump={handleBookmarkJump}
+        onCopyAi={() => void annotations.copyForAI()}
+        onRunAiAction={(a) => void aiPanel.runAction(a)}
+        onApplyAiResult={() => void aiPanel.applyResultToDoc()}
         onRefreshBookmarks={() => bookmarks.reload()}
         onToggleTheme={handleToggleTheme}
         onZoomIn={handleZoomIn} onZoomOut={handleZoomOut}

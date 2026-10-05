@@ -12,14 +12,19 @@
 - 修复启动卡顿的剩余主线程阻塞——**CodeMirror 编辑器随首屏静态加载**：`App.svelte` 原先静态 `import MarkdownEditor`，使其依赖的 CodeMirror 全量（`vendor-codemirror` ~613KB / gzip ~210KB，是体积最大的启动期主线程依赖）在启动时即被解析并执行，抢占首帧渲染与 splash 动画的 CPU。现改为**按需动态加载**：`App.svelte` 移除静态 import，由 `ensureEditorModule()` 在首次进入编辑模式时 `import()` 编辑器组件（并发调用共享同一 in-flight Promise，加载失败可重试），加载完成前显示占位。实测 Vite 产物入口 `index` chunk 的静态依赖不再包含 `vendor-codemirror`，启动主线程静态 JS 减少约 613KB（gzip 约 210KB），CodeMirror 拆为进入编辑模式时才拉取的独立 chunk
 - 修复「转 Svelte 5 后启动变慢」的根因——**主线程启动期同步阻塞 highlight.js**：原 `markdownEngine.ts` 顶层 `import hljs from "highlight.js"`（注册全部语言，全量 ~983KB）被主线程可达模块（useMarkdown / 文件树等）静态引用，导致主线程首屏同步加载并执行 hljs，阻塞首帧绘制。现改为**仅 Worker 线程加载**：`createMarkdownIt(hljs?)` 接收可选 hljs 实例，主线程不传（代码块回退纯转义，主线程只做大纲提取 / DOMPurify 无需高亮），Worker（`markdown.worker.ts`）内部静态 import hljs 并注入——hljs 完全移出主线程启动路径，首屏不再同步执行该重块
 - 修复 `~/.config`、`~/.local` 等隐藏目录中的文档无法打开的问题：Tauri fs 插件 Unix 默认 `requireLiteralLeadingDot=true`，ACL 模式 `$HOME/**` 的通配符不能匹配以 `.` 开头的路径分量，导致 `readTextFile` 报 `PathForbidden`。现于 `tauri.conf.json` 设置 `plugins.fs.requireLiteralLeadingDot: false`，实测授权根内任意深度隐藏目录（含隐藏子目录）均可读取
+- 启动优化续（编辑器预加载按编辑意图门控）：原启动后无条件空闲预加载 CodeMirror（~613KB / gzip ~210KB），纯阅读用户也被迫拉取。现仅在用户此前使用过编辑模式（localStorage 记录 `glim-reader-editor-used`）时才空闲预加载，并新增左侧「编辑」按钮的**悬停预取**；首次编辑经按需 import 兜底，纯阅读用户不再加载编辑器
+- 启动优化续（消除渲染双解析）：打开/激活文档时改为**一次完整渲染同时产出标题大纲与 HTML 并缓存**（新增 `extractHeadingsWithRender` 与 `renderMarkdownFull`，`renderCache` 新增与 HTML 同键的 `markdownHeadingsCache`），随后的 MarkdownView 渲染直接命中缓存，消除「先仅提取大纲、再渲染 HTML」的重复解析；实时编辑用的 `extractHeadings`（仅大纲）亦命中同一缓存
+- 修复浮层内嵌 AI 面板动作回调未接线（死链）：`FloatPanelContent` 的 `onCopyAi/onRunAiAction/onApplyAiResult` 在 App 侧自迁移前即未绑定，浮层 AI 面板按钮无响应；现全部接线，并新增 `useAiPanel.setSelection` 使打开浮层 AI 面板时带入当前选区（不弹模态面板）；同时把 `runAction` 的错误展示由「面板可见性」改为显式的 `closedByUser` 标志，修复内嵌面板（`visible` 恒 false）失败被静默吞掉的问题
 
 ### 工程
+- 新增 `editorPreload`（3）、`useMarkdown`（单次渲染/缓存复用 5）、`useAiPanel`（`setSelection` + 内嵌面板错误展示 2）、`LeftRail`（悬停预取 1）、`AppMount`（浮层 AI 面板接线 1）单测；全量 586 用例通过
 - 新增 `lazyComponent`（`createLazyLoader`：幂等 / 并发 in-flight 去重 / 失败可重试）单测（4）；`AppMount` 新增「编辑器按需加载」集成测试（首次进入编辑模式握手、快速进入→退出不误定位），编辑器以轻量替身 `MarkdownEditorStub` 注入以避免 jsdom 加载 CodeMirror；`useMarkdown` 补「大纲提取失败回退空大纲」用例；全量 577 用例通过
 - 修正 `markdownEngine` 陈旧单测：hljs 高亮迁至 Worker 后，该用例仍按无 hljs 注入的主线程实例断言高亮，导致失败；现按 Worker 路径注入 hljs，并新增「主线程无注入时代码块回退纯转义」的独立断言，防止主线程回退路径静默回归（全量 570 用例通过）
 - 新增 `useFsAuthorize`（8）与 `GrantAccessDialog`（5）单测，覆盖授权错误识别、拒绝/授权后重试、提示未决期并发拒绝、弹窗渲染与 emit；全量 561 个用例通过
 - Svelte 5 + Tailwind 4 迁移完成：前端全量迁移至 Svelte 5（runes）+ Tailwind CSS 4 工具类；移除 Vue 工具链依赖（`vue`/`pinia`/`vue-i18n`/`@vitejs/plugin-vue`/`@vue/test-utils`/`eslint-plugin-vue` 等 -86 包）与 `src/legacy-components.css` 遗留样式表，i18n 改为 Svelte 5 runes 自研实现；`pnpm check` 全绿（svelte-check 0/0、eslint 0、vitest 32 文件 569 用例、vite build ✓）
 
 ### 文档
+- README（中/英）新增「性能与启动」：启动 splash、Worker 内高亮与解析、大纲提取在 Worker、编辑器按需/按编辑意图预加载、单次渲染复用
 - README（中/英）新增「文件访问与授权」：13 个预置授权根、隐藏目录覆盖范围、运行时授权提示、会话级生效说明
 
 ---

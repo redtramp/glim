@@ -16,10 +16,13 @@ let {
     activePanel,
     dynamicIcons = undefined,
     onOpenPanel,
+    onPanelHover,
   }: {
     activePanel: LeftPanelID | null;
     dynamicIcons?: Record<string, string>;
     onOpenPanel?: (id: LeftPanelID) => void;
+    /** 悬停/聚焦按钮时回调（供 App 做编辑意图预取等） */
+    onPanelHover?: (id: LeftPanelID) => void;
   } = $props();
 
 let dimmed = $state(false);
@@ -73,6 +76,7 @@ const groupBoundaries = new Set(
         aria-label={t(item.labelKey)}
         aria-pressed={activePanel === item.id}
         onclick={() => onOpenPanel?.(item.id)}
+        onpointerenter={() => onPanelHover?.(item.id)}
       >
         {#if dynamicIcons?.[item.id]}
           <span class="pointer-events-none text-lg leading-none">{dynamicIcons[item.id]}</span>

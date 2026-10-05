@@ -5,9 +5,12 @@
  * - 哈希采用 cyrb53(64 位双 32 位混合),无依赖、同步、快,适合渲染热路径;
  *   为降低哈希碰撞导致的错误命中,key 之外额外校验源长度,长度不一致视为未命中。
  * - markdown HTML 与主题无关(颜色由 CSS 控制),缓存键 = 源哈希。
+ * - markdown 标题大纲与 markdown HTML 同源同键:一次渲染同时产出 html + headings,
+ *   二者一并缓存,避免「先提取大纲、再渲染 HTML」的重复解析。
  * - mermaid SVG 与主题相关(theme 变量注入到 SVG 内),缓存键 = theme + 代码哈希。
  * - LRU 基于 Map 插入序实现,命中即置顶,超限淘汰最久未用。
  */
+import type { Heading } from "./markdownEngine";
 
 /** 快速 64 位字符串哈希(cyrb53 变体),返回 16 位十六进制串 */
 export function cyrb53(str: string, seed = 0): string {
@@ -84,6 +87,13 @@ class LengthCheckedLRU<V> {
  * 否则会命中错误主题的 HTML。
  */
 export const markdownHtmlCache = new LengthCheckedLRU<string>(10);
+
+/**
+ * markdown 标题大纲缓存:与 markdownHtmlCache 同键(源哈希 + 源长度)。
+ * 渲染一次即产出 html 与 headings,两者同批写入;后续 renderMarkdown / extractHeadings
+ * 可命中并跳过再次解析。
+ */
+export const markdownHeadingsCache = new LengthCheckedLRU<Heading[]>(10);
 
 /** mermaid SVG 缓存:theme+代码哈希 → 净化后的 SVG(与主题相关) */
 export const mermaidSvgCache = new LengthCheckedLRU<string>(80);
