@@ -77,6 +77,7 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - Task lists / footnotes / Emoji / heading anchors
 - **Unified fullscreen viewer**: click any image or Mermaid diagram to enlarge, with scroll-wheel zoom, drag-to-pan, fullscreen toggle (`F`), arrow-key panning, `+/-/0` zoom controls
 - Image hover shows magnifier cursor; Mermaid diagram hover shows blue outline hint
+- **Inline data URI images**: renders inline SVG images (`data:image/svg+xml` and more); automatically repairs broken image links exported by AI tools (ChatGPT etc.) — smart quotes (`‘’“”`) and unencoded spaces are cleaned up, while body text and code blocks stay untouched
 - Light / dark theme switching with theme preference persistence
 - Adjustable reading font size, line height, width, and font family (custom fonts and system fonts supported)
 

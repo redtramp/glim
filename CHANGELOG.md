@@ -1,8 +1,10 @@
 # 更新日志
 
-## [Unreleased]
+## [0.9.1] - 2026-11-02
 
 ### 新增
+- **内联 data URI 图片渲染**：扩展 markdown-it `validateLink` 白名单放行 `data:image/svg+xml`（默认仅 gif/png/jpeg/webp），内联 SVG 图片可直接渲染；`javascript:`、`data:text/html` 等危险协议仍被拒绝，DOMPurify 净化与 Tauri CSP 继续兜底
+- **AI 导出损坏链接自动清洗**：新增 `sanitizeInlineUrlSmartChars`，parse 前自动修复行内图片/链接 URL 中的智能引号（`‘’“”` → `%27`/`%22`）与未编码空格（→ `%20`）——ChatGPT 等工具导出的 Markdown 常见损坏可正常渲染；URL 边界按括号平衡扫描定位，兼容含裸括号的 SVG data URI（如 `translate(-249,...)`）；围栏代码块、行内代码与正文文本均不受影响
 - 授权根之外的目录：打开其中文档时弹出**授权提示**，确认后为该目录追加会话级读写授权（Rust `allow_dir` → `fs_scope().allow_directory(dir, true)`）并自动重试，拒绝则维持原错误提示；i18n 新增 `grant.*` 中英文案
 
 ### 修复
@@ -17,6 +19,7 @@
 - 修复浮层内嵌 AI 面板动作回调未接线（死链）：`FloatPanelContent` 的 `onCopyAi/onRunAiAction/onApplyAiResult` 在 App 侧自迁移前即未绑定，浮层 AI 面板按钮无响应；现全部接线，并新增 `useAiPanel.setSelection` 使打开浮层 AI 面板时带入当前选区（不弹模态面板）；同时把 `runAction` 的错误展示由「面板可见性」改为显式的 `closedByUser` 标志，修复内嵌面板（`visible` 恒 false）失败被静默吞掉的问题
 
 ### 工程
+- 新增 `sanitizeInlineUrlSmartChars` 回归测试（8）：链接清洗、双引号形态、括号不平衡原样保留、干净 URL 幂等、同段落多图清洗、**行内代码保护**（回归发现行内代码 span 内图片语法被误清洗，已修复——以私有区占位符提取还原）、空串/无链接文本、嵌套方括号不崩溃；另含 svg data URI 渲染、png 不回归、危险协议拒绝与用户原始损坏 URL 端到端用例；全量 710 用例通过（42 文件）
 - 新增 `editorPreload`（3）、`useMarkdown`（单次渲染/缓存复用 5）、`useAiPanel`（`setSelection` + 内嵌面板错误展示 2）、`LeftRail`（悬停预取 1）、`AppMount`（浮层 AI 面板接线 1）单测；全量 586 用例通过
 - 新增 `lazyComponent`（`createLazyLoader`：幂等 / 并发 in-flight 去重 / 失败可重试）单测（4）；`AppMount` 新增「编辑器按需加载」集成测试（首次进入编辑模式握手、快速进入→退出不误定位），编辑器以轻量替身 `MarkdownEditorStub` 注入以避免 jsdom 加载 CodeMirror；`useMarkdown` 补「大纲提取失败回退空大纲」用例；全量 577 用例通过
 - 修正 `markdownEngine` 陈旧单测：hljs 高亮迁至 Worker 后，该用例仍按无 hljs 注入的主线程实例断言高亮，导致失败；现按 Worker 路径注入 hljs，并新增「主线程无注入时代码块回退纯转义」的独立断言，防止主线程回退路径静默回归（全量 570 用例通过）
@@ -24,6 +27,7 @@
 - Svelte 5 + Tailwind 4 迁移完成：前端全量迁移至 Svelte 5（runes）+ Tailwind CSS 4 工具类；移除 Vue 工具链依赖（`vue`/`pinia`/`vue-i18n`/`@vitejs/plugin-vue`/`@vue/test-utils`/`eslint-plugin-vue` 等 -86 包）与 `src/legacy-components.css` 遗留样式表，i18n 改为 Svelte 5 runes 自研实现；`pnpm check` 全绿（svelte-check 0/0、eslint 0、vitest 32 文件 569 用例、vite build ✓）
 
 ### 文档
+- README（中/英）「阅读」新增「内联 data URI 图片」：svg data URI 直接渲染与 AI 导出损坏链接自动清洗说明
 - README（中/英）新增「性能与启动」：启动 splash、Worker 内高亮与解析、大纲提取在 Worker、编辑器按需/按编辑意图预加载、单次渲染复用
 - README（中/英）新增「文件访问与授权」：13 个预置授权根、隐藏目录覆盖范围、运行时授权提示、会话级生效说明
 
