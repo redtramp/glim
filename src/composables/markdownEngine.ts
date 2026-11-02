@@ -237,7 +237,6 @@ function sanitizeLineUrls(line: string): string {
 }
 
 function sanitizeLineUrlsInner(line: string): string {
-  const smartQuoteRe = /[\u2018\u2019\u201C\u201D]/;
   let result = "";
   let i = 0;
   while (i < line.length) {
@@ -264,13 +263,13 @@ function sanitizeLineUrlsInner(line: string): string {
       continue;
     }
     const url = line.slice(urlStart, j);
-    const fixed = smartQuoteRe.test(url)
-      ? url
-          .replace(/[\u2018\u2019\u201C\u201D]/g, (q) =>
-            q === "\u201C" || q === "\u201D" ? "%22" : "%27"
-          )
-          .replace(/ /g, "%20")
-      : url;
+    // 引号与空格独立处理,不以"是否含智能引号"为前置条件:
+    // 仅含未编码空格的损坏 URL(ASCII 引号 + translate( 等裸括号结构)同样需要清洗
+    const fixed = url
+      .replace(/[\u2018\u2019\u201C\u201D]/g, (q) =>
+        q === "\u201C" || q === "\u201D" ? "%22" : "%27"
+      )
+      .replace(/ /g, "%20");
     result += line.slice(i, urlStart) + fixed + ")";
     i = j + 1;
   }

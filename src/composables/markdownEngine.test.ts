@@ -369,3 +369,21 @@ describe("sanitizeInlineUrlSmartChars 回归", () => {
     expect(typeof sanitizeInlineUrlSmartChars(src)).toBe("string");
   });
 });
+
+describe("仅空格损坏的 ASCII 引号 URL 回归", () => {
+  it("ASCII 引号 + 未编码空格的 URL 同样被清洗（此前被智能引号前置条件短路）", () => {
+    const withSpaces =
+      "![t](data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E)";
+    const expected =
+      "![t](data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E)";
+    expect(sanitizeInlineUrlSmartChars(withSpaces)).toBe(expected);
+  });
+
+  it("含 translate 裸括号与 title 的真实损坏行可渲染（微信公众号导出场景）", () => {
+    const line =
+      "![图](data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(-249.000000, -126.000000)'%3E%3Crect/%3E%3C/g%3E%3C/svg%3E \"null\")";
+    const html = renderMarkdownRaw(md(), line);
+    expect(html).toContain("<img");
+    expect(html).toContain("transform='translate(-249.000000,%20-126.000000)'");
+  });
+});
