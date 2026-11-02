@@ -17,18 +17,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import katex from "katex";
 import mermaid from "mermaid";
-import { renderMarkdownOffThread } from "./markdownWorkerClient";
+import { renderMarkdownOffThread, extractHeadingsOffThread } from "./markdownWorkerClient";
 import {
   renderMarkdown,
   extractHeadings,
+  extractHeadingsWithRender,
   renderMath,
   renderMermaid,
   renderMermaidAll,
   disposeMermaidObserver,
 } from "./useMarkdown";
-import { markdownHtmlCache, mermaidSvgCache } from "./renderCache";
+import { markdownHtmlCache, markdownHeadingsCache, mermaidSvgCache } from "./renderCache";
 
-vi.mock("./markdownWorkerClient", () => ({ renderMarkdownOffThread: vi.fn() }));
+vi.mock("./markdownWorkerClient", () => ({
+  renderMarkdownOffThread: vi.fn(),
+  extractHeadingsOffThread: vi.fn(),
+}));
 vi.mock("katex", () => ({ default: { render: vi.fn() } }));
 vi.mock("mermaid", () => ({ default: { initialize: vi.fn(), render: vi.fn() } }));
 
@@ -70,6 +74,7 @@ function flush(): Promise<void> {
 
 beforeEach(() => {
   markdownHtmlCache.clear();
+  markdownHeadingsCache.clear();
   mermaidSvgCache.clear();
   vi.clearAllMocks();
   MockIntersectionObserver.instances.length = 0;
@@ -129,10 +134,61 @@ describe("renderMarkdown", () => {
 });
 
 describe("extractHeadings", () => {
-  it("提取标题大纲", () => {
-    const hs = extractHeadings("# 一\n\n## 二");
+  it("委托 markdownWorkerClient.extractHeadingsOffThread 提取大纲（Worker 优先）", async () => {
+    vi.mocked(extractHeadingsOffThread).mockResolvedValue([
+      { level: 1, text: "一", id: "一" },
+      { level: 2, text: "二", id: "二" },
+    ]);
+    const hs = await extractHeadings("# 一\n\n## 二");
+    expect(extractHeadingsOffThread).toHaveBeenCalledWith("# 一\n\n## 二");
     expect(hs.map((h) => h.level)).toEqual([1, 2]);
     expect(hs[0].text).toBe("一");
+  });
+
+  it("提取失败时返回空大纲（不向上抛出，不阻断文件打开/恢复）", async () => {
+    vi.mocked(extractHeadingsOffThread).mockRejectedValue(new Error("boom"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(extractHeadings("# x")).resolves.toEqual([]);
+    warn.mockRestore();
+  });
+
+  it("命中缓存（同源）时不再请求 worker", async () => {
+    vi.mocked(extractHeadingsOffThread).mockResolvedValue([{ level: 1, text: "A", id: "a" }]);
+    await extractHeadings("# A");
+    await extractHeadings("# A");
+    expect(extractHeadingsOffThread).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("extractHeadingsWithRender / 单次渲染复用", () => {
+  it("一次完整渲染同时产出并缓存 html 与 headings", async () => {
+    vi.mocked(renderMarkdownOffThread).mockResolvedValue({
+      html: "<h1>一</h1>",
+      headings: [{ level: 1, text: "一", id: "一" }],
+    });
+    const hs = await extractHeadingsWithRender("# 一");
+    expect(hs).toHaveLength(1);
+    expect(renderMarkdownOffThread).toHaveBeenCalledTimes(1);
+    // 同源随后渲染应命中 HTML 缓存，不再触发 worker（消除「先提取大纲、再渲染」的双解析）
+    const html = await renderMarkdown("# 一");
+    expect(html).toContain("<h1>");
+    expect(renderMarkdownOffThread).toHaveBeenCalledTimes(1);
+  });
+
+  it("renderMarkdown 渲染后 extractHeadings 命中缓存，不再走 headings-only 请求", async () => {
+    vi.mocked(renderMarkdownOffThread).mockResolvedValue({
+      html: "<p>x</p>",
+      headings: [{ level: 1, text: "T", id: "t" }],
+    });
+    await renderMarkdown("same-src");
+    const hs = await extractHeadings("same-src");
+    expect(hs).toHaveLength(1);
+    expect(extractHeadingsOffThread).not.toHaveBeenCalled();
+  });
+
+  it("渲染失败时回退空大纲并缓存空结果", async () => {
+    vi.mocked(renderMarkdownOffThread).mockRejectedValue(new Error("boom"));
+    await expect(extractHeadingsWithRender("x")).resolves.toEqual([]);
   });
 });
 

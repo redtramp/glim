@@ -1,21 +1,28 @@
 /**
- * App.vue 挂载回归测试
+ * App.svelte 挂载回归测试
  *
  * 覆盖两类已修复的缺陷：
  * 1. TDZ 崩溃：useSectionMarkers 必须在使用 useTabs() 之后创建。
- *    其内部 immediate watch 会同步求值 headings computed，若 activeTab 尚未
+ *    其构造会同步求值 headings derived，若 activeTab 尚未
  *    初始化将抛出 ReferenceError，导致整个应用启动即崩溃、大纲无法跳转。
  * 2. 多文档恢复：restoreTabs 并行读取、标签顺序稳定、后台标签延迟提取大纲、
  *    监听目录去重（启动变慢的根因）。
+ *
+ * Vue test-utils → Svelte 5 迁移要点：
+ * - shallowMount(分离树 + 子组件打桩) → mount 到悬挂 target（分离树保留
+ *   document 隔离；子组件全部真实渲染，故面板状态改经 LeftRail 点击驱动）
+ * - wrapper.vm 内部状态断言 → DOM 读取（.search-overlay 样式）/ useTabs 单例
+ * - VTU flushPromises → 本地 flushPromises（setImmediate 宏任务 + svelte tick）
  */
+// setImmediate 由 Node 运行时提供（jsdom 不覆盖、@types/node 未安装），显式声明
+declare function setImmediate(callback: () => void): unknown;
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { shallowMount, flushPromises } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
-import App from "./App.vue";
-import { i18n } from "./i18n";
+import { mount, unmount, tick } from "svelte";
+import App from "./App.svelte";
+import { useTabs } from "./composables/useTabs.svelte.ts";
 
-// ---- localStorage mock（Pinia 持久化依赖） ----
+// ---- localStorage mock（持久化依赖） ----
 const mockStorage: Record<string, string> = {};
 Object.defineProperty(globalThis, "localStorage", {
   value: {
@@ -53,6 +60,12 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
   exists: vi.fn(async () => false),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
+// 编辑器按需加载：用轻量替身替换真实 MarkdownEditor（避免在 jsdom 加载/初始化 CodeMirror），
+// 同时可验证 App 首次进入编辑模式时动态 import 并渲染编辑器。
+// 注意：app.css 上的运行时样式不依赖该 mock；路径须与 App 内动态 import 一致。
+vi.mock("./components/MarkdownEditor.svelte", () =>
+  import("./components/MarkdownEditorStub.svelte")
+);
 
 import { invoke } from "@tauri-apps/api/core";
 import { readTextFile } from "@tauri-apps/plugin-fs";
@@ -81,11 +94,57 @@ async function defaultInvoke(cmd: string): Promise<unknown> {
   }
 }
 
-function mountApp() {
-  const pinia = createPinia();
-  setActivePinia(pinia);
-  const wrapper = shallowMount(App, { global: { plugins: [pinia, i18n] } });
-  return wrapper;
+interface MountedApp {
+  target: HTMLElement;
+  unmount: () => void;
+}
+
+/** 悬挂树挂载：等价旧 shallowMount 的 document 隔离，document.querySelector 只命中测试构造元素 */
+function mountApp(): MountedApp {
+  const target = document.createElement("div");
+  const app = mount(App, { target });
+  let done = false;
+  return {
+    target,
+    unmount: () => {
+      if (done) return;
+      done = true;
+      unmount(app);
+      target.remove();
+    },
+  };
+}
+
+/** 宏任务排空微任务链 + 刷新 Svelte 渲染（setImmediate 不被假计时器伪造）。
+ *  多轮推进：markdown-it 兜底引擎现经动态 import 加载，需跨多个宏任务才 settle。 */
+async function flushPromises(): Promise<void> {
+  // 动态 import（markdown-it 兜底引擎 / 编辑器模块）由定时器宏任务驱动，
+  // 需用真实 setTimeout 才能 settle；假计时器（仅伪造 setTimeout）下退回 setImmediate。
+  const wait = vi.isFakeTimers()
+    ? () => new Promise<void>((r) => setImmediate(r))
+    : () => new Promise<void>((r) => setTimeout(r, 0));
+  for (let i = 0; i < 20; i++) {
+    await wait();
+    await tick();
+  }
+}
+
+/** 假计时器下的推进：先刷新 Svelte 效果（rAF/结算计时已调度），再推时钟，再刷新 DOM */
+async function advance(ms: number): Promise<void> {
+  await tick();
+  await vi.advanceTimersByTimeAsync(ms);
+  await tick();
+}
+
+/** 点击 LeftRail 第 index 个按钮（LEFT_PANEL_META 顺序，分隔符非按钮不计入） */
+function clickRailBtn(target: HTMLElement, index: number): void {
+  const btns = target.querySelectorAll<HTMLButtonElement>(".left-rail-btn");
+  btns[index]?.click();
+}
+
+/** 搜索浮层 left 内联样式（原 wrapper.vm.searchOverlayStyle.left 的等价 DOM 读取） */
+function overlayStyleLeft(target: HTMLElement): string {
+  return target.querySelector<HTMLElement>(".search-overlay")?.style.left ?? "";
 }
 
 // 顶层 beforeEach：对文件内所有 describe 生效（含下方基准测试），避免 mock 跨用例串扰
@@ -94,14 +153,18 @@ beforeEach(() => {
   invokeMock.mockReset();
   invokeMock.mockImplementation(defaultInvoke);
   readTextFileMock.mockReset();
+  // 标签存储是模块级单例（旧版为每用例新 Pinia 实例）：就地清空保证用例隔离
+  const api = useTabs();
+  api.tabs.splice(0, api.tabs.length);
+  api.activeTabId = "";
 });
 
-describe("App.vue 挂载", () => {
+describe("App.svelte 挂载", () => {
   it("应用可成功挂载（useSectionMarkers 不再触发 TDZ 崩溃）", async () => {
-    const wrapper = mountApp();
+    const m = mountApp();
     await flushPromises();
-    expect(wrapper.exists()).toBe(true);
-    wrapper.unmount();
+    expect(m.target.querySelector(".app")).toBeTruthy();
+    m.unmount();
   });
 
   it("多文档恢复：并行读取、顺序稳定、仅激活标签提取大纲、目录监听去重", async () => {
@@ -111,21 +174,25 @@ describe("App.vue 挂载", () => {
     });
     readTextFileMock.mockImplementation(async (p: string | URL) => `# 标题 ${String(p)}\n\n正文内容。`);
 
-    const wrapper = mountApp();
+    const m = mountApp();
     await flushPromises();
 
     // 所有持久化文件均被读取（并行）
     expect(readTextFileMock).toHaveBeenCalledTimes(3);
 
-    const tabs = (wrapper.vm as unknown as { tabs: Array<{ path: string; headings: unknown[] }> }).tabs;
+    const tabs = useTabs().tabs;
     expect(tabs.length).toBe(3);
     // 标签按上次会话顺序恢复
-    expect(tabs.map((t) => t.path)).toEqual(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
+    expect(tabs.map((tb) => tb.path)).toEqual(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
     // 激活标签提取了大纲
     expect(tabs[1].headings.length).toBeGreaterThan(0);
     // 后台标签延迟提取（激活时才补，显著加快多文档启动）
     expect(tabs[0].headings.length).toBe(0);
     expect(tabs[2].headings.length).toBe(0);
+
+    // Task 9 遗留「root 导出契约」收口：MarkdownView 导出的 root（article.markdown-body）
+    // 由 App 的 bind:this 取实例后读 markdownState.root，渲染内容须落在 .viewer 容器内
+    expect(m.target.querySelector(".viewer article.markdown-body")).toBeTruthy();
 
     // 同一目录 /docs 只注册一次 watch_path（去重）。
     // 恢复期间 watcher 尚未启动（watchFile 直接跳过），启动后 startWatching 统一注册一次；
@@ -133,10 +200,10 @@ describe("App.vue 挂载", () => {
     const watchPathCalls = invokeMock.mock.calls.filter(([cmd]) => cmd === "watch_path");
     expect(watchPathCalls).toHaveLength(1);
 
-    wrapper.unmount();
+    m.unmount();
   });
 
-  it("恢复期间窗口关闭（onUnmounted）：异步续体中止，不再装配标签", async () => {
+  it("恢复期间窗口关闭（onDestroy）：异步续体中止，不再装配标签", async () => {
     mockStorage["glim-reader-tabs"] = JSON.stringify({
       paths: ["/docs/a.md", "/docs/b.md"],
       activePath: "/docs/a.md",
@@ -147,19 +214,18 @@ describe("App.vue 挂载", () => {
       () => new Promise<string>((resolve) => { resolvers.push(resolve); })
     );
 
-    const wrapper = mountApp();
-    // 读取已发起但未完成，此时卸载组件（等价于窗口关闭触发 onUnmounted）
+    const m = mountApp();
+    // 读取已发起但未完成，此时卸载组件（等价于窗口关闭触发 onDestroy）
     await flushPromises();
     expect(resolvers).toHaveLength(2);
-    wrapper.unmount();
+    m.unmount();
     // 全部读取完成后异步续体应检测 appDisposed 并中止装配
     resolvers.forEach((resolve) => resolve("# 迟到内容"));
     await flushPromises();
 
     // 标签未被装配：恢复中止而非继续写入已销毁实例
     expect(readTextFileMock).toHaveBeenCalledTimes(2);
-    const tabs = (wrapper.vm as unknown as { tabs: Array<{ path: string }> }).tabs;
-    expect(tabs.length).toBe(0);
+    expect(useTabs().tabs.length).toBe(0);
   });
 
   it("关闭帮助/AI 面板后搜索框位置恢复（面板卸载延迟导致的残留偏移修复）", async () => {
@@ -167,7 +233,7 @@ describe("App.vue 挂载", () => {
       toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame"],
     });
     let panelEl: HTMLElement | null = null;
-    let wrapper: ReturnType<typeof mountApp> | null = null;
+    let m: MountedApp | null = null;
     try {
       // 构造一个带宽度的浮动面板元素，模拟面板驻留 DOM（FloatingPanel 关闭后 250ms 才真正卸载）
       panelEl = document.createElement("div");
@@ -175,36 +241,32 @@ describe("App.vue 挂载", () => {
       Object.defineProperty(panelEl, "offsetWidth", { value: 320, configurable: true });
       document.body.appendChild(panelEl);
 
-      wrapper = mountApp();
+      m = mountApp();
       await flushPromises();
-      const vm = wrapper.vm as unknown as {
-        searchOverlayStyle: Record<string, string>;
-        floatLayout: { state: { activeLeftPanel: string | null } };
-      };
 
-      // 打开帮助面板：搜索框让出面板宽度 40 + 320 + 20 = 380（recalcSearchPosition 由
-      // activeLeftPanel 变化触发，与 searchVisible 无关，故此处不必打开搜索框）
-      vm.floatLayout.state.activeLeftPanel = "help";
-      await vi.advanceTimersByTimeAsync(20); // rAF 重算
-      expect(vm.searchOverlayStyle.left).toBe("380px");
+      // 打开帮助面板（LeftRail 第 13 个按钮）：搜索框让出面板宽度 40 + 320 + 20 = 380
+      // （recalcSearchPosition 由 activeLeftPanel 变化触发，与 searchVisible 无关）
+      clickRailBtn(m.target, 12);
+      await advance(20); // rAF 重算
+      expect(overlayStyleLeft(m.target)).toBe("380px");
 
       // 关闭面板：此刻面板仍驻留 DOM（250ms 卸载延迟未到），立即重算结果不变——
       // 这正是原缺陷的成因；若无延迟重算，偏移将永久残留
-      vm.floatLayout.state.activeLeftPanel = null;
-      await vi.advanceTimersByTimeAsync(20);
-      expect(vm.searchOverlayStyle.left).toBe("380px");
+      clickRailBtn(m.target, 12);
+      await advance(20);
+      expect(overlayStyleLeft(m.target)).toBe("380px");
 
       // 面板完成卸载（250ms 后），300ms 结算重算应恢复原位 40 + 0 + 20 = 60
       document.body.removeChild(panelEl);
       panelEl = null;
-      await vi.advanceTimersByTimeAsync(300);
-      expect(vm.searchOverlayStyle.left).toBe("60px");
+      await advance(300);
+      expect(overlayStyleLeft(m.target)).toBe("60px");
 
-      wrapper.unmount();
-      wrapper = null;
+      m.unmount();
+      m = null;
     } finally {
       panelEl?.remove();
-      wrapper?.unmount();
+      m?.unmount();
       vi.useRealTimers();
     }
   });
@@ -214,7 +276,7 @@ describe("App.vue 挂载", () => {
       toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame"],
     });
     let panelEl: HTMLElement | null = null;
-    let wrapper: ReturnType<typeof mountApp> | null = null;
+    let m: MountedApp | null = null;
     try {
       // 面板驻留 DOM 期间宽度保持 320（真实 FloatingPanel 由 unmountTimer 延迟 250ms 卸载）
       panelEl = document.createElement("div");
@@ -222,38 +284,103 @@ describe("App.vue 挂载", () => {
       Object.defineProperty(panelEl, "offsetWidth", { value: 320, configurable: true });
       document.body.appendChild(panelEl);
 
-      wrapper = mountApp();
+      m = mountApp();
       await flushPromises();
-      const vm = wrapper.vm as unknown as {
-        searchOverlayStyle: Record<string, string>;
-        floatLayout: { state: { activeLeftPanel: string | null } };
-      };
 
-      // 关 A（t=0，结算计时 300ms）→ 开 B（t=100）→ 关 B（t=200）
-      vm.floatLayout.state.activeLeftPanel = "help";
-      await vi.advanceTimersByTimeAsync(20);
-      expect(vm.searchOverlayStyle.left).toBe("380px");
-      vm.floatLayout.state.activeLeftPanel = null; // 关 A
-      await vi.advanceTimersByTimeAsync(100);
-      vm.floatLayout.state.activeLeftPanel = "ai"; // 开 B
-      await vi.advanceTimersByTimeAsync(100);
-      vm.floatLayout.state.activeLeftPanel = null; // 关 B：应重置结算计时
-      await vi.advanceTimersByTimeAsync(20);
-      expect(vm.searchOverlayStyle.left).toBe("380px");
+      // 关 A（结算计时 300ms）→ 开 B → 关 B：应重置结算计时
+      clickRailBtn(m.target, 12); // 开 help
+      await advance(20);
+      expect(overlayStyleLeft(m.target)).toBe("380px");
+      clickRailBtn(m.target, 12); // 关 help（A）
+      await advance(100);
+      clickRailBtn(m.target, 10); // 开 ai（B）
+      await advance(100);
+      clickRailBtn(m.target, 10); // 关 ai（B）：重置结算计时
+      await advance(20);
+      expect(overlayStyleLeft(m.target)).toBe("380px");
 
       // 面板真正卸载后，最后一次关闭的 300ms 结算重算恢复原位
       document.body.removeChild(panelEl);
       panelEl = null;
-      await vi.advanceTimersByTimeAsync(300);
-      expect(vm.searchOverlayStyle.left).toBe("60px");
+      await advance(300);
+      expect(overlayStyleLeft(m.target)).toBe("60px");
 
-      wrapper.unmount();
-      wrapper = null;
+      m.unmount();
+      m = null;
     } finally {
       panelEl?.remove();
-      wrapper?.unmount();
+      m?.unmount();
       vi.useRealTimers();
     }
+  });
+});
+
+describe("编辑器按需加载", () => {
+  function seedActiveTab(): void {
+    mockStorage["glim-reader-tabs"] = JSON.stringify({
+      paths: ["/docs/a.md"],
+      activePath: "/docs/a.md",
+    });
+    readTextFileMock.mockImplementation(async () => "# 标题\n\n正文内容。");
+  }
+
+  it("首次进入编辑模式时动态加载并渲染编辑器（之前为预览）", async () => {
+    seedActiveTab();
+    const m = mountApp();
+    await flushPromises();
+
+    // 初始为预览态，编辑器尚未加载/渲染
+    expect(m.target.querySelector(".viewer article.markdown-body")).toBeTruthy();
+    expect(m.target.querySelector(".markdown-editor-stub")).toBeNull();
+
+    // LeftRail 第 9 个按钮 = 编辑（LEFT_PANEL_META 顺序：filetree..export,edit）
+    clickRailBtn(m.target, 9);
+    await flushPromises();
+
+    // 动态 import 完成后渲染编辑器替身
+    expect(m.target.querySelector(".markdown-editor-stub")).toBeTruthy();
+    m.unmount();
+  });
+
+  it("快速进入→退出编辑：加载续体不误触发定位且不崩溃，回到预览", async () => {
+    seedActiveTab();
+    const m = mountApp();
+    await flushPromises();
+
+    clickRailBtn(m.target, 9); // 进入编辑
+    clickRailBtn(m.target, 9); // 立即退回预览（模块尚未加载完成）
+    await flushPromises();
+
+    expect(m.target.querySelector(".markdown-editor-stub")).toBeNull();
+    expect(m.target.querySelector(".viewer article.markdown-body")).toBeTruthy();
+    m.unmount();
+  });
+});
+
+describe("浮层 AI 面板接线", () => {
+  function seedActiveTab(): void {
+    mockStorage["glim-reader-tabs"] = JSON.stringify({
+      paths: ["/docs/a.md"],
+      activePath: "/docs/a.md",
+    });
+    readTextFileMock.mockImplementation(async () => "# 标题\n\n正文内容。");
+  }
+
+  it("点击左栏 AI 打开浮层内嵌面板（动作按钮已接线、无选区时选区动作禁用）", async () => {
+    seedActiveTab();
+    const m = mountApp();
+    await flushPromises();
+
+    // LeftRail 第 11 个按钮 = ai（LEFT_PANEL_META 顺序：…, edit, ai, …）
+    clickRailBtn(m.target, 10);
+    await flushPromises();
+
+    expect(m.target.querySelector(".ai-inline")).toBeTruthy();
+    expect(m.target.querySelector('[data-action="rewrite"]')).toBeTruthy();
+    // 无选区时选区类动作禁用（选区经 setSelection 带入且为空）
+    const summarize = m.target.querySelector<HTMLButtonElement>('[data-action="summarize"]');
+    expect(summarize?.disabled).toBe(true);
+    m.unmount();
   });
 });
 
@@ -287,7 +414,7 @@ describe("restoreTabs 并发基准", () => {
     });
 
     const start = performance.now();
-    const wrapper = mountApp();
+    const m = mountApp();
     // 确定性等待：直到全部读取完成，而非固定时长（避免慢机器上误判）
     await allReadsDone;
     await flushPromises();
@@ -306,6 +433,6 @@ describe("restoreTabs 并发基准", () => {
         `提速约 ${speedup.toFixed(1)}x，最大并发 ${maxConcurrent}`
     );
 
-    wrapper.unmount();
+    m.unmount();
   });
 });

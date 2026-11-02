@@ -11,8 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { createPinia, setActivePinia } from "pinia";
-import { useTabs, normalizePath, samePath, type Tab } from "./useTabs";
+import { useTabs, normalizePath, samePath, type Tab } from "./useTabs.svelte.ts";
 
 // vitest4 + jsdom 环境无 localStorage,提供内存实现保证持久化可测
 const mockStorage: Record<string, string> = {};
@@ -35,20 +34,18 @@ Object.defineProperty(globalThis, "localStorage", {
   },
 });
 
-// 模块加载前激活 Pinia,保证 useTabs() 在模块顶层可调用
-setActivePinia(createPinia());
+// useTabs 状态为模块级单例（Svelte 5 $state），直接实例化即可
 const api = useTabs();
 
 function pushTabs(paths: string[]): string[] {
   return paths.map((p) => {
     const t = api.createTab(p);
-    api.tabs.value.push(t);
+    api.tabs.push(t);
     return t.id;
   });
 }
 
 beforeEach(() => {
-  setActivePinia(createPinia());
   api.closeAllTabs();
 });
 
@@ -115,7 +112,7 @@ describe("Tab", () => {
     });
 
     it("tabs 初始为空", () => {
-      expect(api.tabs.value).toHaveLength(0);
+      expect(api.tabs).toHaveLength(0);
     });
   });
 });
@@ -148,8 +145,8 @@ describe("tab 激活", () => {
   it("activateTab 激活存在的 tab 并持久化", () => {
     const [a] = pushTabs(["/a.md"]);
     api.activateTab(a);
-    expect(api.activeTabId.value).toBe(a);
-    expect(api.activeTab.value?.path).toBe("/a.md");
+    expect(api.activeTabId).toBe(a);
+    expect(api.activeTab?.path).toBe("/a.md");
     expect(JSON.parse(mockStorage["glim-reader-tabs"]!)).toEqual({
       paths: ["/a.md"],
       activePath: "/a.md",
@@ -158,45 +155,45 @@ describe("tab 激活", () => {
 
   it("activateTab 激活不存在的 id 为 no-op", () => {
     pushTabs(["/a.md"]);
-    api.activeTabId.value = "existing";
+    api.activeTabId = "existing";
     api.activateTab("missing");
-    expect(api.activeTabId.value).toBe("existing");
+    expect(api.activeTabId).toBe("existing");
   });
 
   it("activeTab 在无激活时返回 null", () => {
     pushTabs(["/a.md"]);
-    expect(api.activeTab.value).toBeNull();
+    expect(api.activeTab).toBeNull();
   });
 });
 
 describe("removeTab", () => {
   it("移除 active tab 时激活右侧相邻 tab", () => {
     const [_a, b, c] = pushTabs(["/a.md", "/b.md", "/c.md"]);
-    api.activeTabId.value = b;
+    api.activeTabId = b;
     api.removeTab(b);
-    expect(api.tabs.value.map((t) => t.path)).toEqual(["/a.md", "/c.md"]);
-    expect(api.activeTabId.value).toBe(c);
+    expect(api.tabs.map((t) => t.path)).toEqual(["/a.md", "/c.md"]);
+    expect(api.activeTabId).toBe(c);
   });
 
   it("移除最后一个 active tab 时激活前一个", () => {
     const [a, b] = pushTabs(["/a.md", "/b.md"]);
-    api.activeTabId.value = b;
+    api.activeTabId = b;
     api.removeTab(b);
-    expect(api.activeTabId.value).toBe(a);
+    expect(api.activeTabId).toBe(a);
   });
 
   it("移除非 active tab 时 active 不变", () => {
     const [a, b] = pushTabs(["/a.md", "/b.md"]);
-    api.activeTabId.value = b;
+    api.activeTabId = b;
     api.removeTab(a);
-    expect(api.activeTabId.value).toBe(b);
-    expect(api.tabs.value).toHaveLength(1);
+    expect(api.activeTabId).toBe(b);
+    expect(api.tabs).toHaveLength(1);
   });
 
   it("移除不存在的 id 为 no-op", () => {
     pushTabs(["/a.md"]);
     api.removeTab("missing");
-    expect(api.tabs.value).toHaveLength(1);
+    expect(api.tabs).toHaveLength(1);
   });
 });
 
@@ -204,26 +201,26 @@ describe("closeTabsLeft", () => {
   it("关闭 target 左侧全部 tab", () => {
     const [_a, b, _c] = pushTabs(["/a.md", "/b.md", "/c.md"]);
     api.closeTabsLeft(b);
-    expect(api.tabs.value.map((t) => t.path)).toEqual(["/b.md", "/c.md"]);
+    expect(api.tabs.map((t) => t.path)).toEqual(["/b.md", "/c.md"]);
   });
 
   it("target 是第一个时 no-op", () => {
     const [a, _b] = pushTabs(["/a.md", "/b.md"]);
     api.closeTabsLeft(a);
-    expect(api.tabs.value).toHaveLength(2);
+    expect(api.tabs).toHaveLength(2);
   });
 
   it("active 被移除时回退到 target", () => {
     const [a, b] = pushTabs(["/a.md", "/b.md"]);
-    api.activeTabId.value = a;
+    api.activeTabId = a;
     api.closeTabsLeft(b);
-    expect(api.activeTabId.value).toBe(b);
+    expect(api.activeTabId).toBe(b);
   });
 
   it("target 不存在时 no-op", () => {
     pushTabs(["/a.md"]);
     api.closeTabsLeft("missing");
-    expect(api.tabs.value).toHaveLength(1);
+    expect(api.tabs).toHaveLength(1);
   });
 });
 
@@ -231,63 +228,63 @@ describe("closeTabsRight", () => {
   it("关闭 target 右侧全部 tab", () => {
     const [_a, b, _c] = pushTabs(["/a.md", "/b.md", "/c.md"]);
     api.closeTabsRight(b);
-    expect(api.tabs.value.map((t) => t.path)).toEqual(["/a.md", "/b.md"]);
+    expect(api.tabs.map((t) => t.path)).toEqual(["/a.md", "/b.md"]);
   });
 
   it("target 是最后一个时 no-op", () => {
     const [_a, b] = pushTabs(["/a.md", "/b.md"]);
     api.closeTabsRight(b);
-    expect(api.tabs.value).toHaveLength(2);
+    expect(api.tabs).toHaveLength(2);
   });
 
   it("active 被移除时回退到 target", () => {
     const [_a, b, c] = pushTabs(["/a.md", "/b.md", "/c.md"]);
-    api.activeTabId.value = c;
+    api.activeTabId = c;
     api.closeTabsRight(b);
-    expect(api.activeTabId.value).toBe(b);
+    expect(api.activeTabId).toBe(b);
   });
 
   it("target 不存在时 no-op", () => {
     pushTabs(["/a.md"]);
     api.closeTabsRight("missing");
-    expect(api.tabs.value).toHaveLength(1);
+    expect(api.tabs).toHaveLength(1);
   });
 });
 
 describe("closeTabsOthers / closeAllTabs", () => {
   it("closeTabsOthers 只保留 target", () => {
     const [_a, b, c] = pushTabs(["/a.md", "/b.md", "/c.md"]);
-    api.activeTabId.value = c;
+    api.activeTabId = c;
     api.closeTabsOthers(b);
-    expect(api.tabs.value.map((t) => t.path)).toEqual(["/b.md"]);
-    expect(api.activeTabId.value).toBe(b);
+    expect(api.tabs.map((t) => t.path)).toEqual(["/b.md"]);
+    expect(api.activeTabId).toBe(b);
   });
 
   it("closeTabsOthers 仅剩一个 tab 时 no-op", () => {
     const [a] = pushTabs(["/a.md"]);
     api.closeTabsOthers(a);
-    expect(api.tabs.value).toHaveLength(1);
+    expect(api.tabs).toHaveLength(1);
   });
 
   it("closeTabsOthers target 不存在时 no-op", () => {
     pushTabs(["/a.md"]);
     api.closeTabsOthers("missing");
-    expect(api.tabs.value).toHaveLength(1);
+    expect(api.tabs).toHaveLength(1);
   });
 
   it("closeAllTabs 清空所有 tab 与激活态", () => {
     const [a] = pushTabs(["/a.md"]);
-    api.activeTabId.value = a;
+    api.activeTabId = a;
     api.closeAllTabs();
-    expect(api.tabs.value).toHaveLength(0);
-    expect(api.activeTabId.value).toBe("");
+    expect(api.tabs).toHaveLength(0);
+    expect(api.activeTabId).toBe("");
   });
 });
 
 describe("持久化", () => {
   it("persist / loadPersisted 往返", () => {
     const [_a, b] = pushTabs(["/a.md", "/b.md"]);
-    api.activeTabId.value = b;
+    api.activeTabId = b;
     api.persist();
     const p = api.loadPersisted();
     expect(p?.paths).toEqual(["/a.md", "/b.md"]);

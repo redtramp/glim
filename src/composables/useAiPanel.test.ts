@@ -35,7 +35,7 @@ import {
   buildAiMessages,
   SELECTION_ACTIONS,
   currentLangName,
-} from "./useAiPanel";
+} from "./useAiPanel.svelte.ts";
 import { AiError, type AiSettings } from "./aiProvider";
 import type { AiMessage } from "./aiProvider";
 
@@ -115,6 +115,16 @@ describe("useAiPanel - 状态与动作", () => {
     expect(["中文", "English"]).toContain(currentLangName());
   });
 
+  it("setSelection 更新选区与清态，但不置 visible（不触发模态面板）", () => {
+    const { state, setSelection } = useAiPanel();
+    setSelection("选中文字");
+    expect(state.selectionText).toBe("选中文字");
+    expect(state.result).toBe("");
+    expect(state.error).toBeNull();
+    expect(state.activeAction).toBeNull();
+    expect(state.visible).toBe(false);
+  });
+
   it("openWithSelection 设置选区并清空旧结果/错误", () => {
     const { state, openWithSelection } = useAiPanel();
     openWithSelection("选中文字");
@@ -189,6 +199,19 @@ describe("useAiPanel - 状态与动作", () => {
     expect(state.visible).toBe(false);
     expect(state.loading).toBe(false);
     expect(state.error).toBeNull();
+  });
+
+  it("浮层内嵌场景:visible 为 false 但未用户关闭时,失败仍展示错误", async () => {
+    // 内嵌面板经 setSelection 打开而不置 visible;错误展示不得依赖 visible
+    const chat = mockChat();
+    const { state, setSelection, runAction } = useAiPanel({ chat: chat.impl });
+    setSelection("x");
+    const p = runAction("summarize");
+    chat.reject(new AiError("network", "网络错误"));
+    await p;
+    expect(state.visible).toBe(false);
+    expect(state.error?.code).toBe("network");
+    expect(state.loading).toBe(false);
   });
 
   it("回归:面板仍可见时中止(超时) → 错误必须展示,不被吞掉", async () => {

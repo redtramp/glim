@@ -1,11 +1,17 @@
 import { defineConfig } from "vite";
-import vue from "@vitejs/plugin-vue";
+// v6.2.4 仅提供具名导出 svelte(),无 default 导出
+import { svelte } from "@sveltejs/vite-plugin-svelte";
+import tailwindcss from "@tailwindcss/vite";
 import { configDefaults } from "vitest/config";
 
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig(async () => ({
-  plugins: [vue()],
+  // svelte({ hot: false }):vitest(jsdom)下 HMR 依赖 window,必须关闭
+  // tailwindcss() 必须置于 svelte 之前,保证样式管线先于组件管线处理
+  plugins: [tailwindcss(), svelte({ hot: false })],
+  // vitest 运行时需要 browser 条件解析 Svelte 包
+  resolve: process.env.VITEST ? { conditions: ["browser"] } : undefined,
   clearScreen: false,
   server: {
     port: 1420,
@@ -31,10 +37,13 @@ export default defineConfig(async () => ({
             if (id.includes("@codemirror") || id.includes("codemirror"))
               return "vendor-codemirror";
             if (id.includes("highlight.js")) return "vendor-hljs";
-            if (id.includes("markdown-it") || id.includes("dompurify"))
-              return "vendor-markdown";
+            // dompurify 需在主线程净化渲染结果，保持静态可达；单独拆块，
+            // 使 markdown-it 及其插件（markdownEngine）可随 Worker/兜底动态加载，
+            // 不再进入启动主线程包。
+            if (id.includes("dompurify")) return "vendor-dompurify";
+            if (id.includes("markdown-it")) return "vendor-markdown";
             if (id.includes("@tauri-apps")) return "vendor-tauri";
-            if (id.includes("vue")) return "vendor-vue";
+            if (id.includes("svelte")) return "vendor-svelte";
           }
         },
       },
@@ -42,6 +51,9 @@ export default defineConfig(async () => ({
   },
   test: {
     environment: "jsdom",
+    // Node 26 内置实验性 localStorage 全局会遮蔽 jsdom 的实现,
+    // 使 vitest 跳过复制 jsdom 的 localStorage;关闭该全局交还 jsdom
+    execArgv: ["--no-experimental-webstorage"],
     exclude: [...configDefaults.exclude, "src-tauri/**"],
     include: ["src/**/*.test.ts", "src/**/*.spec.ts"],
     coverage: {

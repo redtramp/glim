@@ -6,13 +6,9 @@ import hljsDark from "highlight.js/styles/github-dark.css?raw";
 import katexCss from "katex/dist/katex.min.css?raw";
 import { EXPORT_BASE_CSS } from "./exportStyles";
 import { inlineImages, ensureSvgNamespace } from "./exportInline";
-import { i18n } from "../i18n";
+import { t } from "../i18n/locale.svelte.ts";
 import { renderMermaidAll } from "./useMarkdown";
 import { escapeHtml } from "../utils/html";
-
-function t(key: string): string {
-  return i18n.global.t(key);
-}
 
 function pickTheme(): "light" | "dark" {
   return document.documentElement.dataset.theme === "dark" ? "dark" : "light";

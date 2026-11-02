@@ -10,6 +10,7 @@
  * - extractHeadingsWith:常规提取、front matter 偏移、>200k 大文件 fallback 与 500 行限制
  */
 import { describe, it, expect } from "vitest";
+import hljs from "highlight.js";
 import {
   createMarkdownIt,
   splitFrontMatter,
@@ -17,10 +18,13 @@ import {
   renderMarkdownRaw,
   renderMarkdownOnce,
   extractHeadingsWith,
+  sanitizeInlineUrlSmartChars,
 } from "./markdownEngine";
 
 function md() {
-  return createMarkdownIt();
+  // 代码高亮已移至 Web Worker（主线程不注入 hljs，代码块回退纯转义）。
+  // 本套件按 Worker 渲染路径注入 hljs，验证引擎的高亮能力与其余渲染规则。
+  return createMarkdownIt(hljs);
 }
 
 describe("splitFrontMatter", () => {
@@ -134,6 +138,13 @@ describe("createMarkdownIt + renderMarkdownRaw", () => {
     expect(html).toContain('<span class="hljs-number">1</span>');
   });
 
+  it("主线程（无 hljs 注入）代码块回退纯转义，不产生高亮 span", () => {
+    const html = renderMarkdownRaw(createMarkdownIt(), "```js\nconst a = 1;\n```");
+    expect(html).toContain('<pre class="hljs">');
+    expect(html).toContain("const a = 1;");
+    expect(html).not.toContain("hljs-keyword");
+  });
+
   it("未知语言代码块转义原样输出", () => {
     const html = renderMarkdownRaw(md(), "```unknownlang\n<b>raw</b>\n```");
     expect(html).toContain('<pre class="hljs">');
@@ -238,5 +249,123 @@ describe("extractHeadingsWith", () => {
     const src = "y".repeat(200_000) + "\n" + lines.join("\n");
     const hs = extractHeadingsWith(md(), src);
     expect(hs.map((h) => h.text)).toEqual(["First"]);
+  });
+});
+
+describe("data URI 图片", () => {
+  it("svg data URI 渲染为 <img>", () => {
+    const src = "![图](data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E)";
+    const html = renderMarkdownRaw(md(), src);
+    expect(html).toContain("<img");
+  });
+
+  it("png data URI 仍可渲染", () => {
+    const html = renderMarkdownRaw(md(), "![图](data:image/png;base64,AAAA)");
+    expect(html).toContain("<img");
+  });
+
+  it("javascript: 与非法 data 协议仍被拒绝", () => {
+    const html1 = renderMarkdownRaw(md(), "[x](javascript:alert(1))");
+    expect(html1).not.toContain("<a");
+    const html2 = renderMarkdownRaw(md(), "![x](data:text/html;base64,PHNjcmlwdD4=)");
+    expect(html2).not.toContain("<img");
+  });
+});
+
+describe("图片 URL 智能引号自动清洗", () => {
+  it("含智能引号与未编码空格的 svg data URI 渲染为 <img>", () => {
+    const src =
+      "![图](data:image/svg+xml,%3C%3Fxml version=\u20181.0\u2019 encoding=\u2018UTF-8\u2019%3F%3E%3Csvg width=\u20181px\u2019%3E%3Crect/%3E%3C/svg%3E)";
+    const html = renderMarkdownRaw(md(), src);
+    expect(html).toContain("<img");
+    expect(html).not.toContain("\u2018");
+    expect(html).not.toContain("\u2019");
+  });
+
+  it("正文非图片内容的智能引号不被改动", () => {
+    const html = renderMarkdownRaw(md(), "这是\u2018弯引号\u2019文本");
+    expect(html).toContain("\u2018弯引号\u2019");
+  });
+
+  it("围栏代码块内的图片语法不被清洗", () => {
+    const src = "~~~\n![t](data:image/svg+xml,%3Csvg width=\u20181px\u2019%3E%3C/svg%3E)\n~~~";
+    const html = renderMarkdownRaw(md(), src);
+    expect(html).toContain("\u20181px\u2019");
+    expect(html).not.toContain("<img");
+  });
+
+  it("尖括号包裹的 URL 清洗引号但保留空格", () => {
+    const src = "![t](<data:image/svg+xml,%3Csvg width=\u20181px\u2019 xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E>)";
+    const html = renderMarkdownRaw(md(), src);
+    expect(html).toContain("<img");
+    // 清洗发生在 parse 前，src 中不应残留弯引号及其 percent-encoding
+    expect(html).not.toContain("\u2018");
+    expect(html).not.toContain("%E2%80%98");
+    expect(html).not.toContain("%E2%80%99");
+  });
+
+  it("renderMarkdownOnce 路径同样清洗", () => {
+    const src = "![t](data:image/svg+xml,%3Csvg width=\u20181px\u2019%3E%3C/svg%3E)";
+    const { html } = renderMarkdownOnce(md(), src);
+    expect(html).toContain("<img");
+  });
+});
+
+describe("用户原始场景", () => {
+  it("ChatGPT 导出的损坏 svg data URI 可渲染", () => {
+    const src = "![图片](data:image/svg+xml,%3C%3Fxml version=‘1.0’ encoding=‘UTF-8’%3F%3E%3Csvg width=‘1px’ height=‘1px’ viewBox=‘0 0 1 1’ version=‘1.1’ xmlns=‘http://www.w3.org/2000/svg’ xmlns:xlink=‘http://www.w3.org/1999/xlink’%3E%3Ctitle%3E%3C/title%3E%3Cg stroke=‘none’ stroke-width=‘1’ fill=‘none’ fill-rule=‘evenodd’ fill-opacity=‘0’%3E%3Cg transform=‘translate(-249.000000, -126.000000)’ fill=‘%23FFFFFF’%3E%3Crect x=‘249’ y=‘126’ width=‘1’ height=‘1’%3E%3C/rect%3E%3C/g%3E%3C/g%3E%3C/svg%3E)";
+    const html = renderMarkdownRaw(createMarkdownIt(hljs), src);
+    expect(html).toContain("<img");
+    expect(html).toContain('src="data:image/svg+xml');
+  });
+});
+
+describe("sanitizeInlineUrlSmartChars 回归", () => {
+  it("链接 [..](..) 的智能引号同样被清洗", () => {
+    const src = "[x](data:image/svg+xml,%3Ca%20b=\u20181\u2019%3E)";
+    expect(sanitizeInlineUrlSmartChars(src)).toBe(
+      "[x](data:image/svg+xml,%3Ca%20b=%271%27%3E)"
+    );
+  });
+
+  it("双引号形态智能引号替换为 %22", () => {
+    const src = "![t](data:image/svg+xml,%3Ca%20b=\u201C1\u201D%3E)";
+    expect(sanitizeInlineUrlSmartChars(src)).toBe(
+      "![t](data:image/svg+xml,%3Ca%20b=%221%22%3E)"
+    );
+  });
+
+  it("括号不平衡的 URL 原样保留（不误伤正文）", () => {
+    const src = "![t](unclosed-data-uri-with-\u2018quote";
+    expect(sanitizeInlineUrlSmartChars(src)).toBe(src);
+  });
+
+  it("干净的 URL 幂等不变", () => {
+    const src = "![t](data:image/png;base64,AAAA)";
+    expect(sanitizeInlineUrlSmartChars(src)).toBe(src);
+  });
+
+  it("同段落多个损坏图片全部被清洗", () => {
+    const src = "![a](u\u20181) ![b](u\u20192) 普通文本";
+    expect(sanitizeInlineUrlSmartChars(src)).toBe("![a](u%271) ![b](u%272) 普通文本");
+  });
+
+  it("行内代码中的图片语法不被清洗", () => {
+    const bt = String.fromCharCode(96);
+    const src = "看 " + bt + "![t](u\u20181)" + bt + " 这段";
+    expect(sanitizeInlineUrlSmartChars(src)).toBe(src);
+  });
+
+  it("空字符串与无链接文本原样返回", () => {
+    expect(sanitizeInlineUrlSmartChars("")).toBe("");
+    expect(sanitizeInlineUrlSmartChars("普通文字，没有链接。")).toBe("普通文字，没有链接。");
+  });
+
+  it("嵌套方括号的 alt 文本不阻塞清洗", () => {
+    // label 匹配 [^]]* 不含 ]，alt 中的嵌套 [ 仍可匹配到第一个 ] 前的完整结构
+    const src = "![a[b]](u\u20181)";
+    // ![a[b] 被视为 label（匹配 ![ 后到第一个 ]），其后是 ](u...) 不构成 ( 形式 → 原样保留
+    // 该行为与 CommonMark 一致：!\[a\[b\]](url) 才是合法嵌套，此处确认不崩溃即可
+    expect(typeof sanitizeInlineUrlSmartChars(src)).toBe("string");
   });
 });

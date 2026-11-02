@@ -6,35 +6,58 @@
  *   主线程只做 DOMPurify 净化;结果按源内容哈希缓存,命中时零开销。
  * - renderMermaid:带 SVG 结果缓存 + 全局串行渲染队列 + 可视区域懒渲染
  *   (IntersectionObserver),避免打开文档即全量渲染造成首屏卡顿。
- * - renderMath / extractHeadings:保持同步/近同步语义,供各处调用。
+ * - renderMath:保持同步/近同步语义,供各处调用。
+ * - extractHeadings:异步,Worker 优先执行(主线程不再持有 markdown-it 实例),
+ *   避免启动期在主线程同步 tokenize 大文档。
+ * - extractHeadingsWithRender:一次完整渲染同时产出 headings 与 html 并缓存两者,
+ *   供「打开/激活文档」路径使用——消除「先仅提取大纲、再渲染 HTML」的重复解析,
+ *   并让随后的 MarkdownView 渲染直接命中 HTML 缓存。
+ * - renderMarkdownFull:完整渲染(html + headings),统一缓存入口。
  */
 import DOMPurify from "dompurify";
-import { createMarkdownIt, extractHeadingsWith } from "./markdownEngine";
 import type { Heading } from "./markdownEngine";
 import {
   markdownHtmlCache,
+  markdownHeadingsCache,
   mermaidSvgCache,
   markdownCacheKey,
   mermaidCacheKey,
 } from "./renderCache";
-import { renderMarkdownOffThread } from "./markdownWorkerClient";
+import { renderMarkdownOffThread, extractHeadingsOffThread } from "./markdownWorkerClient";
 
 export type { Heading };
 
-const md = createMarkdownIt();
+/**
+ * 完整渲染 markdown → { 净化后 HTML, 标题大纲 }。
+ * markdown-it + hljs 在 Worker 线程执行,主线程仅做 DOMPurify 净化;html 与 headings
+ * 一并按源哈希缓存,使同源的大纲提取与视图渲染只解析一次。
+ *
+ * 缓存命中要求 html 与 headings 同时存在——本函数是唯一同时写入两者的路径
+ * (extractHeadings 仅写 headings),故二者要么同批写入、要么同批缺失,不会出现
+ * 「html 在、headings 不在」的错配;若未来新增只写单侧的路径,需同步此判据。
+ */
+async function renderMarkdownFull(
+  source: string
+): Promise<{ html: string; headings: Heading[] }> {
+  const { key, length } = markdownCacheKey(source);
+  const cachedHtml = markdownHtmlCache.get(key, length);
+  const cachedHeadings = markdownHeadingsCache.get(key, length);
+  if (cachedHtml !== undefined && cachedHeadings !== undefined) {
+    return { html: cachedHtml, headings: cachedHeadings };
+  }
+  const { html: raw, headings } = await renderMarkdownOffThread(source);
+  const html = sanitizeHtml(raw);
+  markdownHtmlCache.set(key, html, length);
+  markdownHeadingsCache.set(key, headings, length);
+  return { html, headings };
+}
 
 /**
  * 异步渲染 markdown → 净化后 HTML。
  * markdown-it + hljs 在 Worker 线程执行,主线程仅做 DOMPurify 净化;结果按源哈希缓存。
  */
 export async function renderMarkdown(source: string): Promise<string> {
-  const { key, length } = markdownCacheKey(source);
-  const cached = markdownHtmlCache.get(key, length);
-  if (cached !== undefined) return cached;
-  const { html: raw } = await renderMarkdownOffThread(source);
-  const html = sanitizeHtml(raw);
-  markdownHtmlCache.set(key, html, length);
-  return html;
+  return (await renderMarkdownFull(source)).html;
 }
 
 function sanitizeHtml(raw: string): string {
@@ -51,9 +74,43 @@ function sanitizeHtml(raw: string): string {
   });
 }
 
-/** 提取标题大纲(同步;大文件自动走 fallback,避免全量 token 化) */
-export function extractHeadings(source: string): Heading[] {
-  return extractHeadingsWith(md, source);
+let headingsErrorLogged = false;
+
+function reportHeadingsFailure(e: unknown): void {
+  if (!headingsErrorLogged) {
+    headingsErrorLogged = true;
+    console.warn("extract headings failed:", e);
+  }
+}
+
+/** 仅提取标题大纲(异步,Worker headings-only 路径)。
+ *  无 HTML 净化开销,用于编辑中的实时大纲刷新;命中缓存时零开销。
+ *  失败返回空大纲并仅首次记录警告:大纲非关键路径(仅目录/章节标记),
+ *  不应因一次提取失败而阻断文件打开/会话恢复。 */
+export async function extractHeadings(source: string): Promise<Heading[]> {
+  const { key, length } = markdownCacheKey(source);
+  const cached = markdownHeadingsCache.get(key, length);
+  if (cached !== undefined) return cached;
+  try {
+    const headings = await extractHeadingsOffThread(source);
+    markdownHeadingsCache.set(key, headings, length);
+    return headings;
+  } catch (e) {
+    reportHeadingsFailure(e);
+    return [];
+  }
+}
+
+/** 提取标题大纲,同时完整渲染并缓存 HTML(供「打开/激活文档」路径使用)。
+ *  一次渲染同时得到 headings 与 html:既避免与 MarkdownView 的渲染重复解析,
+ *  又让随后的视图渲染直接命中 HTML 缓存。失败回退空大纲(同 extractHeadings)。 */
+export async function extractHeadingsWithRender(source: string): Promise<Heading[]> {
+  try {
+    return (await renderMarkdownFull(source)).headings;
+  } catch (e) {
+    reportHeadingsFailure(e);
+    return [];
+  }
 }
 
 let katexLoading: Promise<any> | null = null;

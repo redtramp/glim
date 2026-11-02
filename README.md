@@ -36,7 +36,7 @@
 
 ## 简介
 
-Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与编辑器，基于 **Tauri 2 + Vue 3 + Rust** 构建。
+Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与编辑器，基于 **Tauri 2 + Svelte 5 + Rust** 构建。
 
 体积小（约 10 MB），启动快，支持多标签页、源码编辑、公式、图表、代码高亮、懒加载文件树、全文搜索，以及 PDF / HTML / DOCX 导出与打印。
 
@@ -138,6 +138,13 @@ Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与�
 - 简体中文 / English 界面切换（左侧悬浮菜单 🌐 按钮，当前语言动态显示）
 - 检查更新，一键跳转下载页
 
+### 性能与启动
+- **启动 splash**：`index.html` 内联纯静态启动屏，主窗口首帧即显示，内容（激活标签 Markdown）就绪后淡出，消除启动空窗期
+- **高亮与解析在 Worker**：highlight.js 仅在 Web Worker 中加载；markdown-it 及其插件按需加载，不进入主线程启动包
+- **大纲提取在 Worker**：大文档标题大纲在 Worker 线程提取，不阻塞主线程首屏
+- **编辑器按需加载**：CodeMirror（约 613KB）不在启动包内，首次需要时才拉取；此前用过编辑模式的用户会在首屏就绪后空闲预加载，回访编辑零等待，纯阅读用户不加载
+- **一次渲染复用**：打开/激活文档时一次完整渲染同时产出大纲与 HTML 并缓存，视图渲染直接命中，避免「先仅提取大纲、再渲染」的重复解析
+
 ---
 
 ## 快捷键
@@ -205,6 +212,7 @@ Glim 是一个轻量、快速、所见即所得的 Markdown 桌面阅读器与�
 
 ```bash
 pnpm install
+pnpm check
 pnpm tauri dev
 pnpm tauri build
 ```
@@ -215,7 +223,7 @@ pnpm tauri build
 
 ## 技术栈
 
-Tauri 2 · Vue 3 · TypeScript · Vite · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · vue-i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / http / window-state / system-fonts
+Tauri 2 · Svelte 5 · TypeScript · Vite · Tailwind CSS 4 · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · Svelte 5 runes 自研 i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / http / window-state / system-fonts
 
 ---
 

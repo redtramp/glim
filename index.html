@@ -6,6 +6,60 @@
     <title>Glim Reader</title>
   </head>
   <body>
+    <!-- 启动 splash：纯静态内联样式，零 JS / 零外部依赖，主窗口首帧即渲染，
+         消除「点击后空白停顿」的卡顿体感；前端首屏就绪后由 App 移除（见 App.svelte）。
+         样式内联于本元素，确保不依赖 app.css 加载即可正确显示。 -->
+    <div id="splash">
+      <style>
+        #splash {
+          position: fixed;
+          inset: 0;
+          z-index: 99999;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 22px;
+          background: #f7f6f2;
+          color: #6b5d3a;
+          font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+          transition: opacity 0.35s ease;
+        }
+        :root[data-theme="dark"] #splash {
+          background: #1a1a1a;
+          color: #c9a86a;
+        }
+        #splash.glim-splash-hidden {
+          opacity: 0;
+          pointer-events: none;
+        }
+        #splash .splash-logo {
+          font-size: 26px;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+        }
+        #splash .splash-spinner {
+          width: 30px;
+          height: 30px;
+          border: 3px solid currentColor;
+          border-top-color: transparent;
+          border-radius: 50%;
+          animation: glim-splash-spin 0.8s linear infinite;
+        }
+        @keyframes glim-splash-spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          #splash .splash-spinner {
+            animation-duration: 2s;
+          }
+        }
+      </style>
+      <div class="splash-logo">Glim Reader</div>
+      <div class="splash-spinner" aria-hidden="true"></div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

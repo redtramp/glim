@@ -198,6 +198,8 @@ const enUS = {
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
     reset: "Reset",
+    fullscreen: "Fullscreen",
+    exitFullscreen: "Exit fullscreen",
     close: "Close",
     hint: "Wheel to zoom · Drag to pan · Double-click 1x/3x · ESC to close",
   },
@@ -263,6 +265,7 @@ const enUS = {
   },
   review: {
     title: "Review annotations",
+    close: "Close",
     accept: "Accept",
     reject: "Reject",
     acceptAll: "Accept all",
@@ -290,6 +293,7 @@ const enUS = {
     applyConfirm:
       "Replace the whole current document with the AI-rewritten result. Continue?",
     retry: "Retry",
+    close: "Close",
     error: {
       configMissing: "Enable the AI panel and fill in the service settings (base URL and model) in Settings first",
       authFailed: "Invalid API key or insufficient permission. Check Settings",

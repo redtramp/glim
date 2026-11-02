@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { useFloatLayout, LEFT_PANEL_META } from "./useFloatLayout";
+import { useFloatLayout, LEFT_PANEL_META } from "./useFloatLayout.svelte.ts";
 
 describe("useFloatLayout", () => {
   let floatLayout: ReturnType<typeof useFloatLayout>;

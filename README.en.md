@@ -36,7 +36,7 @@ Modification copyright: © 2026 redtramp
 
 ## Introduction
 
-Glim is a lightweight, fast, WYSIWYG Markdown desktop reader and editor, built with **Tauri 2 + Vue 3 + Rust**.
+Glim is a lightweight, fast, WYSIWYG Markdown desktop reader and editor, built with **Tauri 2 + Svelte 5 + Rust**.
 
 Small footprint (~10 MB), fast startup, with support for multi-tabs, source editing, formulas, diagrams, code highlighting, a lazy-loading file tree, full-text search, and PDF / HTML / DOCX export plus printing.
 
@@ -139,6 +139,13 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 - Simplified Chinese / English UI switching (🌐 button in left floating menu, current language dynamically shown)
 - Update checking with one-click navigation to the download page
 
+### Performance & Startup
+- **Startup splash**: a fully static splash screen inlined in `index.html` renders on the very first frame and fades out once the main content (active tab Markdown) is ready, eliminating the startup blank window
+- **Highlighting & parsing in a Worker**: highlight.js is loaded only in a Web Worker; markdown-it and its plugins are lazily loaded and stay out of the main-thread startup bundle
+- **Off-thread outline extraction**: heading outlines of large documents are extracted in a Worker, never blocking the main thread
+- **On-demand editor**: CodeMirror (~613KB) is not in the startup bundle and is fetched on first use; users who have edited before get it idle-preloaded after the first paint for zero-wait re-entry, while read-only users never load it
+- **Single-pass render reuse**: opening/activating a document renders once to produce both the outline and HTML, caching both so the view render hits the cache and avoids the previous double parse
+
 ---
 
 ## Keyboard Shortcuts
@@ -206,6 +213,7 @@ Small footprint (~10 MB), fast startup, with support for multi-tabs, source edit
 
 ```bash
 pnpm install
+pnpm check
 pnpm tauri dev
 pnpm tauri build
 ```
@@ -216,7 +224,7 @@ Requirements: Node.js ≥ 18, pnpm ≥ 8, Rust ≥ 1.77, WebView2 Runtime, VS Bu
 
 ## Tech Stack
 
-Tauri 2 · Vue 3 · TypeScript · Vite · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · vue-i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / http / window-state / system-fonts
+Tauri 2 · Svelte 5 · TypeScript · Vite · Tailwind CSS 4 · markdown-it · CodeMirror 6 · KaTeX · Mermaid · highlight.js · Svelte 5 runes in-house i18n · pandoc · notify · tauri-plugin-single-instance / dialog / fs / opener / http / window-state / system-fonts
 
 ---
 

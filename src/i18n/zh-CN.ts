@@ -194,6 +194,8 @@ const zhCN = {
     zoomIn: "放大",
     zoomOut: "缩小",
     reset: "重置",
+    fullscreen: "全屏",
+    exitFullscreen: "退出全屏",
     close: "关闭",
     hint: "滚轮缩放 · 拖拽平移 · 双击切换 1x/3x · ESC 关闭",
   },
@@ -258,6 +260,7 @@ const zhCN = {
   },
   review: {
     title: "审阅批注",
+    close: "关闭",
     accept: "接受",
     reject: "拒绝",
     acceptAll: "全部接受",
@@ -284,6 +287,7 @@ const zhCN = {
     apply: "应用到文档",
     applyConfirm: "将 AI 改写结果应用到当前文档（替换全部内容），是否继续？",
     retry: "重试",
+    close: "关闭",
     error: {
       configMissing: "请先在设置中启用 AI 面板并填写服务配置（服务地址与模型）",
       authFailed: "API key 无效或没有权限，请检查设置",

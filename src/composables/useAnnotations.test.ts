@@ -23,7 +23,7 @@ import {
   selectionToSourceLines,
   useAnnotations,
   type AnnotationContext,
-} from "./useAnnotations";
+} from "./useAnnotations.svelte.ts";
 
 /** vitest4 + jsdom 环境无 localStorage,提供内存实现保证模板持久化可测 */
 function createLocalStorageMock(): Storage {

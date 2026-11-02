@@ -1,9 +1,8 @@
 // @ts-check
 import js from "@eslint/js";
-import vue from "eslint-plugin-vue";
+import svelte from "eslint-plugin-svelte";
 import tsParser from "@typescript-eslint/parser";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
-import vueParser from "vue-eslint-parser";
 
 export default [
   {
@@ -16,7 +15,7 @@ export default [
     ],
   },
   js.configs.recommended,
-  ...vue.configs["flat/recommended"],
+  ...svelte.configs["flat/recommended"],
   {
     files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
@@ -33,19 +32,20 @@ export default [
     },
   },
   {
-    files: ["**/*.vue"],
+    files: ["**/*.svelte"],
     languageOptions: {
-      parser: vueParser,
-      parserOptions: {
-        parser: tsParser,
-        sourceType: "module",
-        ecmaVersion: 2022,
-      },
+      parserOptions: { parser: { ts: tsParser } },
     },
+    plugins: { "@typescript-eslint": tsPlugin },
     rules: {
-      "vue/multi-word-component-names": "off",
-      "vue/no-v-html": "off",
+      "svelte/no-at-html-tags": "off",
+      // 基础 no-unused-vars 不理解 TS 类型位置，会误报函数类型参数名（如
+      // onOpenPanel?: (id: LeftPanelID) => void 的 id）；改用 TS 感知版本
       "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
     },
   },
   {
@@ -105,13 +105,14 @@ export default [
         TextDecoder: "readonly",
       },
     },
+    rules: {},
+  },
+  // Ruling 5: .svelte.ts 为 runes 文件，$state 等为编译期宏，
+  // no-undef 会误报未定义（TS 交给编译器检查），故仅对该后缀关闭 no-undef
+  {
+    files: ["**/*.svelte.ts"],
     rules: {
-      "vue/max-attributes-per-line": "off",
-      "vue/singleline-html-element-content-newline": "off",
-      "vue/html-self-closing": "off",
-      "vue/first-attribute-linebreak": "off",
-      "vue/html-closing-bracket-newline": "off",
-      "vue/attributes-order": "off",
+      "no-undef": "off",
     },
   },
 ];
