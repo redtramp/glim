@@ -545,6 +545,16 @@ fn initial_open_file() -> Option<String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Linux 下 webkitgtk 2.42+ 的 DMABUF 渲染器在部分驱动/Wayland 组合上出现
+    // 窗口图形不渲染、指针事件冻结等异常（重新编译后更易复现）。
+    // 禁用 DMABUF 渲染器是 Tauri Linux 应用社区标准 workaround，
+    // 以轻微 GPU 合成性能换取渲染稳定性。仅在用户未显式设置时生效，
+    // 便于针对特定环境覆盖调试。
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             // Already-running instance: focus window and emit the new file path.
