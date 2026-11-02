@@ -219,9 +219,24 @@ export function sanitizeInlineUrlSmartChars(source: string): string {
 }
 
 /** 清洗单行内图片/链接 URL 的智能引号与空格。
+ *  行内代码 span(反引号包裹)先提取占位再还原:代码是字面文本,不应被清洗。
  *  用平衡括号扫描定位 URL 边界:损坏 URL 常含裸括号(如 SVG 的 translate(-249,...)),
  *  简单正则 [^)]* 会在裸 ')' 处提前截断导致清洗不完整。未闭合时不处理(留给原解析器)。 */
 function sanitizeLineUrls(line: string): string {
+  // 行内代码保护:提取 `...` 段用私有区占位符替换(普通文档不含私有区字符,
+  // 占位符不含括号/引号,不会被清洗命中)
+  const codeSpans: string[] = [];
+  const withPlaceholders = line.replace(/`[^`]*`/g, (m: string): string => {
+    codeSpans.push(m);
+    return `\uE000${codeSpans.length - 1}\uE001`;
+  });
+  const cleaned = sanitizeLineUrlsInner(withPlaceholders);
+  return cleaned.replace(/\uE000(\d+)\uE001/g, (_m: string, idx: string): string =>
+    codeSpans[Number(idx)] ?? ""
+  );
+}
+
+function sanitizeLineUrlsInner(line: string): string {
   const smartQuoteRe = /[\u2018\u2019\u201C\u201D]/;
   let result = "";
   let i = 0;

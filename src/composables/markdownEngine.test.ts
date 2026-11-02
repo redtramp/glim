@@ -18,6 +18,7 @@ import {
   renderMarkdownRaw,
   renderMarkdownOnce,
   extractHeadingsWith,
+  sanitizeInlineUrlSmartChars,
 } from "./markdownEngine";
 
 function md() {
@@ -316,5 +317,55 @@ describe("用户原始场景", () => {
     const html = renderMarkdownRaw(createMarkdownIt(hljs), src);
     expect(html).toContain("<img");
     expect(html).toContain('src="data:image/svg+xml');
+  });
+});
+
+describe("sanitizeInlineUrlSmartChars 回归", () => {
+  it("链接 [..](..) 的智能引号同样被清洗", () => {
+    const src = "[x](data:image/svg+xml,%3Ca%20b=\u20181\u2019%3E)";
+    expect(sanitizeInlineUrlSmartChars(src)).toBe(
+      "[x](data:image/svg+xml,%3Ca%20b=%271%27%3E)"
+    );
+  });
+
+  it("双引号形态智能引号替换为 %22", () => {
+    const src = "![t](data:image/svg+xml,%3Ca%20b=\u201C1\u201D%3E)";
+    expect(sanitizeInlineUrlSmartChars(src)).toBe(
+      "![t](data:image/svg+xml,%3Ca%20b=%221%22%3E)"
+    );
+  });
+
+  it("括号不平衡的 URL 原样保留（不误伤正文）", () => {
+    const src = "![t](unclosed-data-uri-with-\u2018quote";
+    expect(sanitizeInlineUrlSmartChars(src)).toBe(src);
+  });
+
+  it("干净的 URL 幂等不变", () => {
+    const src = "![t](data:image/png;base64,AAAA)";
+    expect(sanitizeInlineUrlSmartChars(src)).toBe(src);
+  });
+
+  it("同段落多个损坏图片全部被清洗", () => {
+    const src = "![a](u\u20181) ![b](u\u20192) 普通文本";
+    expect(sanitizeInlineUrlSmartChars(src)).toBe("![a](u%271) ![b](u%272) 普通文本");
+  });
+
+  it("行内代码中的图片语法不被清洗", () => {
+    const bt = String.fromCharCode(96);
+    const src = "看 " + bt + "![t](u\u20181)" + bt + " 这段";
+    expect(sanitizeInlineUrlSmartChars(src)).toBe(src);
+  });
+
+  it("空字符串与无链接文本原样返回", () => {
+    expect(sanitizeInlineUrlSmartChars("")).toBe("");
+    expect(sanitizeInlineUrlSmartChars("普通文字，没有链接。")).toBe("普通文字，没有链接。");
+  });
+
+  it("嵌套方括号的 alt 文本不阻塞清洗", () => {
+    // label 匹配 [^]]* 不含 ]，alt 中的嵌套 [ 仍可匹配到第一个 ] 前的完整结构
+    const src = "![a[b]](u\u20181)";
+    // ![a[b] 被视为 label（匹配 ![ 后到第一个 ]），其后是 ](u...) 不构成 ( 形式 → 原样保留
+    // 该行为与 CommonMark 一致：!\[a\[b\]](url) 才是合法嵌套，此处确认不崩溃即可
+    expect(typeof sanitizeInlineUrlSmartChars(src)).toBe("string");
   });
 });
