@@ -250,3 +250,71 @@ describe("extractHeadingsWith", () => {
     expect(hs.map((h) => h.text)).toEqual(["First"]);
   });
 });
+
+describe("data URI 图片", () => {
+  it("svg data URI 渲染为 <img>", () => {
+    const src = "![图](data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E)";
+    const html = renderMarkdownRaw(md(), src);
+    expect(html).toContain("<img");
+  });
+
+  it("png data URI 仍可渲染", () => {
+    const html = renderMarkdownRaw(md(), "![图](data:image/png;base64,AAAA)");
+    expect(html).toContain("<img");
+  });
+
+  it("javascript: 与非法 data 协议仍被拒绝", () => {
+    const html1 = renderMarkdownRaw(md(), "[x](javascript:alert(1))");
+    expect(html1).not.toContain("<a");
+    const html2 = renderMarkdownRaw(md(), "![x](data:text/html;base64,PHNjcmlwdD4=)");
+    expect(html2).not.toContain("<img");
+  });
+});
+
+describe("图片 URL 智能引号自动清洗", () => {
+  it("含智能引号与未编码空格的 svg data URI 渲染为 <img>", () => {
+    const src =
+      "![图](data:image/svg+xml,%3C%3Fxml version=\u20181.0\u2019 encoding=\u2018UTF-8\u2019%3F%3E%3Csvg width=\u20181px\u2019%3E%3Crect/%3E%3C/svg%3E)";
+    const html = renderMarkdownRaw(md(), src);
+    expect(html).toContain("<img");
+    expect(html).not.toContain("\u2018");
+    expect(html).not.toContain("\u2019");
+  });
+
+  it("正文非图片内容的智能引号不被改动", () => {
+    const html = renderMarkdownRaw(md(), "这是\u2018弯引号\u2019文本");
+    expect(html).toContain("\u2018弯引号\u2019");
+  });
+
+  it("围栏代码块内的图片语法不被清洗", () => {
+    const src = "~~~\n![t](data:image/svg+xml,%3Csvg width=\u20181px\u2019%3E%3C/svg%3E)\n~~~";
+    const html = renderMarkdownRaw(md(), src);
+    expect(html).toContain("\u20181px\u2019");
+    expect(html).not.toContain("<img");
+  });
+
+  it("尖括号包裹的 URL 清洗引号但保留空格", () => {
+    const src = "![t](<data:image/svg+xml,%3Csvg width=\u20181px\u2019 xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E>)";
+    const html = renderMarkdownRaw(md(), src);
+    expect(html).toContain("<img");
+    // 清洗发生在 parse 前，src 中不应残留弯引号及其 percent-encoding
+    expect(html).not.toContain("\u2018");
+    expect(html).not.toContain("%E2%80%98");
+    expect(html).not.toContain("%E2%80%99");
+  });
+
+  it("renderMarkdownOnce 路径同样清洗", () => {
+    const src = "![t](data:image/svg+xml,%3Csvg width=\u20181px\u2019%3E%3C/svg%3E)";
+    const { html } = renderMarkdownOnce(md(), src);
+    expect(html).toContain("<img");
+  });
+});
+
+describe("用户原始场景", () => {
+  it("ChatGPT 导出的损坏 svg data URI 可渲染", () => {
+    const src = "![图片](data:image/svg+xml,%3C%3Fxml version=‘1.0’ encoding=‘UTF-8’%3F%3E%3Csvg width=‘1px’ height=‘1px’ viewBox=‘0 0 1 1’ version=‘1.1’ xmlns=‘http://www.w3.org/2000/svg’ xmlns:xlink=‘http://www.w3.org/1999/xlink’%3E%3Ctitle%3E%3C/title%3E%3Cg stroke=‘none’ stroke-width=‘1’ fill=‘none’ fill-rule=‘evenodd’ fill-opacity=‘0’%3E%3Cg transform=‘translate(-249.000000, -126.000000)’ fill=‘%23FFFFFF’%3E%3Crect x=‘249’ y=‘126’ width=‘1’ height=‘1’%3E%3C/rect%3E%3C/g%3E%3C/g%3E%3C/svg%3E)";
+    const html = renderMarkdownRaw(createMarkdownIt(hljs), src);
+    expect(html).toContain("<img");
+    expect(html).toContain('src="data:image/svg+xml');
+  });
+});
