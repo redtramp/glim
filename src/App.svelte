@@ -194,7 +194,7 @@ const hasBookmarkAtCurrentPos = $derived(
 );
 const dynamicIcons = $derived({
   "locale-toggle": locale.value === "zh-CN" ? "中" : "En",
-  edit: isEditing ? "👁" : "✎",
+  edit: isEditing ? "view" : "edit",
 });
 const showUnsavedDialog = unsavedDialog.showUnsavedDialog;
 const showGrantDialog = fsAuthorize.showGrantDialog;

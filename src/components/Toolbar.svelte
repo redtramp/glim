@@ -100,7 +100,7 @@
 </script>
 
 <header class="toolbar flex flex-none flex-row flex-nowrap items-center gap-[2px] px-2 py-1 overflow-visible border-b border-shell-toolbar-border bg-[var(--shell-toolbar-bg)]">
-  <span class="toolbar-brand inline-flex items-center gap-1.5 pl-1 pr-2.5 text-[13px] font-bold tracking-[1px] whitespace-nowrap shrink-0 select-none text-[var(--mdr-accent-gold)] [text-shadow:0_0_8px_color-mix(in_srgb,_var(--mdr-accent-gold)_55%,_transparent)]" title={t("app.title")}>GLIM<span class="caret inline-block h-[14px] w-[7px] bg-[var(--mdr-accent-gold)] shadow-[0_0_6px_color-mix(in_srgb,_var(--mdr-accent-gold)_70%,_transparent)] animate-[mdr-caret-blink_1.1s_steps(1)_infinite] motion-reduce:hidden" aria-hidden="true"></span></span>
+  <span class="toolbar-brand inline-flex items-center pl-1 pr-2.5 text-[13px] font-semibold tracking-[0.08em] whitespace-nowrap shrink-0 select-none text-[var(--mdr-accent-gold)]" title={t("app.title")}>GLIM</span>
   <button class={btnClass} onclick={onCreateNewFile} title={t("toolbar.new") + shortcutSuffix("new-file")}>{t("toolbar.new")}</button>
   <button class={btnClass} onclick={onPickFile} title={t("app.file") + shortcutSuffix("open-file")}>{t("app.file")}</button>
   <button class={btnClass} onclick={onPickFolder} title={t("app.folder")}>{t("app.folder")}</button>

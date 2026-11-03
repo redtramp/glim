@@ -9,9 +9,37 @@
  */
 import type { LeftPanelID } from "../composables/useFloatLayout.svelte.ts";
 
-let { name }: { name: LeftPanelID } = $props();
+/** 图标名 = 左侧面板 ID + 组件内消费的扩展图标（统一 Lucide 风格线性 path） */
+export type IconName =
+  | LeftPanelID
+  | "view"
+  | "trash"
+  | "tabs"
+  | "undo"
+  | "note"
+  | "pin"
+  | "comment"
+  | "star"
+  | "plus"
+  | "swap"
+  | "close"
+  | "download";
 
-const ICON_PATHS: Record<LeftPanelID, string[]> = {
+let { name, size = 20 }: { name: IconName; size?: number } = $props();
+
+const ICON_PATHS: Record<IconName, string[]> = {
+  view: ["M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z", "M12 15a3 3 0 100-6 3 3 0 000 6z"],
+  trash: ["M3 6h18", "M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2", "M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6", "M10 11v6", "M14 11v6"],
+  tabs: ["M4 4h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z", "M3 9h18", "M9 4v5"],
+  undo: ["M3 7v6h6", "M21 17a9 9 0 00-15-6.7L3 13"],
+  note: ["M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9l-6-6z", "M14 3v6h6", "M9 13h6", "M9 17h4"],
+  pin: ["M12 17v5", "M9 3h6l-1 7 3.5 3.5a1 1 0 01-.7 1.7H7.2a1 1 0 01-.7-1.7L10 10l-1-7z"],
+  comment: ["M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"],
+  star: ["M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2z"],
+  plus: ["M12 5v14", "M5 12h14"],
+  swap: ["M7 4l-4 4 4 4", "M3 8h13a4 4 0 014 4v1", "M17 20l4-4-4-4", "M21 16H8a4 4 0 01-4-4v-1"],
+  close: ["M18 6L6 18", "M6 6l12 12"],
+  download: ["M12 3v12", "M7 10l5 5 5-5", "M5 21h14"],
   filetree: [
     "M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z",
   ],
@@ -78,8 +106,8 @@ const ICON_PATHS: Record<LeftPanelID, string[]> = {
 </script>
 
 <svg
-  width="20"
-  height="20"
+  width={size}
+  height={size}
   viewBox="0 0 24 24"
   fill="none"
   stroke="currentColor"

@@ -14,6 +14,7 @@
  */
 import { t } from "../i18n/locale.svelte.ts";
 import { parseCriticMarkup, type CriticType } from "../composables/criticMarkup";
+import PanelIcon from "./PanelIcon.svelte";
 
 interface Props {
   visible: boolean;
@@ -128,7 +129,7 @@ function stopPropagation(e: MouseEvent): void {
                 >
                 <div class="rv-text flex min-w-0 flex-1 items-baseline gap-1.5 whitespace-pre-wrap [word-break:break-word]">
                   {#if ann.type === "comment"}
-                    <span class="rv-comment italic text-critic-comment-color">💬 {ann.newText}</span>
+                    <span class="rv-comment inline-flex items-baseline gap-1 italic text-critic-comment-color"><PanelIcon name="comment" size={12} />{ann.newText}</span>
                   {:else if ann.type === "sub"}
                     <span class="rv-old line-through text-critic-del-color">{ann.oldText}</span>
                     <span class="rv-arrow text-fg-muted">→</span>

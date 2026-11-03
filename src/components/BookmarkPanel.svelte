@@ -5,6 +5,7 @@
 import { t } from "../i18n/locale.svelte.ts";
 import { basename, dirOf } from "../utils/path";
 import { useBookmarks } from "../composables/useBookmarks.svelte.ts";
+import PanelIcon from "./PanelIcon.svelte";
 
 interface Props {
   currentPath?: string;
@@ -117,7 +118,7 @@ function itemState(active: boolean): string {
                   role="presentation"
                   onclick={() => onJump?.(bm.filePath, bm.scrollTop)}
                 >
-                  <span class="bm-item-icon shrink-0 text-[12px]">📌</span>
+                  <span class="bm-item-icon flex shrink-0 items-center text-fg-muted"><PanelIcon name="pin" size={12} /></span>
                   <span class="bm-item-label flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[var(--fg)]"
                     >{bm.label}</span
                   >

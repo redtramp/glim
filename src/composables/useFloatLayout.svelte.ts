@@ -17,27 +17,26 @@ export type LeftPanelID =
 
 export interface LeftPanelMeta {
   id: LeftPanelID;
-  icon: string;
   labelKey: string;
   group: "navigation" | "content" | "tools" | "actions";
 }
 
 export const LEFT_PANEL_META: LeftPanelMeta[] = [
-  { id: "filetree", icon: "🗂", labelKey: "float.filetree", group: "navigation" },
-  { id: "history", icon: "🕐", labelKey: "float.history", group: "navigation" },
-  { id: "search", icon: "🔍", labelKey: "float.search", group: "content" },
-  { id: "annotations", icon: "✏️", labelKey: "float.annotations", group: "content" },
-  { id: "bookmark", icon: "🔖", labelKey: "float.bookmark", group: "content" },
-  { id: "new-file", icon: "📄", labelKey: "float.newFile", group: "actions" },
-  { id: "open-file", icon: "📂", labelKey: "float.openFile", group: "actions" },
-  { id: "open-folder", icon: "🗀", labelKey: "float.openFolder", group: "actions" },
-  { id: "export", icon: "⇩", labelKey: "float.export", group: "actions" },
-  { id: "edit", icon: "✎", labelKey: "float.editToggle", group: "actions" },
-  { id: "ai", icon: "🤖", labelKey: "float.ai", group: "tools" },
-  { id: "settings", icon: "⚙️", labelKey: "float.settings", group: "tools" },
-  { id: "help", icon: "❓", labelKey: "float.help", group: "tools" },
-  { id: "locale-toggle", icon: "🌐", labelKey: "float.localeToggle", group: "tools" },
-  { id: "theme-toggle", icon: "🌓", labelKey: "float.themeToggle", group: "tools" },
+  { id: "filetree", labelKey: "float.filetree", group: "navigation" },
+  { id: "history", labelKey: "float.history", group: "navigation" },
+  { id: "search", labelKey: "float.search", group: "content" },
+  { id: "annotations", labelKey: "float.annotations", group: "content" },
+  { id: "bookmark", labelKey: "float.bookmark", group: "content" },
+  { id: "new-file", labelKey: "float.newFile", group: "actions" },
+  { id: "open-file", labelKey: "float.openFile", group: "actions" },
+  { id: "open-folder", labelKey: "float.openFolder", group: "actions" },
+  { id: "export", labelKey: "float.export", group: "actions" },
+  { id: "edit", labelKey: "float.editToggle", group: "actions" },
+  { id: "ai", labelKey: "float.ai", group: "tools" },
+  { id: "settings", labelKey: "float.settings", group: "tools" },
+  { id: "help", labelKey: "float.help", group: "tools" },
+  { id: "locale-toggle", labelKey: "float.localeToggle", group: "tools" },
+  { id: "theme-toggle", labelKey: "float.themeToggle", group: "tools" },
 ];
 
 /** 动作类面板 ID（不展开浮层，直接执行动作） */

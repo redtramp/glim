@@ -4,6 +4,7 @@
  * 纯展示组件：无 props、无事件。
  */
 import { t } from "../i18n/locale.svelte.ts";
+import PanelIcon from "./PanelIcon.svelte";
 </script>
 
 <div class="help-panel flex h-full flex-col overflow-hidden">
@@ -16,19 +17,19 @@ import { t } from "../i18n/locale.svelte.ts";
       <h3 class="hp-section-title mb-0.5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">{t("float.helpUsageTitle")}</h3>
       <ul class="hp-list m-0 list-none px-2 py-0">
         <li class="hp-item flex items-start gap-2 px-1 py-[5px] text-[12px] leading-[1.4] text-fg-secondary hover:rounded hover:bg-float-rail-icon-hover-bg">
-          <span class="hp-item-icon w-[18px] shrink-0 text-center text-[14px]">📄</span>
+          <span class="hp-item-icon flex w-[18px] shrink-0 justify-center text-fg-muted"><PanelIcon name="new-file" size={14} /></span>
           <span class="hp-item-text flex-1">{t("float.helpUsageOpen")}</span>
         </li>
         <li class="hp-item flex items-start gap-2 px-1 py-[5px] text-[12px] leading-[1.4] text-fg-secondary hover:rounded hover:bg-float-rail-icon-hover-bg">
-          <span class="hp-item-icon w-[18px] shrink-0 text-center text-[14px]">📂</span>
+          <span class="hp-item-icon flex w-[18px] shrink-0 justify-center text-fg-muted"><PanelIcon name="open-folder" size={14} /></span>
           <span class="hp-item-text flex-1">{t("float.helpUsageFolder")}</span>
         </li>
         <li class="hp-item flex items-start gap-2 px-1 py-[5px] text-[12px] leading-[1.4] text-fg-secondary hover:rounded hover:bg-float-rail-icon-hover-bg">
-          <span class="hp-item-icon w-[18px] shrink-0 text-center text-[14px]">✏️</span>
+          <span class="hp-item-icon flex w-[18px] shrink-0 justify-center text-fg-muted"><PanelIcon name="edit" size={14} /></span>
           <span class="hp-item-text flex-1">{t("float.helpUsageEdit")}</span>
         </li>
         <li class="hp-item flex items-start gap-2 px-1 py-[5px] text-[12px] leading-[1.4] text-fg-secondary hover:rounded hover:bg-float-rail-icon-hover-bg">
-          <span class="hp-item-icon w-[18px] shrink-0 text-center text-[14px]">⇩</span>
+          <span class="hp-item-icon flex w-[18px] shrink-0 justify-center text-fg-muted"><PanelIcon name="export" size={14} /></span>
           <span class="hp-item-text flex-1">{t("float.helpUsageExport")}</span>
         </li>
       </ul>
@@ -63,15 +64,15 @@ import { t } from "../i18n/locale.svelte.ts";
       <h3 class="hp-section-title mb-0.5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">{t("float.helpTabsTitle")}</h3>
       <ul class="hp-list m-0 list-none px-2 py-0">
         <li class="hp-item flex items-start gap-2 px-1 py-[5px] text-[12px] leading-[1.4] text-fg-secondary hover:rounded hover:bg-float-rail-icon-hover-bg">
-          <span class="hp-item-icon w-[18px] shrink-0 text-center text-[14px]">📑</span>
+          <span class="hp-item-icon flex w-[18px] shrink-0 justify-center text-fg-muted"><PanelIcon name="tabs" size={14} /></span>
           <span class="hp-item-text flex-1">{t("float.helpTabsClick")}</span>
         </li>
         <li class="hp-item flex items-start gap-2 px-1 py-[5px] text-[12px] leading-[1.4] text-fg-secondary hover:rounded hover:bg-float-rail-icon-hover-bg">
-          <span class="hp-item-icon w-[18px] shrink-0 text-center text-[14px]">🗑</span>
+          <span class="hp-item-icon flex w-[18px] shrink-0 justify-center text-fg-muted"><PanelIcon name="trash" size={14} /></span>
           <span class="hp-item-text flex-1">{t("float.helpTabsClose")}</span>
         </li>
         <li class="hp-item flex items-start gap-2 px-1 py-[5px] text-[12px] leading-[1.4] text-fg-secondary hover:rounded hover:bg-float-rail-icon-hover-bg">
-          <span class="hp-item-icon w-[18px] shrink-0 text-center text-[14px]">↩️</span>
+          <span class="hp-item-icon flex w-[18px] shrink-0 justify-center text-fg-muted"><PanelIcon name="undo" size={14} /></span>
           <span class="hp-item-text flex-1">{t("float.helpTabsRightClick")}</span>
         </li>
       </ul>
@@ -82,19 +83,19 @@ import { t } from "../i18n/locale.svelte.ts";
       <h3 class="hp-section-title mb-0.5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">{t("float.helpAnnotationsTitle")}</h3>
       <ul class="hp-list m-0 list-none px-2 py-0">
         <li class="hp-item flex items-start gap-2 px-1 py-[5px] text-[12px] leading-[1.4] text-fg-secondary hover:rounded hover:bg-float-rail-icon-hover-bg">
-          <span class="hp-item-icon w-[18px] shrink-0 text-center text-[14px]">📝</span>
+          <span class="hp-item-icon flex w-[18px] shrink-0 justify-center text-fg-muted"><PanelIcon name="note" size={14} /></span>
           <span class="hp-item-text flex-1">{t("float.helpAnnotationsSelect")}</span>
         </li>
         <li class="hp-item flex items-start gap-2 px-1 py-[5px] text-[12px] leading-[1.4] text-fg-secondary hover:rounded hover:bg-float-rail-icon-hover-bg">
-          <span class="hp-item-icon w-[18px] shrink-0 text-center text-[14px]">✏️</span>
+          <span class="hp-item-icon flex w-[18px] shrink-0 justify-center text-fg-muted"><PanelIcon name="edit" size={14} /></span>
           <span class="hp-item-text flex-1">{t("float.helpAnnotationsTypes")}</span>
         </li>
         <li class="hp-item flex items-start gap-2 px-1 py-[5px] text-[12px] leading-[1.4] text-fg-secondary hover:rounded hover:bg-float-rail-icon-hover-bg">
-          <span class="hp-item-icon w-[18px] shrink-0 text-center text-[14px]">🤖</span>
+          <span class="hp-item-icon flex w-[18px] shrink-0 justify-center text-fg-muted"><PanelIcon name="ai" size={14} /></span>
           <span class="hp-item-text flex-1">{t("float.helpAnnotationsAI")}</span>
         </li>
         <li class="hp-item flex items-start gap-2 px-1 py-[5px] text-[12px] leading-[1.4] text-fg-secondary hover:rounded hover:bg-float-rail-icon-hover-bg">
-          <span class="hp-item-icon w-[18px] shrink-0 text-center text-[14px]">🔍</span>
+          <span class="hp-item-icon flex w-[18px] shrink-0 justify-center text-fg-muted"><PanelIcon name="search" size={14} /></span>
           <span class="hp-item-text flex-1">{t("float.helpAnnotationsReview")}</span>
         </li>
       </ul>
@@ -105,7 +106,7 @@ import { t } from "../i18n/locale.svelte.ts";
       <h3 class="hp-section-title mb-0.5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">{t("float.helpSearchTitle")}</h3>
       <ul class="hp-list m-0 list-none px-2 py-0">
         <li class="hp-item flex items-start gap-2 px-1 py-[5px] text-[12px] leading-[1.4] text-fg-secondary hover:rounded hover:bg-float-rail-icon-hover-bg">
-          <span class="hp-item-icon w-[18px] shrink-0 text-center text-[14px]">🔍</span>
+          <span class="hp-item-icon flex w-[18px] shrink-0 justify-center text-fg-muted"><PanelIcon name="search" size={14} /></span>
           <span class="hp-item-text flex-1">{t("float.helpSearchDoc")}</span>
         </li>
         <li class="hp-item flex items-start gap-2 px-1 py-[5px] text-[12px] leading-[1.4] text-fg-secondary hover:rounded hover:bg-float-rail-icon-hover-bg">

@@ -78,10 +78,12 @@ const groupBoundaries = new Set(
         onclick={() => onOpenPanel?.(item.id)}
         onpointerenter={() => onPanelHover?.(item.id)}
       >
-        {#if dynamicIcons?.[item.id]}
-          <span class="pointer-events-none text-lg leading-none">{dynamicIcons[item.id]}</span>
+        {#if item.id === "locale-toggle" && dynamicIcons?.[item.id]}
+          <!-- 语言切换保留文字图标（中/En），语义即文字 -->
+          <span class="pointer-events-none text-[13px] font-semibold leading-none">{dynamicIcons[item.id]}</span>
         {:else}
-          <PanelIcon name={item.id} />
+          <!-- edit 图标随编辑态动态切换（SVG edit/view） -->
+          <PanelIcon name={dynamicIcons?.[item.id] === "view" ? "view" : item.id} />
         {/if}
       </button>
       {#if groupBoundaries.has(idx)}

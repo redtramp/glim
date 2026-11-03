@@ -148,18 +148,7 @@
   background: var(--bg-code);
 }
 
-:root[data-theme="dark"] .markdown-body h1 {
-  font-size: 2.45em;
-  padding-bottom: 0.32em;
-  letter-spacing: -0.03em;
-}
-:root[data-theme="dark"] .markdown-body h2 {
-  font-size: 1.45em;
-  padding-bottom: 0.34em;
-}
-:root[data-theme="dark"] .markdown-body h3 {
-  font-size: 1.22em;
-}
+/* 标题字号阶两主题统一（原暗色单独放大 h1 至 2.45em，阶跃突兀且与亮色不一致） */
 :root[data-theme="dark"] .markdown-body blockquote {
   padding: 0.05em 1em;
   border-left-width: 3px;

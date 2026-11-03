@@ -25,6 +25,7 @@
   import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
   import { t } from "../i18n/locale.svelte.ts";
   import { useReadingSettings } from "../composables/useReadingSettings.svelte.ts";
+  import PanelIcon from "./PanelIcon.svelte";
   import {
     getCachedPandocRefDoc,
     setCachedPandocRefDoc,
@@ -446,10 +447,11 @@
       <div class="title mb-3.5 flex justify-between text-[15px] font-semibold">
         {t("settings.title")}
         <button
-          class="close border-none bg-transparent text-fg-muted cursor-pointer text-[14px]"
+          class="close flex cursor-pointer items-center border-none bg-transparent text-fg-muted hover:text-fg"
+          aria-label="close"
           onclick={onClose}
         >
-          ✕
+          <PanelIcon name="close" size={14} />
         </button>
       </div>
 

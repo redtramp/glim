@@ -10,6 +10,7 @@
  */
 import { t } from "../i18n/locale.svelte.ts";
 import { parseCriticMarkup, type CriticType } from "../composables/criticMarkup";
+import PanelIcon, { type IconName } from "./PanelIcon.svelte";
 
 interface Props {
   /** 当前文档的源文本（含 CriticMarkup 语法） */
@@ -36,12 +37,13 @@ const TYPE_LABELS: Record<CriticType, string> = {
   comment: "annotation.comment",
 };
 
-const TYPE_ICONS: Record<CriticType, string> = {
-  del: "✕",
-  ins: "+",
-  sub: "⇄",
-  hl: "★",
-  comment: "💬",
+/** 批注类型图标（PanelIcon 名，统一 SVG 线性风格） */
+const TYPE_ICONS: Record<CriticType, IconName> = {
+  del: "close",
+  ins: "plus",
+  sub: "swap",
+  hl: "star",
+  comment: "comment",
 };
 
 /* 分组图标配色（互斥串，同名 text-* 不会同时出现） */
@@ -91,8 +93,8 @@ function snippet(text: string, maxLen = 60): string {
             <div
               class="al-group-header sticky top-0 z-[1] flex items-center gap-1.5 bg-[rgba(255,255,255,0.72)] px-4 pb-1 pt-1.5 text-[11px] text-fg-muted dark:bg-[rgba(24,24,24,0.78)]"
             >
-              <span class="al-group-icon w-4 shrink-0 text-center text-[12px] {ICON_CLS[group.type]}">
-                {TYPE_ICONS[group.type]}
+              <span class="al-group-icon flex w-4 shrink-0 justify-center {ICON_CLS[group.type]}">
+                <PanelIcon name={TYPE_ICONS[group.type]} size={13} />
               </span>
               <span class="al-group-label flex-1 uppercase tracking-[0.4px]">{group.label}</span>
               <span class="al-group-count text-[10px] opacity-60">{group.items.length}</span>
@@ -110,7 +112,8 @@ function snippet(text: string, maxLen = 60): string {
                   >
                   <span class="al-item-text flex min-w-0 flex-1 items-baseline gap-1 overflow-hidden whitespace-nowrap text-ellipsis leading-[1.5]">
                     {#if ann.type === "comment"}
-                      💬 {snippet(ann.newText)}
+                      <span class="inline-flex translate-y-[2px] text-critic-comment-color"><PanelIcon name="comment" size={12} /></span>
+                      {snippet(ann.newText)}
                     {:else if ann.type === "sub"}
                       <span class="al-old line-through text-critic-del-color">{snippet(ann.oldText)}</span>
                       <span class="al-arrow text-[11px] text-fg-muted">→</span>

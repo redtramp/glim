@@ -8,6 +8,7 @@
  */
 import { t } from "../i18n/locale.svelte.ts";
 import { useShortcuts } from "../composables/useShortcuts";
+import PanelIcon from "./PanelIcon.svelte";
 
 interface Props {
   visible: boolean;
@@ -126,7 +127,7 @@ function onOverlayClick(e: MouseEvent): void {
     >
       <div class="sc-title mb-3.5 flex items-center justify-between text-[15px] font-semibold">
         {t("shortcuts.title")}
-        <button class="sc-close cursor-pointer border-none bg-transparent p-0 text-[14px] text-fg-muted hover:text-fg" onclick={() => onClose?.()}>✕</button>
+        <button class="sc-close flex cursor-pointer items-center border-none bg-transparent p-0 text-fg-muted hover:text-fg" aria-label="close" onclick={() => onClose?.()}><PanelIcon name="close" size={14} /></button>
       </div>
       <div class="sc-content min-h-0 flex-1 overflow-y-auto">
         {#each grouped as cat (cat.key)}
