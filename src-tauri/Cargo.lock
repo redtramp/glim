@@ -1491,6 +1491,7 @@ dependencies = [
  "tauri-plugin-system-fonts",
  "tauri-plugin-window-state",
  "walkdir",
+ "webkit2gtk",
  "window-vibrancy",
 ]
 

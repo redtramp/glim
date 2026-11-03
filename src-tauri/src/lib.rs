@@ -543,6 +543,29 @@ fn initial_open_file() -> Option<String> {
     extract_md_path_from_args(&argv)
 }
 
+/// 方案 A（仅 Linux）：把 WebKitGTK 调成「文档查看器」形态，降低内存基线。
+/// - DOCUMENT_VIEWER 缓存模型：完全禁用资源缓存（官方说明可显著降内存，
+///   适用于只读本地文件的应用；本应用全部资源经 custom-protocol 读自本地 dist）。
+/// - 关闭未使用的 Web 特性（WebGL/WebAudio/MediaStream/空间导航/DNS 预取）：
+///   markdown 渲染、mermaid(SVG)、katex、CodeMirror 均不依赖，省去对应子系统初始化与内存。
+#[cfg(target_os = "linux")]
+fn apply_webkit_linux_tuning(window: &tauri::WebviewWindow) {
+    use webkit2gtk::{CacheModel, SettingsExt, WebContextExt, WebViewExt};
+    let _ = window.with_webview(move |webview| {
+        let inner = webview.inner();
+        if let Some(context) = inner.context() {
+            context.set_cache_model(CacheModel::DocumentViewer);
+        }
+        if let Some(settings) = inner.settings() {
+            settings.set_enable_webgl(false);
+            settings.set_enable_webaudio(false);
+            settings.set_enable_media_stream(false);
+            settings.set_enable_spatial_navigation(false);
+            settings.set_enable_dns_prefetching(false);
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Linux 下不再主动禁用 webkitgtk 的 DMABUF 渲染器（回退 e9f59a3 引入的默认禁用）：
@@ -576,6 +599,12 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_theme(None);
                 apply_windows_frame_theme(&window, false);
+                // 方案 A：把 WebKitGTK 调成「文档查看器」形态，压内存基线。
+                // 依据 webkitgtk 官方 API：DOCUMENT_VIEWER 缓存模型
+                // "Disable the cache completely, which substantially reduces memory usage.
+                //  Useful for applications that only access a single local file"。
+                #[cfg(target_os = "linux")]
+                apply_webkit_linux_tuning(&window);
             }
             let _ = app;
             Ok(())

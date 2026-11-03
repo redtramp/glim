@@ -31,6 +31,12 @@ notify = "8.2.0"
 notify-debouncer-mini = "0.7.0"
 tauri-plugin-http = "2.8.0"
 
+# Linux 专用：经 tauri with_webview 拿到底层 WebKitGTK WebView，
+# 设置文档查看器缓存模型并关闭未使用的 Web 特性以降低内存（方案 A）。
+# 版本须与 tauri 2.12 内置的 webkit2gtk crate 一致（2.0.x），否则类型不兼容。
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = "2.0"
+
 [profile.release]
 panic = "abort"
 codegen-units = 1

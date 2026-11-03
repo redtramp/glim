@@ -12,7 +12,9 @@
 import { createMarkdownIt, renderMarkdownOnce, extractHeadingsWith } from "../composables/markdownEngine";
 // highlight.js 静态引入进 Worker chunk（仅 Worker 线程加载，不阻塞主线程首屏）；
 // 主线程的 markdownEngine 不再引用 hljs，从而把 ~983KB hljs 移出主线程启动路径。
-import hljs from "highlight.js";
+// 用 common 子集（~38 种常用语言，体积约为全量的 30%）降低 Worker 解析内存与冷加载耗时；
+// 冷门语言代码块回退纯文本（无高亮），不影响正确性。
+import hljs from "highlight.js/lib/common";
 
 const md = createMarkdownIt(hljs);
 
