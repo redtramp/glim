@@ -545,15 +545,12 @@ fn initial_open_file() -> Option<String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Linux 下 webkitgtk 2.42+ 的 DMABUF 渲染器在部分驱动/Wayland 组合上出现
-    // 窗口图形不渲染、指针事件冻结等异常（重新编译后更易复现）。
-    // 禁用 DMABUF 渲染器是 Tauri Linux 应用社区标准 workaround，
-    // 以轻微 GPU 合成性能换取渲染稳定性。仅在用户未显式设置时生效，
-    // 便于针对特定环境覆盖调试。
-    #[cfg(target_os = "linux")]
-    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-    }
+    // Linux 下不再主动禁用 webkitgtk 的 DMABUF 渲染器（回退 e9f59a3 引入的默认禁用）：
+    // 实测禁用后 WebKit 退回共享内存缓冲路径，启动瞬时内存尖峰（约 830MB）拖垮 kwin
+    // 合成（journal 实证 kwin_wayland 主线程挂起、全系统卡顿），并伴随指针/滚轮事件异常；
+    // 保持 WebKit 默认（启用 DMABUF）时峰值更低且上述症状消失，即 e9f59a3 之前的正常状态。
+    // 环境可覆盖：个别驱动/Wayland 组合如确需禁用兜底，用户显式设置
+    // WEBKIT_DISABLE_DMABUF_RENDERER=1 即可生效，本处不再写入或覆盖该变量。
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
