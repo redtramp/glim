@@ -129,6 +129,18 @@ async function flushPromises(): Promise<void> {
   }
 }
 
+/** 轮询等待条件成立（真实计时器下确定性等待异步续体完成）。
+ *  固定次数的 flushPromises 在机器负载高时会过早返回，而恢复装配循环内含 await
+ *  （激活标签提取大纲经动态 import），必须等条件成立再断言/卸载。 */
+async function waitFor(cond: () => boolean, timeoutMs = 3000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!cond()) {
+    if (Date.now() > deadline) return;
+    await new Promise<void>((r) => setTimeout(r, 0));
+    await tick();
+  }
+}
+
 /** 假计时器下的推进：先刷新 Svelte 效果（rAF/结算计时已调度），再推时钟，再刷新 DOM */
 async function advance(ms: number): Promise<void> {
   await tick();
@@ -175,6 +187,9 @@ describe("App.svelte 挂载", () => {
     readTextFileMock.mockImplementation(async (p: string | URL) => `# 标题 ${String(p)}\n\n正文内容。`);
 
     const m = mountApp();
+    // 确定性等待恢复装配完成：装配循环为激活标签提取大纲含 await，
+    // 固定次数 flush 在负载下会过早返回，导致中途卸载把续体写进共享 tabs 单例
+    await waitFor(() => useTabs().tabs.length === 3);
     await flushPromises();
 
     // 所有持久化文件均被读取（并行）
@@ -335,7 +350,8 @@ describe("编辑器按需加载", () => {
 
     // LeftRail 第 9 个按钮 = 编辑（LEFT_PANEL_META 顺序：filetree..export,edit）
     clickRailBtn(m.target, 9);
-    await flushPromises();
+    // 动态 import 的续体在负载高时超出 flushPromises 固定迭代数，用条件等待（与恢复测试同款修复）
+    await waitFor(() => Boolean(m.target.querySelector(".markdown-editor-stub")));
 
     // 动态 import 完成后渲染编辑器替身
     expect(m.target.querySelector(".markdown-editor-stub")).toBeTruthy();
