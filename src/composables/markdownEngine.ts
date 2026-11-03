@@ -236,6 +236,24 @@ function sanitizeLineUrls(line: string): string {
   );
 }
 
+/**
+ * 拆分链接/图片的"目标"与可选的尾部 title(CommonMark:目标后至少一个空白 + 引号或圆括号包裹的 title)。
+ *
+ * 括号平衡扫描会把 `(目标 "title")` 整体当作目标;若直接把其中的空格编码为 %20,
+ * 分隔空白消失,markdown-it 便无法识别 title,`"null"` 之类的内容会并入 URL。
+ * 对 data: URI 尤其致命:尾部多出的 ` "null"` 让 SVG 的 XML 解析失败,图片不显示。
+ *
+ * 有 title 时只清洗目标、title 原样保留;无 title 时整个内容仍是目标(保留
+ * "未编码空格的损坏 URL 也一并清洗"的既有行为,如 `(my image.png)`)。
+ */
+function splitLinkTitle(content: string): { dest: string; title: string } {
+  const m = /^([\s\S]*?)((?:\s+)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\((?:[^()\\]|\\.)*\)))?\s*$/.exec(
+    content
+  );
+  if (!m) return { dest: content, title: "" };
+  return { dest: m[1], title: m[2] ?? "" };
+}
+
 function sanitizeLineUrlsInner(line: string): string {
   let result = "";
   let i = 0;
@@ -262,15 +280,16 @@ function sanitizeLineUrlsInner(line: string): string {
       i = urlStart;
       continue;
     }
-    const url = line.slice(urlStart, j);
+    const { dest, title } = splitLinkTitle(line.slice(urlStart, j));
     // 引号与空格独立处理,不以"是否含智能引号"为前置条件:
     // 仅含未编码空格的损坏 URL(ASCII 引号 + translate( 等裸括号结构)同样需要清洗
-    const fixed = url
+    const fixed = dest
       .replace(/[\u2018\u2019\u201C\u201D]/g, (q) =>
         q === "\u201C" || q === "\u201D" ? "%22" : "%27"
       )
       .replace(/ /g, "%20");
-    result += line.slice(i, urlStart) + fixed + ")";
+    // title 原样回填:分隔空白不得编码,否则 markdown-it 会把 title 并入目标
+    result += line.slice(i, urlStart) + fixed + title + ")";
     i = j + 1;
   }
   return result;

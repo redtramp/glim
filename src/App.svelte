@@ -629,6 +629,9 @@ async function restoreTabs(initialPath = "") {
       const recentPaths: string[] = [];
       let activeId = "";
       for (const path of uniquePaths) {
+        // 装配循环内含 await（激活标签提取大纲）：续体恢复时必须再次校验未卸载，
+        // 否则窗口关闭后仍会向 tabs 单例 push，污染已销毁实例/后续测试
+        if (appDisposed) return;
         const text = textByPath.get(path);
         if (text === undefined) { fileManager.clearSuppress(path); continue; }
         const tab = createTab(path);
@@ -636,6 +639,7 @@ async function restoreTabs(initialPath = "") {
         tab.isDirty = false; tab.isEditing = false;
         // 仅对本次激活的标签同步提取大纲，其余延迟到激活时（显著加快多文档启动）
         tab.headings = samePath(path, activePath) ? await extractHeadingsWithRender(text) : [];
+        if (appDisposed) return; // await 期间可能已卸载
         tab.pendingHash = ""; tab.pendingScrollTop = getScroll(path);
         tab.pendingSourceLine = 0; tab.scrollTop = tab.pendingScrollTop;
         tabs.push(tab);
@@ -643,6 +647,7 @@ async function restoreTabs(initialPath = "") {
         fileManager.scheduleSuppressClear(path);
         if (samePath(path, activePath)) activeId = tab.id;
       }
+      if (appDisposed) return;
       if (!activeId && tabs.length) activeId = tabs[0].id;
       if (activeId) activateTab(activeId);
       // activePath 为空（默认取第一个标签）时补一次大纲提取

@@ -379,6 +379,29 @@ describe("仅空格损坏的 ASCII 引号 URL 回归", () => {
     expect(sanitizeInlineUrlSmartChars(withSpaces)).toBe(expected);
   });
 
+  it("title 不被并入 URL：清洗后 src 不含 title 文本，title 单独成属性", () => {
+    const line =
+      "![图片](data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E \"null\")";
+    const cleaned = sanitizeInlineUrlSmartChars(line);
+    // 目标与 title 之间的分隔空白必须保留（否则 title 会被当成目标的一部分）
+    expect(cleaned).toContain("%3C/svg%3E \"null\")");
+    const html = renderMarkdownRaw(md(), line);
+    const src = /<img[^>]*src="([^"]*)"/.exec(html)?.[1] ?? "";
+    expect(src).toBe(
+      "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E"
+    );
+    expect(html).toContain('title="null"');
+  });
+
+  it("无 title 的空格 URL 仍被编码（既有行为不回退）", () => {
+    expect(sanitizeInlineUrlSmartChars("![t](my image.png)")).toBe(
+      "![t](my%20image.png)"
+    );
+    expect(sanitizeInlineUrlSmartChars("![t](my image.png \"标题\")")).toBe(
+      "![t](my%20image.png \"标题\")"
+    );
+  });
+
   it("含 translate 裸括号与 title 的真实损坏行可渲染（微信公众号导出场景）", () => {
     const line =
       "![图](data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(-249.000000, -126.000000)'%3E%3Crect/%3E%3C/g%3E%3C/svg%3E \"null\")";

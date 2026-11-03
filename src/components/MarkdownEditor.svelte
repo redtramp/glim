@@ -37,6 +37,7 @@
   import { oneDark } from "@codemirror/theme-one-dark";
   import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
   import { useShortcuts } from "../composables/useShortcuts";
+  import { createWheelFallback } from "../composables/editorWheel";
 
   interface Props {
     modelValue: string;
@@ -423,9 +424,19 @@
     }
   }
 
+  /* 滚轮兜底：原生 wheel 驱动不了滚动容器时改用 scrollTop（见 editorWheel.ts） */
+  const wheelFallback = createWheelFallback();
+
+  function handleEditorWheel(e: WheelEvent) {
+    if (!view || e.ctrlKey || e.defaultPrevented) return;
+    if (e.deltaX === 0 && e.deltaY === 0) return;
+    if (wheelFallback.handle(e, view.scrollDOM)) e.preventDefault();
+  }
+
   onMount(() => {
     createEditor();
     host?.addEventListener("paste", handlePaste, true);
+    host?.addEventListener("wheel", handleEditorWheel, { passive: false });
 
     // 字体族跟随 CSS 变量（写在 documentElement 的 style 上）热更新
     // eslint-disable-next-line no-undef
@@ -439,6 +450,7 @@
 
   onDestroy(() => {
     host?.removeEventListener("paste", handlePaste, true);
+    host?.removeEventListener("wheel", handleEditorWheel);
     fontObserver?.disconnect();
     fontObserver = null;
     view?.destroy();
@@ -490,7 +502,7 @@
   });
 </script>
 
-<div class="markdown-editor-shell relative h-full min-h-0 overflow-hidden">
+<div class="markdown-editor-shell absolute inset-0 min-h-0 overflow-hidden">
   <div class="markdown-editor h-full min-h-0 overflow-hidden" bind:this={host}></div>
   {#if searchCounter.visible}
     <div class="editor-find-counter pointer-events-none absolute top-[58px] right-4 z-[8] min-w-[44px] rounded-[6px] border border-border bg-toolbar px-2 py-1 text-center text-[12px] text-fg-muted shadow-[0_4px_12px_rgba(0,0,0,0.12)]">{searchCounter.current}/{searchCounter.total}</div>

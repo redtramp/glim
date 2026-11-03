@@ -58,6 +58,24 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
+/** 点分十进制 IPv4 是否属于私网/回环/元数据/保留段（非法八位组也视作拒绝） */
+function isPrivateIpv4(dotted: string): boolean {
+  const v4 = dotted.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!v4) return false;
+  const octets = v4.slice(1).map((s) => Number.parseInt(s, 10));
+  if (octets.some((n) => n > 255)) return true;
+  const [first, second] = octets;
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 100 && second >= 64 && second <= 127)
+  );
+}
+
 /**
  * 私网/回环地址防护:图片抓取现经 Tauri http 插件(原生 reqwest)发出,不再受
  * CSP connect-src 限制,本函数是防止文档中的图片 URL 被用于 SSRF 的主要防线
@@ -74,23 +92,17 @@ function isPrivateUrl(url: string): boolean {
   if (host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) {
     return true;
   }
+  // IPv4-mapped IPv6:某些实现保留点分形式(::ffff:127.0.0.1),另一些(WHATWG URL)
+  // 会规范化为十六进制(::ffff:7f00:1),两种形态都需还原后再套用私网判定
   const mapped = host.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-  const ipv4Host = mapped ? mapped[1] : host;
-  const v4 = ipv4Host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (v4) {
-    const octets = v4.slice(1).map((s) => Number.parseInt(s, 10));
-    if (octets.some((n) => n > 255)) return true;
-    const [first, second] = octets;
-    return (
-      first === 0 ||
-      first === 10 ||
-      first === 127 ||
-      (first === 169 && second === 254) ||
-      (first === 172 && second >= 16 && second <= 31) ||
-      (first === 192 && second === 168) ||
-      (first === 100 && second >= 64 && second <= 127)
-    );
+  if (mapped) return isPrivateIpv4(mapped[1]);
+  const mappedHex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (mappedHex) {
+    const hi = Number.parseInt(mappedHex[1], 16);
+    const lo = Number.parseInt(mappedHex[2], 16);
+    return isPrivateIpv4([hi >> 8, hi & 0xff, lo >> 8, lo & 0xff].join("."));
   }
+  if (isPrivateIpv4(host)) return true;
   if (host.includes(":")) {
     return (
       host === "::" ||

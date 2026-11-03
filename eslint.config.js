@@ -65,6 +65,7 @@ export default [
         NodeFilter: "readonly",
         Range: "readonly",
         HTMLElement: "readonly",
+        HTMLDivElement: "readonly",
         HTMLInputElement: "readonly",
         HTMLButtonElement: "readonly",
         HTMLImageElement: "readonly",
