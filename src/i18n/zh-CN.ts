@@ -13,7 +13,7 @@ const zhCN = {
     emptyTitle: "Glim Reader",
     emptyHint: "点击「文件」或「文件夹」开始\n也可将 .md 文件拖入此窗口",
     shortcutHint:
-      "Ctrl+N 新建 · Ctrl+O 打开文件 · Ctrl+E 切换预览/编辑 · Ctrl+F 查找 · Ctrl+S 保存 · Ctrl+Shift+F 全文搜索",
+      "Ctrl+N 新建 · Ctrl+O 打开文件 · Ctrl+F 查找 · Ctrl+S 保存 · Ctrl+Shift+F 全文搜索",
     toggleTheme: "切换主题",
     switchLanguage: "Switch to English",
     allFiles: "所有文件",
@@ -379,7 +379,6 @@ const zhCN = {
     resetAll: "全部重置",
     reset: "重置",
     done: "完成",
-    toggleMode: "切换预览/编辑模式",
     newFile: "新建文件",
     openFile: "打开文件",
     searchPanel: "全文搜索",

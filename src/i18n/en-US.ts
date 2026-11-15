@@ -16,7 +16,7 @@ const enUS = {
     emptyHint:
       'Click "File" or "Folder" to get started\nYou can also drag a .md file into this window',
     shortcutHint:
-      "Ctrl+N New · Ctrl+O Open File · Ctrl+E Preview/Edit · Ctrl+F Find · Ctrl+S Save · Ctrl+Shift+F Search",
+      "Ctrl+N New · Ctrl+O Open File · Ctrl+F Find · Ctrl+S Save · Ctrl+Shift+F Search",
     toggleTheme: "Toggle theme",
     switchLanguage: "切换到中文",
     allFiles: "All files",
@@ -386,7 +386,6 @@ const enUS = {
     resetAll: "Reset all",
     reset: "Reset",
     done: "Done",
-    toggleMode: "Toggle preview / edit mode",
     newFile: "New file",
     openFile: "Open file",
     searchPanel: "Full-text search",

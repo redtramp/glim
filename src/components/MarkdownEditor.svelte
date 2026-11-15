@@ -8,7 +8,7 @@
    * - watch(modelValue) → $effect 内比较 view.state.doc 后再 replaceDoc
    * - watch(theme/readonly/overrides) → $effect + 首跑跳过（原 Vue watch 非 immediate）
    *   ⚠️ 必须在首跑 return 之前先读依赖，否则不会注册跟踪，之后永不重跑
-   * - emit("update:modelValue"/"ready"/"toggle-mode") → onUpdateModelValue/onReady/onToggleMode
+   * - emit("update:modelValue"/"ready") → onUpdateModelValue/onReady
    * - 原来把 MutationObserver 挂在 host DOM 上清理，改为普通 let，行为等价
    * - scoped CSS → Tailwind（markdown-editor* 三个类在全局 CSS 中无消费方）
    */
@@ -46,7 +46,6 @@
     currentFile?: string;
     onUpdateModelValue?: (value: string) => void;
     onReady?: () => void;
-    onToggleMode?: () => void;
   }
 
   let {
@@ -56,7 +55,6 @@
     currentFile,
     onUpdateModelValue,
     onReady,
-    onToggleMode,
   }: Props = $props();
 
   let host: HTMLElement | null = $state(null);
@@ -83,9 +81,11 @@
 
   const editorBaseTheme = EditorView.theme({
     "&": {
-      // spike：不再为 .cm-editor 设固定高度/裁切，也不让 .cm-scroller 内部滚动。
-      // 文档内容自然撑高，滚动统一交给外层 <section class="viewer overflow-auto">，
-      // 避免 WebKitGTK/Wayland 下嵌套 overflow 容器的原生 wheel 失效（tauri#14427）。
+      // 滚动统一交给外层 <section class="viewer overflow-auto">（唯一滚动容器），
+      // CM6 内容自然撑高、不在内部产生第二个可滚容器——规避 WebKitGTK/Wayland
+      // 下嵌套 overflow 容器的原生 wheel 失效(tauri#14427)。
+      // 启动时挂载需一次 scrollIntoView(0) dispatch 初始化 CM6 虚拟滚动视口，
+      // 否则 .cm-content 会被 spacer 推到文档中部导致正文空白（见 createEditor）。
       backgroundColor: "var(--bg)",
       color: "var(--fg)",
     },
@@ -251,13 +251,6 @@
           run: () => wrapSelection("`"),
         },
         {
-          key: toCodeMirror(getBinding("toggle-mode")),
-          run: () => {
-            onToggleMode?.();
-            return true;
-          },
-        },
-        {
           key: toCodeMirror(getBinding("find")),
           run: () => {
             openSearch();
@@ -330,6 +323,15 @@
         ],
       }),
     });
+    // 单一视图在启动时即挂载，CM6 首帧可能把虚拟滚动视口算到文档中部
+    // （真机实测 .cm-content 被推到 6957px，正文空白）。显式 scrollIntoView(0)
+    // dispatch 一次，强制把视口初始化到文档顶部——阶段一「切换进编辑态」路径
+    // 由 scrollToLine 的 dispatch 隐式完成，启动时挂载没有这次触发。
+    if (view.state.doc.length > 0) {
+      view.dispatch({
+        effects: EditorView.scrollIntoView(0, { y: "start" }),
+      });
+    }
     onReady?.();
     updateSearchCounter();
   }
@@ -461,8 +463,8 @@
     }
   }
 
-  /* spike：滚动统一交给外层单一容器，组件内不再接管 wheel。
-     editorWheel.ts 及其测试暂留（阶段二统一清理），以便原生滚轮验证失败时完整回退。 */
+  /* 单一视图：外层 section 是唯一滚动容器，其 onscroll 由 App 直接监听；
+     组件内不接管 wheel / scroll。editorWheel.ts 及测试暂留（阶段二清理）。 */
   onMount(() => {
     createEditor();
     host?.addEventListener("paste", handlePaste, true);

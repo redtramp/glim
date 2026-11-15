@@ -15,7 +15,6 @@ export interface ShortcutDef {
 }
 
 const DEFS: ShortcutDef[] = [
-  { id: "toggle-mode", defaultBinding: "Ctrl+E", target: "both", category: "global", descKey: "toggleMode" },
   { id: "new-file", defaultBinding: "Ctrl+N", target: "both", category: "global", descKey: "newFile" },
   { id: "open-file", defaultBinding: "Ctrl+O", target: "both", category: "global", descKey: "openFile" },
   { id: "search-panel", defaultBinding: "Ctrl+Shift+F", target: "app", category: "global", descKey: "searchPanel" },

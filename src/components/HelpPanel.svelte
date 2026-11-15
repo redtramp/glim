@@ -43,7 +43,7 @@ import PanelIcon from "./PanelIcon.svelte";
           { key: "Ctrl+S", action: t("shortcuts.save") },
           { key: "Ctrl+N", action: t("shortcuts.newFile") },
           { key: "Ctrl+O", action: t("shortcuts.openFile") },
-          { key: "Ctrl+E", action: t("shortcuts.toggleMode") },
+          { key: "Ctrl+E", action: t("shortcuts.openFiletree") },
           { key: "Ctrl+F", action: t("shortcuts.find") },
           { key: "Ctrl+Shift+F", action: t("shortcuts.searchPanel") },
           { key: "Ctrl+,", action: t("shortcuts.settings") },

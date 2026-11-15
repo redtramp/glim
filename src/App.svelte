@@ -44,7 +44,6 @@ import { useUnsavedDialog } from "./composables/useUnsavedDialog.svelte.ts";
 import { useFsAuthorize } from "./composables/useFsAuthorize.svelte.ts";
 import { useFloatLayout, ACTION_PANEL_IDS } from "./composables/useFloatLayout.svelte.ts";
 import { createLazyLoader } from "./composables/lazyComponent";
-import { markEditorUsed, hasEditorIntent } from "./composables/editorPreload";
 import { useSectionMarkers } from "./composables/useSectionMarkers.svelte.ts";
 import { useBookmarks } from "./composables/useBookmarks.svelte.ts";
 import { basename, dirOf } from "./utils/path";
@@ -64,10 +63,9 @@ import Banner from "./components/Banner.svelte";
 import DiffView from "./components/DiffView.svelte";
 import ReviewPanel from "./components/ReviewPanel.svelte";
 import AiPanel from "./components/AiPanel.svelte";
-import MarkdownView from "./components/MarkdownView.svelte";
-// MarkdownEditor 仅编辑模式需要，其依赖的 CodeMirror（vendor-codemirror ~613KB / gzip 210KB）
-// 是全应用最重的启动期主线程依赖。此处不做静态 import，改由 ensureEditorModule() 动态按需加载，
-// 把 CodeMirror 移出启动关键路径（详见 toggleEditorMode 与模板中的 {#if EditorComponent}）。
+// MarkdownEditor 是单一视图的正文组件，其依赖的 CodeMirror（vendor-codemirror ~613KB / gzip 210KB）
+// 是全应用最重的启动期主线程依赖。此处不做静态 import，由 onMount 的 ensureEditorForSingleView()
+// 动态加载，把 CodeMirror 移出启动关键路径（模板中 {#if EditorComponent} 加载完成前显示占位）。
 // 仅类型层引用组件，不产生运行时依赖。
 type MarkdownEditorComponent = typeof import("./components/MarkdownEditor.svelte")["default"];
 import AnnotationToolbar from "./components/AnnotationToolbar.svelte";
@@ -190,7 +188,7 @@ const hasActiveFile = $derived(Boolean(activeTab?.path));
 const fileName = $derived(currentFile ? basename(currentFile) : t("app.noFile"));
 const displayFileName = $derived(isDirty ? `${fileName} *` : fileName);
 const hasBookmarkAtCurrentPos = $derived(
-  !currentFile || !viewerEl.value ? false : bookmarks.hasAt(currentFile, viewerEl.value.scrollTop)
+  !currentFile ? false : bookmarks.hasAt(currentFile, currentScrollTop())
 );
 const dynamicIcons = $derived({
   "locale-toggle": locale.value === "zh-CN" ? "中" : "En",
@@ -202,6 +200,14 @@ const grantDir = fsAuthorize.grantDir;
 const unsavedDialogMode = unsavedDialog.unsavedDialogMode;
 const dialogTab = unsavedDialog.dialogTab;
 const editorRef = fileManager.editorRef;
+
+/** 单一视图：外层 section 是唯一滚动容器，周边功能统一经此读写 scrollTop。 */
+function currentScrollTop(): number {
+  return viewerEl.value?.scrollTop ?? 0;
+}
+function applyScrollTop(top: number): void {
+  if (viewerEl.value) viewerEl.value.scrollTop = top;
+}
 
 /** 悬浮面板关闭后仍驻留 DOM 的卸载窗口（FloatingPanel unmountTimer 250ms）+ 缓冲 */
 const PANEL_UNMOUNT_SETTLE_MS = 300;
@@ -227,15 +233,20 @@ async function loadFile(path: string, hash = "", sourceLine = 0) {
   const existing = findTabByPath(path);
   if (existing) {
     const t2 = activeTab;
-    if (t2 && t2.path && viewerEl.value && !t2.isEditing) { t2.scrollTop = viewerEl.value.scrollTop; saveScroll(t2.path, viewerEl.value.scrollTop); }
-    existing.pendingHash = hash; existing.pendingScrollTop = 0; existing.pendingSourceLine = sourceLine;
+    if (t2 && t2.path && !t2.isEditing) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); }
+    existing.pendingHash = hash; existing.pendingScrollTop = 0; existing.pendingSourceLine = 0;
     activateTab(existing.id); await syncRootDir(path);
     if (lastSearchQuery) { find.highlightSearch(lastSearchQuery); lastSearchQuery = ""; }
-    if (existing.pendingSourceLine > 0) { scrollPreviewToSourceLine(existing.pendingSourceLine); existing.pendingSourceLine = 0; }
+    // 单一视图：全局搜索带源码行跳转，直接让 CM6 滚到该行（编辑器常驻）
+    if (sourceLine > 0) {
+      await ensureEditorModule();
+      await tick();
+      editorRef.value?.scrollToLine(sourceLine);
+    }
     return;
   }
   const t2 = activeTab;
-  if (t2 && t2.path && viewerEl.value && !t2.isEditing) { t2.scrollTop = viewerEl.value.scrollTop; saveScroll(t2.path, viewerEl.value.scrollTop); }
+  if (t2 && t2.path && !t2.isEditing) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); }
   const tab = createTab(path);
   try { await readFileIntoTab(tab, path, hash, sourceLine); } catch (e: any) { appStore.errorMsg = `${t("errors.readFailed")}: ${e?.message || e}`; return; }
   tabs.push(tab); activateTab(tab.id); await syncRootDir(path);
@@ -254,33 +265,11 @@ async function forceReloadTab(tab: Tab) {
 async function switchToTab(id: string) {
   if (id === activeTabId) return;
   const t2 = activeTab;
-  if (t2 && t2.path && viewerEl.value && !t2.isEditing) { t2.scrollTop = viewerEl.value.scrollTop; saveScroll(t2.path, viewerEl.value.scrollTop); }
+  if (t2 && t2.path && !t2.isEditing) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); }
   const tab = tabs.find(x => x.id === id); if (!tab) return;
   tab.pendingHash = ""; tab.pendingScrollTop = tab.scrollTop; tab.pendingSourceLine = 0;
   activateTab(id); await syncRootDir(tab.path);
   if (tab.staleSince) { bannerTab = tab; showBanner = true; }
-}
-
-function scrollPreviewToSourceLine(line: number) {
-  const container = viewerEl.value, body = bodyRef.value;
-  if (!container || !body) return;
-  const items = Array.from(body.querySelectorAll<HTMLElement>("[data-source-line]"));
-  let target: HTMLElement | null = items[0] ?? null, targetLine = 0;
-  for (const item of items) { const l = Number(item.dataset.sourceLine || "0"); if (!l) continue; if (l <= line && l >= targetLine) { target = item; targetLine = l; } }
-  if (!target) return;
-  container.scrollTop += target.getBoundingClientRect().top - container.getBoundingClientRect().top - 8;
-}
-
-function getPreviewTopSourceLine(): number {
-  const container = viewerEl.value, body = bodyRef.value;
-  if (!container || !body) return 1;
-  const ct = container.getBoundingClientRect().top;
-  let topLine = 1;
-  for (const item of Array.from(body.querySelectorAll<HTMLElement>("[data-source-line]"))) {
-    const line = Number(item.dataset.sourceLine || "0"); if (!line) continue;
-    if (item.getBoundingClientRect().top - ct <= 16) topLine = line; else return topLine;
-  }
-  return topLine;
 }
 
 let headingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -295,7 +284,7 @@ let scrollSaveTimer: ReturnType<typeof setTimeout> | null = null;
 function onViewerScroll() {
   if (isEditing) return; onScroll();
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
-  scrollSaveTimer = setTimeout(() => { const t2 = activeTab; if (t2 && t2.path && viewerEl.value && !t2.isEditing) { t2.scrollTop = viewerEl.value.scrollTop; saveScroll(t2.path, viewerEl.value.scrollTop); } }, 400);
+  scrollSaveTimer = setTimeout(() => { const t2 = activeTab; if (t2 && t2.path && !t2.isEditing) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); } }, 400);
 }
 
 async function startWatching(dir: string) {
@@ -326,20 +315,6 @@ async function syncRootDir(path: string) {
   await setRootFromFile(path); await startWatching(targetDir);
 }
 
-function toggleEditorMode() {
-  const tab = activeTab; if (!tab) return;
-  if (tab.isEditing) { tab.pendingSourceLine = editorRef.value?.getTopVisibleLine() ?? 1; tab.pendingScrollTop = 0; tab.isEditing = false; find.reset(); return; }
-  tab.pendingSourceLine = 0; tab.isEditing = true; markEditorUsed();
-  // 先确保编辑器模块加载完成，再渲染定位；否则首次进入编辑模式时编辑器尚未挂载，滚动定位会丢失。
-  // 续体再次校验仍处于编辑模式：模块加载期间用户可能已切回预览，此时不再定位。
-  void (async () => {
-    await ensureEditorModule();
-    await tick();
-    if (!activeTab?.isEditing) return;
-    editorRef.value?.scrollToLine(getPreviewTopSourceLine());
-  })();
-}
-
 let autoReloadWhitelist = $state<string[]>(JSON.parse(localStorage.getItem("glim-reader-auto-reload-whitelist") || "[]"));
 function toggleAutoReload(path: string) {
   const normalized = path.replace(/\\/g, "/").toLowerCase();
@@ -359,7 +334,7 @@ function onBannerIgnore() { const tab = bannerTab; if (tab) tab.staleSince = nul
 async function onBannerReload() { const tab = bannerTab; if (tab) { await forceReloadTab(tab); tab.staleSince = null; } showBanner = false; bannerTab = null; }
 function onBannerAutoReload() { const tab = bannerTab; if (tab) toggleAutoReload(tab.path); showBanner = false; bannerTab = null; }
 
-let renderTick = $state(0); let treeFocusKey = $state(0);
+let treeFocusKey = $state(0);
 let annotationToast = $state(""); let annotationToastTimer: ReturnType<typeof setTimeout> | null = null;
 function showAnnotationToast(message: string) { annotationToast = message; if (annotationToastTimer) clearTimeout(annotationToastTimer); annotationToastTimer = setTimeout(() => { annotationToast = ""; }, 2500); }
 let showExportMenu = $state(false);
@@ -501,7 +476,8 @@ function onReviewApplyAll(decision: "accept" | "reject") {
 }
 function onReviewFocus(id: number) {
   const tab = activeTab; if (!tab) return;
-  const ann = parseCriticMarkup(tab.draftContent).find(a => a.id === id); if (ann) scrollPreviewToSourceLine(ann.line);
+  const ann = parseCriticMarkup(tab.draftContent).find(a => a.id === id);
+  if (ann) editorRef.value?.scrollToLine(ann.line);
 }
 
 let recentFiltered = $state<RecentItem[]>([]);
@@ -516,45 +492,43 @@ async function refreshRecent() {
 const keyboardHandlers = useKeyboardHandlers({
   fileManager: { openFile: fileManager.openFile, saveCurrentFile: fileManager.saveCurrentFile, saveAs: fileManager.saveAs, closeCurrentTab: fileManager.closeCurrentTab, closeAllTabs: fileManager.closeAllTabs, createNewFile: fileManager.createNewFile },
   floatLayout, unsavedDialog, onOpenSearch: () => { searchVisible = true; }, enableFloatLayout: () => enableFloatLayout,
-  onToggleEditorMode: () => toggleEditorMode(),
 });
 const showSettings = keyboardHandlers.showSettings;
 // App 自有审阅面板开关（键盘处理器内部的同名盒不接模板 —— 与 Vue 版一致的历史分叉）
 let showReviewPanel = $state(false);
 
 function handleToggleBookmark() {
-  const tab = activeTab; if (!tab || !viewerEl.value || isEditing) return;
-  const scrollTop = viewerEl.value.scrollTop;
+  const tab = activeTab; if (!tab || isEditing) return;
+  const scrollTop = currentScrollTop();
+  const scrollerTop = viewerEl.value?.getBoundingClientRect().top ?? 0;
   const h = headings.filter(hh => {
-    // 同 useSectionMarkers：属性选择器匹配 %XX 形式的标题 id，不依赖 CSS.escape
+    // 单一视图无 markdown-it 渲染 DOM；标题定位由阶段二 Task 2 改 CM6 行位置。
+    // 此处保留可选 DOM 查询作为过渡（bodyRef 为 null 时 label 降级为空，不崩）。
     const el = bodyRef.value?.querySelector(`[id="${hh.id}"]`);
     if (!el) return false;
-    return el.getBoundingClientRect().top + scrollTop - viewerEl.value!.getBoundingClientRect().top <= scrollTop + 16;
+    return el.getBoundingClientRect().top + scrollTop - scrollerTop <= scrollTop + 16;
   }).pop();
   const label = h?.text;
   const r = bookmarks.toggle(tab.path, scrollTop, label, label);
   showAnnotationToast(r ? t('float.bookmarkAdded') : t('float.bookmarkRemoved'));
 }
-function handleToggleTheme() { appStore.toggleTheme(); renderTick++; }
+function handleToggleTheme() { appStore.toggleTheme(); }
 function handleToggleLocale() { const next = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'; locale.value = next; persistLocale(next as AppLocale); }
-function handleOnRendered() {
-  void (async () => {
-    await tick();
-    const tab = activeTab; if (!viewerEl.value || !tab) return;
-    annotations.configure(annotationContext, () => bodyRef.value);
-    annotations.initSelectionWatch();
-    aiPanel.configure(() => ({ getSource: () => activeTab?.draftContent ?? '', applyResult: onAiApplyResult }));
-    if (tab.pendingHash) { sectionMarkers.jumpTo(tab.pendingHash); tab.pendingHash = ''; }
-    if (lastSearchQuery) { find.highlightSearch(lastSearchQuery); lastSearchQuery = ''; }
-    pendingRestoreQuery = false;
-    if (tab.pendingSourceLine > 0) { scrollPreviewToSourceLine(tab.pendingSourceLine); tab.pendingSourceLine = 0; }
-    else if (tab.pendingScrollTop > 0) viewerEl.value.scrollTop = tab.pendingScrollTop;
-    else viewerEl.value.scrollTop = 0;
-  })();
+/** 单一视图：面板一次性初始化（原在 MarkdownView 的 onRendered 回调里，已无渲染事件）。 */
+function initializePanels(): void {
+  annotations.configure(annotationContext, () => bodyRef.value);
+  annotations.initSelectionWatch();
+  aiPanel.configure(() => ({ getSource: () => activeTab?.draftContent ?? '', applyResult: onAiApplyResult }));
+}
+
+/** 激活标签后恢复滚动位置：单一视图无组件切换，写到 CM6 scroller。 */
+function restoreScrollForTab(tab: Tab): void {
+  applyScrollTop(tab.scrollTop);
+  if (tab.pendingHash) { sectionMarkers.jumpTo(tab.pendingHash); tab.pendingHash = ''; }
 }
 function handleBookmarkJump(path: string, scrollTop: number) {
   floatLayout.closePanel();
-  void loadFile(path).then(() => { void (async () => { await tick(); if (viewerEl.value) viewerEl.value.scrollTop = scrollTop; })(); });
+  void loadFile(path).then(() => { void (async () => { await tick(); applyScrollTop(scrollTop); })(); });
 }
 function handleZoomIn() { isEditing ? setEditorFontSize(readingSettings.editorFontSize + 1) : setFontSize(readingSettings.fontSize + 1); }
 function handleZoomOut() { isEditing ? setEditorFontSize(readingSettings.editorFontSize - 1) : setFontSize(readingSettings.fontSize - 1); }
@@ -569,7 +543,8 @@ function onFloatTabBarMouseLeave() {
 }
 function onFloatPanelAction(id: string) {
   floatLayout.closePanel();
-  if (id === "edit") toggleEditorMode();
+  // 单一视图无「切换模式」：编辑动作改为聚焦编辑器
+  if (id === "edit") editorRef.value?.focus();
   else if (id === "new-file") void fileManager.createNewFile();
   else if (id === "open-file") void fileManager.openFile();
   else if (id === "open-folder") void onPickFolder();
@@ -683,33 +658,11 @@ function dismissSplash(): void {
   setTimeout(remove, 600);
 }
 
-/** 空闲预加载编辑器模块的句柄，供 onDestroy 取消以防卸载后跳回 */
-let editorPreloadIdle: number | null = null;
-let editorPreloadTimer: ReturnType<typeof setTimeout> | null = null;
-
-/** 首屏就绪后利用空闲时段预加载编辑器（CodeMirror）模块，让首次进入编辑模式零等待。
- *  不抢占启动关键路径：requestIdleCallback 在浏览器空闲时执行（3s 超时兜底）；
- *  不支持时退回 2s 定时器。卸载时取消，避免在已销毁实例上继续加载。 */
-function scheduleEditorPreload(): void {
-  // 仅当用户此前使用过编辑模式时才空闲预加载:纯阅读用户不拉取 CodeMirror(~613KB)。
-  // 首次编辑由左侧编辑按钮的悬停/聚焦预取(onPanelHover)或进入编辑时的按需 import 兜底。
-  if (!hasEditorIntent()) return;
-  const preload = () => {
-    editorPreloadIdle = null;
-    editorPreloadTimer = null;
-    void editorLoader.ensure();
-  };
-  if (typeof window.requestIdleCallback === "function") {
-    editorPreloadIdle = window.requestIdleCallback(preload, { timeout: 3000 });
-  } else {
-    editorPreloadTimer = setTimeout(preload, 2000);
-  }
-}
-
-/** 编辑意图预取:悬停/聚焦左侧「编辑」按钮即提前拉取编辑器模块,
- *  让首次编辑（尚未有过编辑记录的用户）也尽量零等待;ensure() 幂等,重复调用无副作用。 */
-function prefetchEditorOnIntent(id: string): void {
-  if (id === "edit") void editorLoader.ensure();
+/** 单一视图下编辑器是正文唯一渲染组件，onMount 立即加载（不再依赖编辑意图/空闲预加载）。
+ *  返回 ensure 的 Promise，供调用方等待「模块加载 + 组件挂载」完成后再淡出 splash，
+ *  避免 WebKitGTK 首帧在正文尚未挂载时把空白合成进图层。 */
+function ensureEditorForSingleView(): Promise<void> {
+  return editorLoader.ensure();
 }
 
 onMount(() => {
@@ -720,11 +673,10 @@ onMount(() => {
     const initialPath = await (async () => { try { return await invoke<string | null>("initial_open_file"); } catch { return ""; } })();
     await restoreTabs(typeof initialPath === "string" ? initialPath : "");
     if (currentFile) await syncRootDir(currentFile); else await setHomeRoot();
-    // 首屏内容（激活标签 markdown）已挂载、即将渲染，淡出并移除启动 splash
-    // （splash 在 index.html 中，主窗口 visible:true 首帧即显示，消除空白停顿体感）。
-    dismissSplash();
-    // 启动关键路径结束后，空闲时预加载编辑器模块（不阻塞首屏）
-    scheduleEditorPreload();
+    // 单一视图：编辑器即正文，立即加载模块（无二态切换，无需意图门控）
+    const editorReady = ensureEditorForSingleView();
+    // 面板初始化不再依赖渲染完成事件，挂载即接线
+    initializePanels();
     // syncRootDir 已启动监听时跳过，避免重复 stop/start
     if (fileTree.rootDir && watcher.watching.value !== fileTree.rootDir) await startWatching(fileTree.rootDir);
     // 探测导出能力：pandoc（DOCX）与 Edge（PDF）
@@ -734,6 +686,12 @@ onMount(() => {
     try { const { getCurrentWindow } = await import("@tauri-apps/api/window"); appWindow = getCurrentWindow(); unlistenClose = await appWindow.onCloseRequested(async event => { if (!tabs.some(tb => tb.isDirty)) return; event.preventDefault(); await fileManager.closeAllTabs(); if (appWindow) await appWindow.destroy(); }); } catch { /* ignore */ }
     try { const webview = getCurrentWebview(); unlistenDrop = await webview.onDragDropEvent(async event => { if (event.payload.type === "drop" && event.payload.paths) { const target = event.payload.paths.find(p => /\.(md|markdown|mdx|txt)$/i.test(p)); if (target) await loadFile(target); } }); } catch { /* ignore */ }
     void refreshRecent(); floatLayout.bindGlobalClick();
+    // 等「模块加载 + Svelte 挂载完成」后才淡出 splash：否则 WebKitGTK 会把
+    // 正文尚未挂载的空白首帧合成进图层，导致启动后正文不显示（真机实测回归）。
+    // 放在末尾以免 await 改变上述初始化的调用顺序（watch_path 去重依赖该顺序）。
+    await editorReady;
+    await tick();
+    dismissSplash();
   })();
 });
 
@@ -746,8 +704,6 @@ onDestroy(() => {
   unlistenDrop?.(); unlistenOpen?.(); unlistenClose?.();
   if (headingTimer) clearTimeout(headingTimer);
   if (searchPosSettleTimer !== null) clearTimeout(searchPosSettleTimer);
-  if (editorPreloadIdle !== null) window.cancelIdleCallback(editorPreloadIdle);
-  if (editorPreloadTimer !== null) clearTimeout(editorPreloadTimer);
   void watcher.stop(); annotations.dispose(); floatLayout.unbindGlobalClick();
   window.removeEventListener("resize", recalcSearchPosition);
   sectionMarkers.dispose();
@@ -830,7 +786,9 @@ $effect(() => {
     if (lastSearchQuery && !pendingRestoreQuery) find.clearHighlights();
   }
   prevTabPath = newPath; annotations.dispose();
-  if (!activeTab?.isEditing) void (async () => { await tick(); onScroll(); })();
+  // 单一视图：切换标签后按 tab.scrollTop 恢复滚动位置（无组件重挂、无行号映射）
+  const active = activeTab;
+  if (active) void (async () => { await tick(); restoreScrollForTab(active); })();
 });
 
 // 7. 搜索浮层显隐：显示聚焦输入框并重算位置，隐藏清空查询
@@ -921,7 +879,6 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
         onPickFolder={onPickFolder}
         onRefreshTree={() => void refreshTree()}
         onCloseFolder={() => { void watcher.stop(); clearRoot(); }}
-        onToggleEditorMode={toggleEditorMode}
         onSave={fileManager.saveCurrentFile}
         onSaveAs={fileManager.saveAs}
         onFind={onFind}
@@ -950,7 +907,7 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
     <main class="layout flex min-h-0 flex-1 overflow-hidden">
       <!-- tabindex="-1"（原 Vue 为 "0"）：Svelte a11y 禁止非交互元素挂非负 tabindex，
            内容内链接/按钮仍可 Tab 到达，点击本区仍可聚焦滚动 -->
-      <section bind:this={viewerElState} class="viewer relative flex-1 max-[1199px]:[--reader-max-width:100%] overflow-auto" data-scroll-root tabindex="-1" onscroll={onViewerScroll}>
+      <section bind:this={viewerElState} class="viewer relative min-h-0 flex-1 max-[1199px]:[--reader-max-width:100%] overflow-auto" data-scroll-root tabindex="-1" onscroll={onViewerScroll}>
         {#if appStore.errorMsg}
           <div class="error cursor-pointer px-4 py-2 text-xs text-danger bg-[rgba(207,34,46,0.08)]" role="presentation" onclick={() => (appStore.errorMsg = "")}>{appStore.errorMsg}</div>
         {/if}
@@ -971,15 +928,13 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
               </div>
             {/if}
           </div>
-        {:else if isEditing}
+        {:else}
           {#if EditorComponent}
-            <EditorComponent bind:this={editorState} modelValue={draftContent} theme={appStore.theme} currentFile={currentFile} onUpdateModelValue={onDraftUpdate} onToggleMode={toggleEditorMode} />
+            <EditorComponent bind:this={editorState} modelValue={draftContent} theme={appStore.theme} currentFile={currentFile} onUpdateModelValue={onDraftUpdate} />
           {:else}
             <!-- 编辑器模块（CodeMirror）按需加载中的占位：通常瞬间完成，避免首屏静态加载重块 -->
             <div class="flex h-full items-center justify-center text-sm text-fg-muted" aria-busy="true"></div>
           {/if}
-        {:else}
-          <MarkdownView bind:this={markdownState} source={draftContent} {currentFile} {rootDir} renderTick={renderTick} onRendered={handleOnRendered} onInternalLink={(p) => void loadFile(p)} />
         {/if}
         <AnnotationToolbar visible={annotations.toolbar.visible} x={annotations.toolbar.x} y={annotations.toolbar.y} mode={annotations.toolbar.mode}
                            onApply={onAnnotationApply} onInputStart={(m) => { annotations.toolbar.mode = m; }} onCancel={() => (annotations.toolbar.mode = "")}
@@ -989,8 +944,7 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
     </main>
     {#if enableFloatLayout}
       <LeftRail activePanel={floatLayout.state.activeLeftPanel} {dynamicIcons}
-                onOpenPanel={(id) => (id === 'search' ? toggleSearchPanel() : id === 'ai' ? openInlineAiPanel() : ACTION_PANEL_IDS.has(id) ? onFloatPanelAction(id) : floatLayout.openPanel(id))}
-                onPanelHover={prefetchEditorOnIntent} />
+                onOpenPanel={(id) => (id === 'search' ? toggleSearchPanel() : id === 'ai' ? openInlineAiPanel() : ACTION_PANEL_IDS.has(id) ? onFloatPanelAction(id) : floatLayout.openPanel(id))} />
       <TopTrigger enabled onShow={() => (topTabBarVisible = true)} />
     {/if}
     {#if enableFloatLayout && tabs.length}

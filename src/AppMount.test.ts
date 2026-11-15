@@ -205,9 +205,9 @@ describe("App.svelte 挂载", () => {
     expect(tabs[0].headings.length).toBe(0);
     expect(tabs[2].headings.length).toBe(0);
 
-    // Task 9 遗留「root 导出契约」收口：MarkdownView 导出的 root（article.markdown-body）
-    // 由 App 的 bind:this 取实例后读 markdownState.root，渲染内容须落在 .viewer 容器内
-    expect(m.target.querySelector(".viewer article.markdown-body")).toBeTruthy();
+    // 单一视图：正文即 CM6 编辑器（测试环境由 MarkdownEditorStub 替换），
+    // 须落在 .viewer 容器内；不再有 markdown-it 渲染的 article.markdown-body
+    expect(m.target.querySelector(".viewer .markdown-editor-stub")).toBeTruthy();
 
     // 同一目录 /docs 只注册一次 watch_path（去重）。
     // 恢复期间 watcher 尚未启动（watchFile 直接跳过），启动后 startWatching 统一注册一次；
@@ -330,7 +330,7 @@ describe("App.svelte 挂载", () => {
   });
 });
 
-describe("编辑器按需加载", () => {
+describe("单一视图挂载契约", () => {
   function seedActiveTab(): void {
     mockStorage["glim-reader-tabs"] = JSON.stringify({
       paths: ["/docs/a.md"],
@@ -339,36 +339,35 @@ describe("编辑器按需加载", () => {
     readTextFileMock.mockImplementation(async () => "# 标题\n\n正文内容。");
   }
 
-  it("首次进入编辑模式时动态加载并渲染编辑器（之前为预览）", async () => {
+  it("挂载即加载并渲染编辑器（无需进入编辑模式），无 markdown-it 预览分支", async () => {
     seedActiveTab();
     const m = mountApp();
     await flushPromises();
-
-    // 初始为预览态，编辑器尚未加载/渲染
-    expect(m.target.querySelector(".viewer article.markdown-body")).toBeTruthy();
-    expect(m.target.querySelector(".markdown-editor-stub")).toBeNull();
-
-    // LeftRail 第 9 个按钮 = 编辑（LEFT_PANEL_META 顺序：filetree..export,edit）
-    clickRailBtn(m.target, 9);
-    // 动态 import 的续体在负载高时超出 flushPromises 固定迭代数，用条件等待（与恢复测试同款修复）
+    // 单一视图：编辑器是正文唯一组件，onMount 主动 ensure 后即渲染
     await waitFor(() => Boolean(m.target.querySelector(".markdown-editor-stub")));
-
-    // 动态 import 完成后渲染编辑器替身
-    expect(m.target.querySelector(".markdown-editor-stub")).toBeTruthy();
+    const stub = m.target.querySelector(".markdown-editor-stub");
+    expect(m.target.querySelector(".viewer .markdown-editor-stub")).toBeTruthy();
+    expect(m.target.querySelector(".viewer article.markdown-body")).toBeNull();
+    // 关键：restoreTabs 读到的文档内容必须真正传给编辑器（data-len = modelValue 长度），
+    // 否则真机上正文会是空白。regression guard for 单一视图挂载时序。
+    expect(Number(stub?.getAttribute("data-len"))).toBeGreaterThan(0);
     m.unmount();
   });
 
-  it("快速进入→退出编辑：加载续体不误触发定位且不崩溃，回到预览", async () => {
+  it("点击编辑动作不卸载/重挂编辑器（二态切换已删除，bug1 根治）", async () => {
     seedActiveTab();
     const m = mountApp();
     await flushPromises();
+    await waitFor(() => Boolean(m.target.querySelector(".markdown-editor-stub")));
+    const firstEl = m.target.querySelector(".markdown-editor-stub");
+    expect(firstEl).toBeTruthy();
 
-    clickRailBtn(m.target, 9); // 进入编辑
-    clickRailBtn(m.target, 9); // 立即退回预览（模块尚未加载完成）
+    // LeftRail 第 9 个按钮 = 编辑（LEFT_PANEL_META 顺序：filetree..export,edit）
+    // 单一视图下此动作只聚焦编辑器，不应触发组件切换
+    clickRailBtn(m.target, 9);
     await flushPromises();
-
-    expect(m.target.querySelector(".markdown-editor-stub")).toBeNull();
-    expect(m.target.querySelector(".viewer article.markdown-body")).toBeTruthy();
+    expect(m.target.querySelector(".viewer .markdown-editor-stub")).toBe(firstEl);
+    expect(m.target.querySelector(".viewer article.markdown-body")).toBeNull();
     m.unmount();
   });
 });

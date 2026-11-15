@@ -15,8 +15,6 @@ export function useKeyboardHandlers(opts: {
   unsavedDialog?: { showUnsavedDialog?: any; resolveDialog?: (choice: 'save' | 'discard' | 'cancel') => void };
   /** 悬浮布局下打开独立搜索面板的回调 */
   onOpenSearch?: () => void;
-  /** 切换阅读/编辑模式：统一走 App 主路径（含编辑器按需加载与滚动定位） */
-  onToggleEditorMode?: () => void;
   /** 是否使用悬浮布局 */
   enableFloatLayout?: boolean | (() => boolean);
 }) {
@@ -97,9 +95,6 @@ export function useKeyboardHandlers(opts: {
     e.stopPropagation();
 
     switch (matched.id) {
-      case "toggle-mode":
-        opts.onToggleEditorMode?.();
-        break;
       case "new-file":
         void opts.fileManager.createNewFile();
         break;
