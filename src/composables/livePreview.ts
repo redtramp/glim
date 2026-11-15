@@ -29,6 +29,13 @@ export const LP_CLASS = {
   h4: "cm-lp-h4",
   h5: "cm-lp-h5",
   h6: "cm-lp-h6",
+  // 常驻行装饰：承载标题字号/行高，不随光标撤回，避免光标进出标题行时行高抖动
+  h1Line: "cm-lp-h1-line",
+  h2Line: "cm-lp-h2-line",
+  h3Line: "cm-lp-h3-line",
+  h4Line: "cm-lp-h4-line",
+  h5Line: "cm-lp-h5-line",
+  h6Line: "cm-lp-h6-line",
   strong: "cm-lp-strong",
   em: "cm-lp-em",
   code: "cm-lp-code",
@@ -61,6 +68,12 @@ const LINES = {
   quote: Decoration.line({ class: LP_CLASS.quote }),
   codeBlock: Decoration.line({ class: LP_CLASS.codeBlock }),
   hr: Decoration.line({ class: LP_CLASS.hr }),
+  h1: Decoration.line({ class: LP_CLASS.h1Line }),
+  h2: Decoration.line({ class: LP_CLASS.h2Line }),
+  h3: Decoration.line({ class: LP_CLASS.h3Line }),
+  h4: Decoration.line({ class: LP_CLASS.h4Line }),
+  h5: Decoration.line({ class: LP_CLASS.h5Line }),
+  h6: Decoration.line({ class: LP_CLASS.h6Line }),
 };
 /** 列表符号保留可见（隐藏会破坏大纲扫描），仅加弱化样式 */
 const LIST_MARK = Decoration.mark({ class: LP_CLASS.listMark });
@@ -196,12 +209,16 @@ const visitLink: Visitor = (node, ctx) => {
 
 /* ============ 行级构造 ============ */
 
-/** 通用：ATX 标题（1-6 级），隐藏前置/闭合 HeaderMark，文字加对应级别样式 */
-function atxHeading(deco: Decoration): Visitor {
+/** 通用：ATX 标题（1-6 级）。
+ *  - lineDeco 常驻行装饰：承载字号/行高，不随光标撤回（避免行高抖动）；
+ *  - deco 为可撤回的 mark：隐藏标记 + 文字样式，光标在该行时全部撤走。 */
+function atxHeading(deco: Decoration, lineDeco: Decoration): Visitor {
   return (node, ctx) => {
-    // 光标所在行：整行露源码，不产出装饰
-    if (ctx.isCursorLine(node.from)) return;
     const line = ctx.state.doc.lineAt(node.from);
+    // 常驻：字号/行高始终由 line class 决定，光标进出不改变行高
+    ctx.line(lineDeco, line.from);
+    // 光标所在行：hide / mark 全部撤回，露出完整源码
+    if (ctx.isCursorLine(node.from)) return;
     const lineEnd = Math.min(line.to, ctx.docEnd);
     const marks = childMarks(node, "HeaderMark");
     if (marks.length === 0) return;
@@ -376,12 +393,12 @@ const visitTaskMarker: Visitor = (node, ctx) => {
 
 /** visitor 派发表：节点名 → 处理函数 */
 const VISITORS: Record<string, Visitor> = {
-  ATXHeading1: atxHeading(MARKS.h1),
-  ATXHeading2: atxHeading(MARKS.h2),
-  ATXHeading3: atxHeading(MARKS.h3),
-  ATXHeading4: atxHeading(MARKS.h4),
-  ATXHeading5: atxHeading(MARKS.h5),
-  ATXHeading6: atxHeading(MARKS.h6),
+  ATXHeading1: atxHeading(MARKS.h1, LINES.h1),
+  ATXHeading2: atxHeading(MARKS.h2, LINES.h2),
+  ATXHeading3: atxHeading(MARKS.h3, LINES.h3),
+  ATXHeading4: atxHeading(MARKS.h4, LINES.h4),
+  ATXHeading5: atxHeading(MARKS.h5, LINES.h5),
+  ATXHeading6: atxHeading(MARKS.h6, LINES.h6),
   StrongEmphasis: visitStrong,
   Emphasis: visitEmphasis,
   Strikethrough: visitStrike,

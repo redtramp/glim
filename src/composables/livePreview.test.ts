@@ -172,6 +172,20 @@ describe("livePreview / grammar 锁定", () => {
 });
 
 describe("livePreview / ATX 一级标题", () => {
+  it("标题行有常驻 line 装饰承载字号（光标进出不抖动）", () => {
+    // 行高抖动根因：若字号挂在随光标撤回的 mark 上，光标进入标题行时
+    // 装饰消失 → 字号突变 → 行高跳动。解法是额外产出「不随光标撤回」的
+    // line 装饰承载字号，mark 只承载字重/颜色。
+    const offCursor = summary(stateOf("# Title\n\nbody", 11));
+    const onCursor = summary(stateOf("# Title\n\nbody", 4));
+    const lineCls = "cm-lp-h1-line";
+    expect(offCursor.some((d) => d.cls === lineCls && d.from === d.to)).toBe(true);
+    expect(onCursor.some((d) => d.cls === lineCls && d.from === d.to)).toBe(true);
+    // 光标在标题行时，可撤回的 hide / mark 仍应全部撤走
+    expect(onCursor.some((d) => d.replace)).toBe(false);
+    expect(onCursor.some((d) => d.cls === "cm-lp-h1")).toBe(false);
+  });
+
   it("光标不在标题行：隐藏 '# ' 前缀、标题文字加 cm-lp-h1 类", () => {
     const s = stateOf("# Title\n\nbody", 11); // cursor 在 "body"
     const decos = summary(s);
@@ -212,8 +226,13 @@ describe("livePreview / ATX 一级标题", () => {
   it("只有 '#' 没有内容的标题：不越界、不产生内容 mark", () => {
     const s = stateOf("#\n\nbody", 5);
     const decos = summary(s);
-    // 边界：内容区间为空时不应生成 from>=to 的 mark
-    expect(decos.every((d) => d.from < d.to)).toBe(true);
+    // 边界：内容区间为空时不应生成零长的 mark/replace（line 装饰是 from===to 的常驻装饰，属预期）
+    expect(
+      decos
+        .filter((d) => d.replace || d.cls === "cm-lp-h1")
+        .every((d) => d.from < d.to)
+    ).toBe(true);
+    expect(decos.some((d) => d.cls === "cm-lp-h1-line")).toBe(true);
   });
 
   it("atomicRanges 只含被隐藏的 replace 区间，不含内容 mark", () => {

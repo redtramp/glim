@@ -100,10 +100,10 @@
     ".cm-line": {
       padding: "0 16px",
     },
+    // 单一视图是 WYSIWYG 阅读器而非代码编辑器，行号无意义；且外层滚动容器
+    // 与 CM6 gutter 的 sticky 定位叠加会遮住每行首字（真机实测左侧裁切）。
     ".cm-gutters": {
-      backgroundColor: "var(--bg-toolbar)",
-      color: "var(--fg-muted)",
-      borderRight: "1px solid var(--border)",
+      display: "none",
     },
     ".cm-activeLine": {
       backgroundColor: "var(--editor-active-line-bg, rgba(0, 0, 0, 0.03))",
@@ -139,12 +139,17 @@
     },
 
     /* ---- livePreview 就地富文本装饰（类名见 composables/livePreview.ts 的 LP_CLASS） ---- */
-    // 标题字号刻意不放大：mark 装饰随光标进出撤回，若在此改 font-size 会撑行导致
-    // 光标进出该行时行高抖动（cairn 的 "no twitch"）。阶段一以字重/颜色区分层级，
-    // 阶段二改为「常驻 line 装饰承载字号」后再放大。
+    // 标题 mark 只承载字重/颜色（随光标撤回）；字号与行高由常驻的 line 装饰
+    // （cm-lp-hN-line）承载，光标进出标题行时行高不抖动（cairn "no twitch"）。
     ".cm-lp-h1, .cm-lp-h2, .cm-lp-h3, .cm-lp-h4, .cm-lp-h5, .cm-lp-h6": {
       fontWeight: "600",
     },
+    ".cm-lp-h1-line": { fontSize: "2em", lineHeight: "1.3" },
+    ".cm-lp-h2-line": { fontSize: "1.5em", lineHeight: "1.35" },
+    ".cm-lp-h3-line": { fontSize: "1.25em", lineHeight: "1.4" },
+    ".cm-lp-h4-line": { fontSize: "1.1em", lineHeight: "1.45" },
+    ".cm-lp-h5-line": { fontSize: "1em", lineHeight: "1.5" },
+    ".cm-lp-h6-line": { fontSize: "0.9em", lineHeight: "1.55" },
     ".cm-lp-h6": { color: "var(--fg-muted)" },
     ".cm-lp-strong": { fontWeight: "700" },
     ".cm-lp-em": { fontStyle: "italic" },
