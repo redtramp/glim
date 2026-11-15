@@ -326,6 +326,40 @@ describe("livePreview / 引用与列表", () => {
     const decos = summary(s);
     expect(decos.some((d) => d.from === 0 && d.to === 2 && d.cls === "cm-lp-list-mark")).toBe(true);
   });
+
+  it("列表：光标在列表行时该行符号不加弱化样式（露源码）", () => {
+    const doc = "- item one\n- item two\n\ntail";
+    const s = stateOf(doc, 4); // 光标在第一行文字中
+    const decos = summary(s);
+    expect(decos.some((d) => d.from === 0 && d.to === 1 && d.cls === "cm-lp-list-mark")).toBe(false);
+  });
+
+  it("混合构造文档：全部装饰区间合法（无零长/越界），且原文无损", () => {
+    const src = [
+      "# Head",
+      "",
+      "**b** *i* `c` [x](u) ~~s~~",
+      "",
+      "> quote",
+      "",
+      "- item",
+      "",
+      "```js",
+      "const x = 1;",
+      "```",
+      "",
+      "---",
+    ].join("\n");
+    const s = stateOf(src, 0);
+    const { decorations } = buildDecorations(s);
+    const iter = decorations.iter();
+    while (iter.value) {
+      expect(iter.from).toBeGreaterThanOrEqual(0);
+      expect(iter.to).toBeLessThanOrEqual(src.length);
+      iter.next();
+    }
+    expect(s.doc.toString()).toBe(src);
+  });
 });
 
 describe("livePreview / 围栏代码块", () => {
