@@ -33,10 +33,6 @@ export function useReadingSettings() {
     store.setFontCustom(v);
   }
 
-  function setEditorFontSize(v: number) {
-    store.setEditorFontSize(v);
-  }
-
   function setEditorFontFamily(v: string) {
     store.setEditorFontFamily(v);
   }
@@ -72,7 +68,6 @@ export function useReadingSettings() {
     setMaxWidth,
     setFontFamily,
     setFontCustom,
-    setEditorFontSize,
     setEditorFontFamily,
     setEditorFontCustom,
     reset,

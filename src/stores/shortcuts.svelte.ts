@@ -1,45 +1,42 @@
 import { t } from "../i18n/locale.svelte.ts";
 import { loadJson, saveJson } from "../utils/storage";
 
-export type ShortcutTarget = "app" | "editor" | "both" | "readonly";
 export type ShortcutCategory = "global" | "editor" | "find";
 
 export interface ShortcutDef {
   id: string;
   defaultBinding: string;
-  target: ShortcutTarget;
-  editOnly?: boolean;
   category: ShortcutCategory;
   descKey: string;
   readonly?: boolean;
 }
 
 const DEFS: ShortcutDef[] = [
-  { id: "new-file", defaultBinding: "Ctrl+N", target: "both", category: "global", descKey: "newFile" },
-  { id: "open-file", defaultBinding: "Ctrl+O", target: "both", category: "global", descKey: "openFile" },
-  { id: "search-panel", defaultBinding: "Ctrl+Shift+F", target: "app", category: "global", descKey: "searchPanel" },
-  { id: "save", defaultBinding: "Ctrl+S", target: "both", category: "global", descKey: "save" },
-  { id: "save-as", defaultBinding: "Ctrl+Shift+S", target: "app", category: "global", descKey: "saveAs" },
-  { id: "settings", defaultBinding: "Ctrl+,", target: "app", category: "global", descKey: "settings" },
-  { id: "print", defaultBinding: "Ctrl+P", target: "app", category: "global", descKey: "print" },
-  { id: "copy-ai", defaultBinding: "Ctrl+Shift+C", target: "app", category: "global", descKey: "copyAI" },
-  { id: "review-annotations", defaultBinding: "Ctrl+Shift+R", target: "app", category: "global", descKey: "reviewAnnotations" },
-  { id: "zoom-in", defaultBinding: "Ctrl+=", target: "app", category: "global", descKey: "zoomIn" },
-  { id: "zoom-out", defaultBinding: "Ctrl+-", target: "app", category: "global", descKey: "zoomOut" },
-  { id: "zoom-reset", defaultBinding: "Ctrl+0", target: "app", category: "global", descKey: "zoomReset" },
-  { id: "find", defaultBinding: "Ctrl+F", target: "both", category: "find", descKey: "find" },
-  { id: "replace", defaultBinding: "Ctrl+H", target: "both", editOnly: true, category: "find", descKey: "replace" },
-  { id: "go-to-line", defaultBinding: "Ctrl+G", target: "app", editOnly: true, category: "find", descKey: "goToLine" },
-  { id: "bold", defaultBinding: "Ctrl+B", target: "editor", category: "editor", descKey: "bold" },
-  { id: "italic", defaultBinding: "Ctrl+I", target: "editor", category: "editor", descKey: "italic" },
-  { id: "underline", defaultBinding: "Ctrl+U", target: "editor", category: "editor", descKey: "underline" },
-  { id: "highlight", defaultBinding: "Ctrl+L", target: "editor", category: "editor", descKey: "highlight" },
-  { id: "inline-code", defaultBinding: "Ctrl+Shift+`", target: "editor", category: "editor", descKey: "inlineCode" },
-  { id: "close", defaultBinding: "Esc", target: "readonly", category: "global", descKey: "close", readonly: true },
-  { id: "zoom-wheel", defaultBinding: "Ctrl+Wheel", target: "readonly", category: "global", descKey: "zoomWheel", readonly: true },
-  { id: "toggle-bookmark", defaultBinding: "Ctrl+D", target: "app", category: "global", descKey: "toggleBookmark" },
-  { id: "open-filetree", defaultBinding: "Ctrl+E", target: "app", category: "global", descKey: "openFiletree" },
-  { id: "open-annotations", defaultBinding: "Ctrl+Shift+A", target: "app", category: "global", descKey: "openAnnotations" },
+  { id: "new-file", defaultBinding: "Ctrl+N", category: "global", descKey: "newFile" },
+  { id: "open-file", defaultBinding: "Ctrl+O", category: "global", descKey: "openFile" },
+  { id: "search-panel", defaultBinding: "Ctrl+Shift+F", category: "global", descKey: "searchPanel" },
+  { id: "save", defaultBinding: "Ctrl+S", category: "global", descKey: "save" },
+  { id: "save-as", defaultBinding: "Ctrl+Shift+S", category: "global", descKey: "saveAs" },
+  { id: "settings", defaultBinding: "Ctrl+,", category: "global", descKey: "settings" },
+  { id: "print", defaultBinding: "Ctrl+P", category: "global", descKey: "print" },
+  { id: "copy-ai", defaultBinding: "Ctrl+Shift+C", category: "global", descKey: "copyAI" },
+  { id: "review-annotations", defaultBinding: "Ctrl+Shift+R", category: "global", descKey: "reviewAnnotations" },
+  { id: "zoom-in", defaultBinding: "Ctrl+=", category: "global", descKey: "zoomIn" },
+  { id: "zoom-out", defaultBinding: "Ctrl+-", category: "global", descKey: "zoomOut" },
+  { id: "zoom-reset", defaultBinding: "Ctrl+0", category: "global", descKey: "zoomReset" },
+  { id: "find", defaultBinding: "Ctrl+F", category: "find", descKey: "find" },
+  { id: "replace", defaultBinding: "Ctrl+H", category: "find", descKey: "replace" },
+  { id: "go-to-line", defaultBinding: "Ctrl+G", category: "find", descKey: "goToLine" },
+  { id: "bold", defaultBinding: "Ctrl+B", category: "editor", descKey: "bold" },
+  { id: "italic", defaultBinding: "Ctrl+I", category: "editor", descKey: "italic" },
+  { id: "underline", defaultBinding: "Ctrl+U", category: "editor", descKey: "underline" },
+  { id: "highlight", defaultBinding: "Ctrl+L", category: "editor", descKey: "highlight" },
+  { id: "inline-code", defaultBinding: "Ctrl+Shift+`", category: "editor", descKey: "inlineCode" },
+  { id: "close", defaultBinding: "Esc", category: "global", descKey: "close", readonly: true },
+  { id: "zoom-wheel", defaultBinding: "Ctrl+Wheel", category: "global", descKey: "zoomWheel", readonly: true },
+  { id: "toggle-bookmark", defaultBinding: "Ctrl+D", category: "global", descKey: "toggleBookmark" },
+  { id: "open-filetree", defaultBinding: "Ctrl+E", category: "global", descKey: "openFiletree" },
+  { id: "open-annotations", defaultBinding: "Ctrl+Shift+A", category: "global", descKey: "openAnnotations" },
 ];
 
 function normalizeComboKey(combo: string): string {

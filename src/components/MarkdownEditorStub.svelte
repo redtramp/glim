@@ -11,7 +11,6 @@
     theme?: string;
     currentFile?: string;
     onUpdateModelValue?: (v: string) => void;
-    onToggleMode?: () => void;
   }
   let { modelValue = "" }: Props = $props();
 

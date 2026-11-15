@@ -55,7 +55,6 @@ const enUS = {
     tabAI: "AI",
     tabOther: "Other",
     fontSize: "Font Size",
-    editorFontSize: "Editor Font Size",
     lineHeight: "Line Height",
     maxWidth: "Page Width",
     fontFamily: "Body Font",

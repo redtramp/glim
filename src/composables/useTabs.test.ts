@@ -64,12 +64,9 @@ describe("Tab", () => {
         content: "# Hello",
         draftContent: "# Hello",
         isDirty: false,
-        isEditing: false,
         headings: [],
         scrollTop: 0,
         pendingHash: "",
-        pendingScrollTop: 0,
-        pendingSourceLine: 0,
         staleSince: null,
       };
       expect(tab.staleSince).toBe(null);
@@ -100,12 +97,9 @@ describe("Tab", () => {
         content: "",
         draftContent: "",
         isDirty: false,
-        isEditing: false,
         headings: [],
         scrollTop: 0,
         pendingHash: "",
-        pendingScrollTop: 0,
-        pendingSourceLine: 0,
         staleSince: null,
       });
       expect(tab.id).toMatch(/^tab-/);

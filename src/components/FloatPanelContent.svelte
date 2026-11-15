@@ -35,8 +35,7 @@ interface Props {
   recentFiltered: RecentItem[];
   draftContent: string;
   theme: "light" | "dark";
-  isEditing: boolean;
-  readingSettings: { editorFontSize: number; fontSize: number };
+  readingSettings: { fontSize: number };
   floatLayoutEnabled: boolean;
   /** App.vue 仍传入，但 Vue 版模板自始未引用 —— 只声明不解构（noUnusedLocals） */
   showSettings: boolean;
@@ -73,7 +72,6 @@ let {
   recentFiltered,
   draftContent,
   theme,
-  isEditing,
   readingSettings,
   floatLayoutEnabled,
   aiPanel,
@@ -152,7 +150,7 @@ let treeScrollEl = $state<HTMLElement | null>(null);
   {:else if floatState.activeLeftPanel === "settings"}
     <QuickSettings
       theme={theme}
-      fontSize={isEditing ? readingSettings.editorFontSize : readingSettings.fontSize}
+      fontSize={readingSettings.fontSize}
       floatLayoutEnabled={floatLayoutEnabled}
       onToggleTheme={onToggleTheme}
       onOpenSettings={onOpenSettings}

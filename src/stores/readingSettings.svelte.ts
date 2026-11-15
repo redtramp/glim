@@ -8,7 +8,6 @@ export interface ReadingSettings {
   maxWidth: number;
   fontFamily: string;
   fontCustom: string;
-  editorFontSize: number;
   editorFontFamily: string;
   editorFontCustom: string;
 }
@@ -38,7 +37,6 @@ function defaults(): ReadingSettings {
     maxWidth: 900,
     fontFamily: "system",
     fontCustom: "",
-    editorFontSize: 16,
     editorFontFamily: "mono",
     editorFontCustom: "",
   };
@@ -89,10 +87,6 @@ export const readingSettingsState = $state({
       readingSettingsState.settings.maxWidth + "px"
     );
     r.style.setProperty("--reader-font-family", readerFont);
-    r.style.setProperty(
-      "--editor-font-size",
-      readingSettingsState.settings.editorFontSize + "px"
-    );
     r.style.setProperty("--editor-font-family", editorFont);
   },
 
@@ -135,11 +129,6 @@ export const readingSettingsState = $state({
 
   setFontFamily(v: string) {
     readingSettingsState.settings.fontFamily = v;
-    readingSettingsState.save();
-  },
-
-  setEditorFontSize(v: number) {
-    readingSettingsState.settings.editorFontSize = Math.max(12, Math.min(24, v));
     readingSettingsState.save();
   },
 

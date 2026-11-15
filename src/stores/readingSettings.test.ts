@@ -28,7 +28,6 @@ function defaults() {
     maxWidth: 900,
     fontFamily: "system",
     fontCustom: "",
-    editorFontSize: 16,
     editorFontFamily: "mono",
     editorFontCustom: "",
   };
@@ -62,13 +61,6 @@ describe("stores/readingSettings", () => {
     expect(readingSettingsState.settings.maxWidth).toBe(600);
     readingSettingsState.setMaxWidth(9999);
     expect(readingSettingsState.settings.maxWidth).toBe(1400);
-  });
-
-  it("setEditorFontSize 夹取 [12,24]", () => {
-    readingSettingsState.setEditorFontSize(1);
-    expect(readingSettingsState.settings.editorFontSize).toBe(12);
-    readingSettingsState.setEditorFontSize(999);
-    expect(readingSettingsState.settings.editorFontSize).toBe(24);
   });
 
   it("setFontFamily / setEditorFontFamily 直接赋值并保存", () => {
@@ -134,7 +126,6 @@ describe("stores/readingSettings", () => {
     expect(style.getPropertyValue("--reader-line-height")).toBe("2");
     expect(style.getPropertyValue("--reader-max-width")).toBe("800px");
     expect(style.getPropertyValue("--reader-font-family")).toBeTruthy();
-    expect(style.getPropertyValue("--editor-font-size")).toBe("16px");
   });
 
   it("reset 还原默认", () => {

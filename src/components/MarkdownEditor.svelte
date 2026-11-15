@@ -90,7 +90,8 @@
       color: "var(--fg)",
     },
     ".cm-scroller": {
-      fontSize: "var(--editor-font-size, 14px)",
+      // 单一视图：正文字号与阅读设置合并为一套（--reader-font-size）
+      fontSize: "var(--reader-font-size, 16px)",
       lineHeight: "1.65",
     },
     ".cm-content": {
@@ -480,7 +481,7 @@
   }
 
   /* 单一视图：外层 section 是唯一滚动容器，其 onscroll 由 App 直接监听；
-     组件内不接管 wheel / scroll。editorWheel.ts 及测试暂留（阶段二清理）。 */
+     组件内不接管 wheel / scroll（单一滚动容器下原生 wheel 已验证可用）。 */
   onMount(() => {
     createEditor();
     host?.addEventListener("paste", handlePaste, true);

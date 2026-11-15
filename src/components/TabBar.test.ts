@@ -51,12 +51,9 @@ function makeTab(
     content: "# Hello",
     draftContent: "# Hello",
     isDirty,
-    isEditing: false,
     headings: [],
     scrollTop: 0,
     pendingHash: "",
-    pendingScrollTop: 0,
-    pendingSourceLine: 0,
     staleSince,
   };
 }

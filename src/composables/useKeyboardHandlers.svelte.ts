@@ -1,4 +1,3 @@
-import { useTabsStore } from "../stores/tabs.svelte.ts";
 import { useShortcutsStore } from "../stores/shortcuts.svelte.ts";
 import { useReadingSettingsStore } from "../stores/readingSettings.svelte.ts";
 
@@ -15,23 +14,17 @@ export function useKeyboardHandlers(opts: {
   unsavedDialog?: { showUnsavedDialog?: any; resolveDialog?: (choice: 'save' | 'discard' | 'cancel') => void };
   /** 悬浮布局下打开独立搜索面板的回调 */
   onOpenSearch?: () => void;
+  /** 页内查找（Ctrl+F）：统一走 CM6 搜索面板 */
+  onFind?: () => void;
   /** 是否使用悬浮布局 */
   enableFloatLayout?: boolean | (() => boolean);
 }) {
-  const tabs = useTabsStore();
   const shortcuts = useShortcutsStore();
   const reading = useReadingSettingsStore();
 
   // 保留 .value 访问形状：$state box 替代 vue ref
   const showSettings = $state<{ value: boolean }>({ value: false });
   const showReviewPanel = $state<{ value: boolean }>({ value: false });
-
-  // 旧 computed：普通 getter 对象，保持 isEditing.value 访问形状（不随返回对象导出）
-  const isEditing = {
-    get value(): boolean {
-      return tabs.activeTab?.isEditing ?? false;
-    },
-  };
 
   function openSettings() {
     showSettings.value = true;
@@ -59,12 +52,9 @@ export function useKeyboardHandlers(opts: {
     el?.click();
   }
 
+  /** 单一视图：只有一套正文字号，不再按编辑/阅读分叉 */
   function zoomFont(delta: number) {
-    if (isEditing.value) {
-      reading.setEditorFontSize(reading.settings.editorFontSize + delta);
-    } else {
-      reading.setFontSize(reading.settings.fontSize + delta);
-    }
+    reading.setFontSize(reading.settings.fontSize + delta);
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -87,10 +77,6 @@ export function useKeyboardHandlers(opts: {
     if (!matched) return;
 
     if (matched.readonly) return;
-    if (matched.editOnly && !isEditing.value) return;
-    if (matched.target === "editor" && !isEditing.value) return;
-    if (matched.target === "app" && isEditing.value) return;
-
     e.preventDefault();
     e.stopPropagation();
 
@@ -102,7 +88,7 @@ export function useKeyboardHandlers(opts: {
         void opts.fileManager.openFile();
         break;
       case "search-panel":
-        if (!isEditing.value) openSearchPanel();
+        openSearchPanel();
         break;
       case "save":
         void opts.fileManager.saveCurrentFile();
@@ -132,16 +118,16 @@ export function useKeyboardHandlers(opts: {
         reading.reset();
         break;
       case "find":
-        if (!isEditing.value) openSearchPanel();
+        opts.onFind?.();
         break;
       case "toggle-bookmark":
         /* handled by App.vue toggleBookmark */
         break;
       case "open-filetree":
-        if (!isEditing.value) openFileTreePanel();
+        openFileTreePanel();
         break;
       case "open-annotations":
-        if (!isEditing.value) openAnnotationsPanel();
+        openAnnotationsPanel();
         break;
       default:
         break;

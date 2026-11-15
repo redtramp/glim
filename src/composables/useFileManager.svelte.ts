@@ -55,12 +55,10 @@ export function useFileManager() {
 
   /** 打开文件（完整流程：读取→填 tab→激活）
    *  @param sourceLine 跳转至指定行号（来自全局搜索），设为 0 时不主动滚动 */
-  async function loadFile(path: string, hash = "", sourceLine = 0): Promise<void> {
+  async function loadFile(path: string, hash = ""): Promise<void> {
     const existing = tabs.findTabByPath(path);
     if (existing) {
       existing.pendingHash = hash;
-      existing.pendingScrollTop = 0;
-      existing.pendingSourceLine = sourceLine;
       tabs.activateTab(existing.id);
       return;
     }
@@ -70,11 +68,8 @@ export function useFileManager() {
       tab.content = text;
       tab.draftContent = text;
       tab.isDirty = false;
-      tab.isEditing = false;
       tab.headings = await extractHeadingsWithRender(text);
       tab.pendingHash = "";
-      tab.pendingScrollTop = 0;
-      tab.pendingSourceLine = sourceLine;
       tab.scrollTop = 0;
       history.pushRecent(path);
       app.errorMsg = "";
@@ -179,7 +174,6 @@ export function useFileManager() {
         existing.content = "";
         existing.draftContent = "";
         existing.isDirty = false;
-        existing.isEditing = true;
         existing.headings = [];
         tabs.activateTab(existing.id);
       } else {
@@ -187,7 +181,6 @@ export function useFileManager() {
         tab.content = "";
         tab.draftContent = "";
         tab.isDirty = false;
-        tab.isEditing = true;
         tab.headings = [];
         tabs.tabs.push(tab);
         tabs.activateTab(tab.id);
@@ -348,8 +341,6 @@ export function useFileManager() {
       tab.staleSince = Date.now();
       if (tab.id === tabs.activeTabId) {
         tab.pendingHash = "";
-        tab.pendingScrollTop = tab.scrollTop;
-        tab.pendingSourceLine = 0;
       }
     }
   }

@@ -129,7 +129,7 @@ const history = useHistory();
 const { pushRecent, pushRecentBatch, clearRecent, saveScroll, getScroll } = history;
 const recent = $derived(history.recent);
 const reading = useReadingSettings();
-const { apply: applyReadingSettings, setFontSize, setEditorFontSize, setMaxWidth, setLineHeight } = reading;
+const { apply: applyReadingSettings, setFontSize, setMaxWidth, setLineHeight } = reading;
 const readingSettings = $derived(reading.settings);
 const annotations = useAnnotations();
 const aiPanel = useAiPanel();
@@ -172,7 +172,6 @@ const searchOverlayStyleStr = $derived(
 
 const currentFile = $derived(activeTab?.path ?? "");
 const draftContent = $derived(activeTab?.draftContent ?? "");
-const isEditing = $derived(activeTab?.isEditing ?? false);
 const headings = $derived(activeTab?.headings ?? []);
 const headingsBox = { get value() { return headings; } };
 // 单一视图：TOC 位置由 CM6 行位置提供者换算，不再查 markdown-it 渲染 DOM
@@ -189,7 +188,7 @@ const hasBookmarkAtCurrentPos = $derived(
 );
 const dynamicIcons = $derived({
   "locale-toggle": locale.value === "zh-CN" ? "中" : "En",
-  edit: isEditing ? "view" : "edit",
+  edit: "edit",
 });
 const showUnsavedDialog = unsavedDialog.showUnsavedDialog;
 const showGrantDialog = fsAuthorize.showGrantDialog;
@@ -212,14 +211,14 @@ let searchPosSettleTimer: ReturnType<typeof setTimeout> | null = null;
 
 function closeSearchPanel() { searchVisible = false; }
 
-async function readFileIntoTab(tab: Tab, path: string, hash = "", sourceLine = 0) {
+async function readFileIntoTab(tab: Tab, path: string, hash = "") {
   fileManager.addSuppress(path);
   try {
     const text = await fsAuthorize.readTextFileAuthorized(path);
     tab.path = path; tab.content = text; tab.draftContent = text;
-    tab.isDirty = false; tab.isEditing = false; tab.headings = await extractHeadingsWithRender(text);
-    tab.pendingHash = hash; tab.pendingScrollTop = hash ? 0 : getScroll(path);
-    tab.pendingSourceLine = sourceLine; tab.scrollTop = tab.pendingScrollTop;
+    tab.isDirty = false; tab.headings = await extractHeadingsWithRender(text);
+    tab.pendingHash = hash;
+    tab.scrollTop = hash ? 0 : getScroll(path);
     pushRecent(path); void watcher.watchFile(dirOf(path));
     appStore.errorMsg = ""; fileManager.scheduleSuppressClear(path);
   } catch (e: any) { fileManager.clearSuppress(path); throw e; }
@@ -229,8 +228,8 @@ async function loadFile(path: string, hash = "", sourceLine = 0) {
   const existing = findTabByPath(path);
   if (existing) {
     const t2 = activeTab;
-    if (t2 && t2.path && !t2.isEditing) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); }
-    existing.pendingHash = hash; existing.pendingScrollTop = 0; existing.pendingSourceLine = 0;
+    if (t2 && t2.path) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); }
+    existing.pendingHash = hash;
     activateTab(existing.id); await syncRootDir(path);
     // 单一视图：全局搜索带源码行跳转，直接让 CM6 滚到该行（编辑器常驻）
     if (sourceLine > 0) {
@@ -241,9 +240,9 @@ async function loadFile(path: string, hash = "", sourceLine = 0) {
     return;
   }
   const t2 = activeTab;
-  if (t2 && t2.path && !t2.isEditing) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); }
+  if (t2 && t2.path) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); }
   const tab = createTab(path);
-  try { await readFileIntoTab(tab, path, hash, sourceLine); } catch (e: any) { appStore.errorMsg = `${t("errors.readFailed")}: ${e?.message || e}`; return; }
+  try { await readFileIntoTab(tab, path, hash); } catch (e: any) { appStore.errorMsg = `${t("errors.readFailed")}: ${e?.message || e}`; return; }
   tabs.push(tab); activateTab(tab.id); await syncRootDir(path);
 }
 
@@ -252,7 +251,7 @@ async function forceReloadTab(tab: Tab) {
   try {
     const text = await fsAuthorize.readTextFileAuthorized(tab.path);
     tab.content = text; tab.draftContent = text; tab.isDirty = false; tab.headings = await extractHeadingsWithRender(text);
-    if (tab.id === activeTabId) { tab.pendingHash = ""; tab.pendingScrollTop = tab.scrollTop; tab.pendingSourceLine = 0; }
+    if (tab.id === activeTabId) { tab.pendingHash = ""; }
     fileManager.scheduleSuppressClear(tab.path);
   } catch (e: any) { fileManager.clearSuppress(tab.path); appStore.errorMsg = `${t("errors.readFailed")}: ${e?.message || e}`; }
 }
@@ -260,9 +259,9 @@ async function forceReloadTab(tab: Tab) {
 async function switchToTab(id: string) {
   if (id === activeTabId) return;
   const t2 = activeTab;
-  if (t2 && t2.path && !t2.isEditing) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); }
+  if (t2 && t2.path) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); }
   const tab = tabs.find(x => x.id === id); if (!tab) return;
-  tab.pendingHash = ""; tab.pendingScrollTop = tab.scrollTop; tab.pendingSourceLine = 0;
+  tab.pendingHash = "";
   activateTab(id); await syncRootDir(tab.path);
   if (tab.staleSince) { bannerTab = tab; showBanner = true; }
 }
@@ -277,9 +276,8 @@ function onDraftUpdate(value: string) {
 
 let scrollSaveTimer: ReturnType<typeof setTimeout> | null = null;
 function onViewerScroll() {
-  if (isEditing) return;
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
-  scrollSaveTimer = setTimeout(() => { const t2 = activeTab; if (t2 && t2.path && !t2.isEditing) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); } }, 400);
+  scrollSaveTimer = setTimeout(() => { const t2 = activeTab; if (t2 && t2.path) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); } }, 400);
 }
 
 async function startWatching(dir: string) {
@@ -294,7 +292,7 @@ async function startWatching(dir: string) {
         try { const diskText = await readTextFile(tab.path); if (diskText === tab.draftContent) continue; } catch { /* ignore */ }
         const normalized = tab.path.replace(/\\/g, "/").toLowerCase();
         if (autoReloadWhitelist.includes(normalized) && !tab.isDirty) { await forceReloadTab(tab); continue; }
-        if (tab.isEditing) continue; tab.staleSince = Date.now();
+        tab.staleSince = Date.now();
         if (tab.id === activeTabId) { bannerTab = tab; showBanner = true; }
       }
     }, 150);
@@ -487,6 +485,7 @@ async function refreshRecent() {
 const keyboardHandlers = useKeyboardHandlers({
   fileManager: { openFile: fileManager.openFile, saveCurrentFile: fileManager.saveCurrentFile, saveAs: fileManager.saveAs, closeCurrentTab: fileManager.closeCurrentTab, closeAllTabs: fileManager.closeAllTabs, createNewFile: fileManager.createNewFile },
   floatLayout, unsavedDialog, onOpenSearch: () => { searchVisible = true; }, enableFloatLayout: () => enableFloatLayout,
+  onFind: () => editorRef.value?.openSearch(),
 });
 const showSettings = keyboardHandlers.showSettings;
 // App 自有审阅面板开关（键盘处理器内部的同名盒不接模板 —— 与 Vue 版一致的历史分叉）
@@ -525,8 +524,8 @@ function handleBookmarkJump(path: string, scrollTop: number) {
   floatLayout.closePanel();
   void loadFile(path).then(() => { void (async () => { await tick(); applyScrollTop(scrollTop); })(); });
 }
-function handleZoomIn() { isEditing ? setEditorFontSize(readingSettings.editorFontSize + 1) : setFontSize(readingSettings.fontSize + 1); }
-function handleZoomOut() { isEditing ? setEditorFontSize(readingSettings.editorFontSize - 1) : setFontSize(readingSettings.fontSize - 1); }
+function handleZoomIn() { setFontSize(readingSettings.fontSize + 1); }
+function handleZoomOut() { setFontSize(readingSettings.fontSize - 1); }
 
 let topTabBarVisible = $state(true);
 let topTabBarHideTimer: ReturnType<typeof setTimeout> | null = null;
@@ -604,12 +603,12 @@ async function restoreTabs(initialPath = "") {
         if (text === undefined) { fileManager.clearSuppress(path); continue; }
         const tab = createTab(path);
         tab.path = path; tab.content = text; tab.draftContent = text;
-        tab.isDirty = false; tab.isEditing = false;
+        tab.isDirty = false;
         // 仅对本次激活的标签同步提取大纲，其余延迟到激活时（显著加快多文档启动）
         tab.headings = samePath(path, activePath) ? await extractHeadingsWithRender(text) : [];
         if (appDisposed) return; // await 期间可能已卸载
-        tab.pendingHash = ""; tab.pendingScrollTop = getScroll(path);
-        tab.pendingSourceLine = 0; tab.scrollTop = tab.pendingScrollTop;
+        tab.pendingHash = "";
+        tab.scrollTop = getScroll(path);
         tabs.push(tab);
         recentPaths.push(path);
         fileManager.scheduleSuppressClear(path);
@@ -826,7 +825,6 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
   <div class="app flex h-full flex-col overflow-hidden">
     {#if !enableFloatLayout}
       <Toolbar
-        {isEditing}
         {isDirty}
         {hasActiveFile}
         saving={appStore.saving}
@@ -925,7 +923,7 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
               onCloseOthers={(id) => void fileManager.closeTabOthers(id)}
               onMouseEnter={onFloatTabBarMouseEnter} onMouseLeave={onFloatTabBarMouseLeave} />
     {/if}
-    {#if enableFloatLayout && !isEditing}
+    {#if enableFloatLayout}
       <MobileBottomBar activePanel={floatLayout.state.activeLeftPanel}
                        onOpenPanel={(id) => (id === 'search' ? toggleSearchPanel() : id === 'ai' ? openInlineAiPanel() : ACTION_PANEL_IDS.has(id) ? onFloatPanelAction(id) : floatLayout.openPanel(id))} />
       <FloatPanelContent
@@ -933,7 +931,7 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
         isMobile={isMobileViewport} {rootDir} {tree} {currentFile}
         {canGoUp} treeFocusKey={treeFocusKey} {loadChildren}
         {recentFiltered} {draftContent} theme={appStore.theme}
-        {isEditing} {readingSettings} floatLayoutEnabled={enableFloatLayout}
+        {readingSettings} floatLayoutEnabled={enableFloatLayout}
         showSettings={showSettings.value} {aiPanel}
         onOpenFile={onFloatPanelOpenFile} onGoUp={() => void goUp()} onOpen={onFloatPanelOpenFile}
         onRefreshRecent={refreshRecent} onAnnotationFocus={onReviewFocus}

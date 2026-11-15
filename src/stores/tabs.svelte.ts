@@ -6,12 +6,9 @@ export interface Tab {
   content: string;
   draftContent: string;
   isDirty: boolean;
-  isEditing: boolean;
   headings: Heading[];
   scrollTop: number;
   pendingHash: string;
-  pendingScrollTop: number;
-  pendingSourceLine: number;
   staleSince: number | null;
 }
 
@@ -59,12 +56,9 @@ export const tabsState = $state({
       content: "",
       draftContent: "",
       isDirty: false,
-      isEditing: false,
       headings: [],
       scrollTop: 0,
       pendingHash: "",
-      pendingScrollTop: 0,
-      pendingSourceLine: 0,
       staleSince: null,
     };
   },

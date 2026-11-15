@@ -82,7 +82,6 @@
      $props.id() 每组件仅允许调用一次，按行派生后缀） */
   const uid = $props.id();
   const fontSizeId = `${uid}-font-size`;
-  const editorFontSizeId = `${uid}-editor-font-size`;
   const lineHeightId = `${uid}-line-height`;
   const maxWidthId = `${uid}-max-width`;
   const fontFamilyId = `${uid}-font-family`;
@@ -495,25 +494,6 @@
               />
               <span class="value text-right text-fg-muted tabular-nums"
                 >{rs.settings.fontSize}px</span
-              >
-            </div>
-
-            <div class={ROW}>
-              <label class="text-fg-muted" for={editorFontSizeId}>{t("settings.editorFontSize")}</label>
-              <input
-                type="range"
-                id={editorFontSizeId}
-                value={rs.settings.editorFontSize}
-                min="12"
-                max="24"
-                step="1"
-                oninput={(e) =>
-                  rs.setEditorFontSize(
-                    Number((e.target as HTMLInputElement).value)
-                  )}
-              />
-              <span class="value text-right text-fg-muted tabular-nums"
-                >{rs.settings.editorFontSize}px</span
               >
             </div>
 

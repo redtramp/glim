@@ -4,9 +4,9 @@
  * 新代码应直接使用 useShortcutsStore。
  */
 import { useShortcutsStore } from "../stores/shortcuts.svelte.ts";
-import type { ShortcutTarget, ShortcutCategory, ShortcutDef } from "../stores/shortcuts.svelte.ts";
+import type { ShortcutCategory, ShortcutDef } from "../stores/shortcuts.svelte.ts";
 
-export type { ShortcutTarget, ShortcutCategory, ShortcutDef };
+export type { ShortcutCategory, ShortcutDef };
 
 export function useShortcuts() {
   const store = useShortcutsStore();

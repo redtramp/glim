@@ -12,7 +12,6 @@
   import { useShortcuts } from "../composables/useShortcuts";
 
   interface Props {
-    isEditing: boolean;
     isDirty: boolean;
     hasActiveFile: boolean;
     saving: boolean;
@@ -35,7 +34,6 @@
     onPickFolder?: () => void;
     onRefreshTree?: () => void;
     onCloseFolder?: () => void;
-    onToggleEditorMode?: () => void;
     onSave?: () => void;
     onSaveAs?: () => void;
     onFind?: () => void;
@@ -53,7 +51,6 @@
   }
 
   let {
-    isEditing,
     isDirty,
     hasActiveFile,
     saving,
@@ -73,7 +70,6 @@
     onPickFolder,
     onRefreshTree,
     onCloseFolder,
-    onToggleEditorMode,
     onSave,
     onSaveAs,
     onFind,
@@ -116,14 +112,6 @@
   <div class="toolbar-right flex shrink-0 flex-row items-center justify-end gap-[2px]">
     <button
       class={btnClass}
-      onclick={onToggleEditorMode}
-      disabled={!hasActiveFile}
-      title={(isEditing ? t("editor.preview") : t("editor.edit")) + shortcutSuffix("toggle-mode")}>{isEditing
-        ? t("editor.preview")
-        : t("editor.edit")}{#if isEditing}<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class={svgInlineGap}><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></svg>{:else}<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class={svgInlineGap}><path d="M11 2l3 3L4 15H1v-3z" /><path d="M8 6l2 2" /></svg>{/if}</button
-    >
-    <button
-      class={btnClass}
       onclick={onSave}
       disabled={!hasActiveFile || !isDirty || saving}
       title={t("editor.save") + shortcutSuffix("save")}>{t("editor.save")}<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class={svgInlineGap}><path d="M3 2h8l4 4v9H3V2z" /><path d="M11 2v4h4" /><path d="M5 8h6v5H5z" /></svg></button
@@ -159,7 +147,7 @@
     <button
       class="{btnClass} icon"
       class:active={hasBookmarkAtCurrentPos}
-      disabled={!hasActiveFile || isEditing}
+      disabled={!hasActiveFile}
       title={t("float.toggleBookmark") + shortcutSuffix("toggle-bookmark")}
       onclick={onToggleBookmark}>{#if hasBookmarkAtCurrentPos}<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class={svgInline}><polygon points="19 21 12 17 5 21 5 3 19 3 19 21" /></svg>{:else}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class={svgInline}><polygon points="19 21 12 17 5 21 5 3 19 3 19 21" /></svg>{/if}</button
     >
