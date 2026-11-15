@@ -15,6 +15,8 @@ export function useKeyboardHandlers(opts: {
   unsavedDialog?: { showUnsavedDialog?: any; resolveDialog?: (choice: 'save' | 'discard' | 'cancel') => void };
   /** 悬浮布局下打开独立搜索面板的回调 */
   onOpenSearch?: () => void;
+  /** 切换阅读/编辑模式：统一走 App 主路径（含编辑器按需加载与滚动定位） */
+  onToggleEditorMode?: () => void;
   /** 是否使用悬浮布局 */
   enableFloatLayout?: boolean | (() => boolean);
 }) {
@@ -32,18 +34,6 @@ export function useKeyboardHandlers(opts: {
       return tabs.activeTab?.isEditing ?? false;
     },
   };
-
-  function toggleEditorMode() {
-    const tab = tabs.activeTab;
-    if (!tab) return;
-    tab.isEditing = !tab.isEditing;
-    if (tab.isEditing) {
-      tab.draftContent = tab.content;
-    } else {
-      tab.content = tab.draftContent;
-    }
-    tab.isDirty = true;
-  }
 
   function openSettings() {
     showSettings.value = true;
@@ -108,7 +98,7 @@ export function useKeyboardHandlers(opts: {
 
     switch (matched.id) {
       case "toggle-mode":
-        toggleEditorMode();
+        opts.onToggleEditorMode?.();
         break;
       case "new-file":
         void opts.fileManager.createNewFile();

@@ -516,6 +516,7 @@ async function refreshRecent() {
 const keyboardHandlers = useKeyboardHandlers({
   fileManager: { openFile: fileManager.openFile, saveCurrentFile: fileManager.saveCurrentFile, saveAs: fileManager.saveAs, closeCurrentTab: fileManager.closeCurrentTab, closeAllTabs: fileManager.closeAllTabs, createNewFile: fileManager.createNewFile },
   floatLayout, unsavedDialog, onOpenSearch: () => { searchVisible = true; }, enableFloatLayout: () => enableFloatLayout,
+  onToggleEditorMode: () => toggleEditorMode(),
 });
 const showSettings = keyboardHandlers.showSettings;
 // App 自有审阅面板开关（键盘处理器内部的同名盒不接模板 —— 与 Vue 版一致的历史分叉）
@@ -949,7 +950,7 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
     <main class="layout flex min-h-0 flex-1 overflow-hidden">
       <!-- tabindex="-1"（原 Vue 为 "0"）：Svelte a11y 禁止非交互元素挂非负 tabindex，
            内容内链接/按钮仍可 Tab 到达，点击本区仍可聚焦滚动 -->
-      <section bind:this={viewerElState} class="viewer relative flex-1 max-[1199px]:[--reader-max-width:100%] {isEditing ? 'overflow-hidden' : 'overflow-auto'}" data-scroll-root class:editing={isEditing} tabindex="-1" onscroll={onViewerScroll}>
+      <section bind:this={viewerElState} class="viewer relative flex-1 max-[1199px]:[--reader-max-width:100%] overflow-auto" data-scroll-root tabindex="-1" onscroll={onViewerScroll}>
         {#if appStore.errorMsg}
           <div class="error cursor-pointer px-4 py-2 text-xs text-danger bg-[rgba(207,34,46,0.08)]" role="presentation" onclick={() => (appStore.errorMsg = "")}>{appStore.errorMsg}</div>
         {/if}

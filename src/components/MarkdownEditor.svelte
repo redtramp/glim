@@ -37,7 +37,6 @@
   import { oneDark } from "@codemirror/theme-one-dark";
   import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
   import { useShortcuts } from "../composables/useShortcuts";
-  import { createWheelFallback } from "../composables/editorWheel";
 
   interface Props {
     modelValue: string;
@@ -83,7 +82,9 @@
 
   const editorBaseTheme = EditorView.theme({
     "&": {
-      height: "100%",
+      // spike：不再为 .cm-editor 设固定高度/裁切，也不让 .cm-scroller 内部滚动。
+      // 文档内容自然撑高，滚动统一交给外层 <section class="viewer overflow-auto">，
+      // 避免 WebKitGTK/Wayland 下嵌套 overflow 容器的原生 wheel 失效（tauri#14427）。
       backgroundColor: "var(--bg)",
       color: "var(--fg)",
     },
@@ -424,19 +425,11 @@
     }
   }
 
-  /* 滚轮兜底：原生 wheel 驱动不了滚动容器时改用 scrollTop（见 editorWheel.ts） */
-  const wheelFallback = createWheelFallback();
-
-  function handleEditorWheel(e: WheelEvent) {
-    if (!view || e.ctrlKey || e.defaultPrevented) return;
-    if (e.deltaX === 0 && e.deltaY === 0) return;
-    if (wheelFallback.handle(e, view.scrollDOM)) e.preventDefault();
-  }
-
+  /* spike：滚动统一交给外层单一容器，组件内不再接管 wheel。
+     editorWheel.ts 及其测试暂留（阶段二统一清理），以便原生滚轮验证失败时完整回退。 */
   onMount(() => {
     createEditor();
     host?.addEventListener("paste", handlePaste, true);
-    host?.addEventListener("wheel", handleEditorWheel, { passive: false });
 
     // 字体族跟随 CSS 变量（写在 documentElement 的 style 上）热更新
     // eslint-disable-next-line no-undef
@@ -450,7 +443,6 @@
 
   onDestroy(() => {
     host?.removeEventListener("paste", handlePaste, true);
-    host?.removeEventListener("wheel", handleEditorWheel);
     fontObserver?.disconnect();
     fontObserver = null;
     view?.destroy();
@@ -502,8 +494,8 @@
   });
 </script>
 
-<div class="markdown-editor-shell absolute inset-0 min-h-0 overflow-hidden">
-  <div class="markdown-editor h-full min-h-0 overflow-hidden" bind:this={host}></div>
+<div class="markdown-editor-shell relative min-h-0">
+  <div class="markdown-editor min-h-0" bind:this={host}></div>
   {#if searchCounter.visible}
     <div class="editor-find-counter pointer-events-none absolute top-[58px] right-4 z-[8] min-w-[44px] rounded-[6px] border border-border bg-toolbar px-2 py-1 text-center text-[12px] text-fg-muted shadow-[0_4px_12px_rgba(0,0,0,0.12)]">{searchCounter.current}/{searchCounter.total}</div>
   {/if}
