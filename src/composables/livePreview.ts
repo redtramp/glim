@@ -219,13 +219,29 @@ const visitListMark: Visitor = (node, ctx) => {
   ctx.mark(LIST_MARK, node.from, node.to);
 };
 
-/** 围栏代码块：隐藏 CodeMark 围栏行，块内每行加代码样式 */
+/** 围栏代码块：隐藏首尾 CodeMark 与首行语言标识 CodeInfo，块内每行加代码样式 */
 const visitFencedCode: Visitor = (node, ctx) => {
   const firstLine = ctx.state.doc.lineAt(node.from).number;
   const lastLine = ctx.state.doc.lineAt(node.to).number;
   // 光标在块内任意行 → 整块露源码
   if (ctx.cursorLine >= firstLine && ctx.cursorLine <= lastLine) return;
-  for (const m of childMarks(node, "CodeMark")) ctx.hide(m.from, m.to);
+  // 首围栏 ``` 与紧随的语言标识 js 一并隐藏（否则渲染后残留孤立的 "js"）；
+  // 尾围栏 ``` 同样隐藏。CodeInfo 是 CodeMark 之外的独立子节点，需单独收集。
+  // 把首行上相邻的标记区间合并为一段，避免中间出现零宽空隙。
+  const fenceMarks = [
+    ...childMarks(node, "CodeMark"),
+    ...childMarks(node, "CodeInfo"),
+  ].sort((a, b) => a.from - b.from);
+  const merged: { from: number; to: number }[] = [];
+  for (const m of fenceMarks) {
+    const last = merged[merged.length - 1];
+    if (last && m.from <= last.to) {
+      last.to = Math.max(last.to, m.to);
+    } else {
+      merged.push({ from: m.from, to: m.to });
+    }
+  }
+  for (const m of merged) ctx.hide(m.from, m.to);
   for (let ln = firstLine; ln <= lastLine; ln++) {
     ctx.line(LINES.codeBlock, ctx.state.doc.line(ln).from);
   }

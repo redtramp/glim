@@ -327,3 +327,69 @@ describe("livePreview / 引用与列表", () => {
     expect(decos.some((d) => d.from === 0 && d.to === 2 && d.cls === "cm-lp-list-mark")).toBe(true);
   });
 });
+
+describe("livePreview / 围栏代码块", () => {
+  const doc = "```js\nconst x = 1;\n```\n\ntail";
+
+  it("off-cursor：隐藏首尾围栏标记、块内每行加 cm-lp-codeblock", () => {
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const decos = summary(s);
+    // 首围栏 ```js 隐藏
+    expect(decos.some((d) => d.from === 0 && d.to === 5 && d.replace)).toBe(true);
+    // 尾围栏 ``` 隐藏
+    const closeFrom = doc.lastIndexOf("```");
+    expect(decos.some((d) => d.from === closeFrom && d.to === closeFrom + 3 && d.replace)).toBe(true);
+    // 块内有 codeblock 行样式
+    expect(decos.some((d) => d.cls === "cm-lp-codeblock")).toBe(true);
+  });
+
+  it("on-cursor：光标在代码块内任意行时整块露源码", () => {
+    const s = stateOf(doc, doc.indexOf("const"));
+    const decos = summary(s);
+    expect(decos.some((d) => d.replace)).toBe(false);
+    expect(decos.some((d) => d.cls === "cm-lp-codeblock")).toBe(false);
+  });
+
+  it("严格无损：代码块原文不变", () => {
+    const src = "```ts\nlet a = 1;\n```\n";
+    const s = stateOf(src, 0);
+    buildDecorations(s);
+    expect(s.doc.toString()).toBe(src);
+  });
+});
+
+describe("livePreview / 分隔线", () => {
+  it("off-cursor：隐藏 --- 并加 cm-lp-hr 行样式", () => {
+    const doc = "above\n\n---\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const decos = summary(s);
+    const hrFrom = doc.indexOf("---");
+    expect(decos.some((d) => d.from === hrFrom && d.to === hrFrom + 3 && d.replace)).toBe(true);
+    expect(decos.some((d) => d.cls === "cm-lp-hr")).toBe(true);
+  });
+
+  it("on-cursor：光标在分隔线行时露源码", () => {
+    const doc = "above\n\n---\n\ntail";
+    const s = stateOf(doc, doc.indexOf("---"));
+    expect(summary(s).some((d) => d.replace)).toBe(false);
+  });
+});
+
+describe("livePreview / 多级标题", () => {
+  it("h2-h6 各自使用对应级别样式类", () => {
+    const doc = "## Two\n\n### Three\n\n#### Four\n\n##### Five\n\n###### Six\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const decos = summary(s);
+    for (const lvl of [2, 3, 4, 5, 6]) {
+      expect(decos.some((d) => d.cls === `cm-lp-h${lvl}`)).toBe(true);
+    }
+  });
+
+  it("二级标题：隐藏 '## ' 前缀、文字加 cm-lp-h2", () => {
+    const doc = "## Title\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const decos = summary(s);
+    expect(decos.some((d) => d.from === 0 && d.to === 3 && d.replace)).toBe(true);
+    expect(decos.some((d) => d.from === 3 && d.to === 8 && d.cls === "cm-lp-h2")).toBe(true);
+  });
+});
