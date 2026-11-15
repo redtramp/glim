@@ -25,7 +25,7 @@
   } from "@codemirror/state";
   import { EditorView, keymap, drawSelection } from "@codemirror/view";
   import { indentWithTab } from "@codemirror/commands";
-  import { markdown } from "@codemirror/lang-markdown";
+  import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
   import {
     getSearchQuery,
     gotoLine,
@@ -37,6 +37,7 @@
   import { oneDark } from "@codemirror/theme-one-dark";
   import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
   import { useShortcuts } from "../composables/useShortcuts";
+  import { livePreview, livePreviewAtomic } from "../composables/livePreview";
 
   interface Props {
     modelValue: string;
@@ -135,6 +136,37 @@
     ".cm-search button:hover": {
       backgroundColor: "var(--bg-btn-hover)",
     },
+
+    /* ---- livePreview 就地富文本装饰（类名见 composables/livePreview.ts 的 LP_CLASS） ---- */
+    // 标题字号刻意不放大：mark 装饰随光标进出撤回，若在此改 font-size 会撑行导致
+    // 光标进出该行时行高抖动（cairn 的 "no twitch"）。阶段一以字重/颜色区分层级，
+    // 阶段二改为「常驻 line 装饰承载字号」后再放大。
+    ".cm-lp-h1, .cm-lp-h2, .cm-lp-h3, .cm-lp-h4, .cm-lp-h5, .cm-lp-h6": {
+      fontWeight: "600",
+    },
+    ".cm-lp-h6": { color: "var(--fg-muted)" },
+    ".cm-lp-strong": { fontWeight: "700" },
+    ".cm-lp-em": { fontStyle: "italic" },
+    ".cm-lp-code": {
+      fontFamily: "var(--editor-font-family, ui-monospace, monospace)",
+      backgroundColor: "var(--bg-toolbar)",
+      borderRadius: "3px",
+      padding: "0 2px",
+    },
+    ".cm-lp-link": { color: "var(--link)", textDecoration: "underline" },
+    ".cm-lp-strike": { textDecoration: "line-through", color: "var(--fg-muted)" },
+    // line 装饰：整行样式，不随内容宽度变化
+    ".cm-lp-quote": {
+      borderLeft: "3px solid var(--border)",
+      paddingLeft: "10px",
+      color: "var(--fg-muted)",
+    },
+    ".cm-lp-codeblock": { backgroundColor: "var(--bg-toolbar)" },
+    ".cm-lp-hr": { color: "var(--fg-muted)" },
+    ".cm-lp-list-mark": { color: "var(--fg-muted)" },
+    ".cm-lp-image": { maxWidth: "100%" },
+    ".cm-lp-image-fallback": { color: "var(--fg-muted)", fontStyle: "italic" },
+    ".cm-lp-task": { verticalAlign: "middle" },
   });
 
   function themeExtension(): Extension {
@@ -270,7 +302,11 @@
         extensions: [
           basicSetup,
           drawSelection(),
-          markdown(),
+          // 必须用 markdownLanguage（含 GFM）而非裸 markdown()：后者不解析
+          // 删除线 / 表格 / 任务列表节点，livePreview 的对应装饰会在真机上静默失效。
+          markdown({ base: markdownLanguage }),
+          livePreview,
+          livePreviewAtomic,
           search({ top: true }),
           replacePanelTheme,
           fontFamilyCompartment.of(fontFamilyExtension()),

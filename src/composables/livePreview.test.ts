@@ -414,6 +414,70 @@ describe("livePreview / 分隔线", () => {
   });
 });
 
+describe("livePreview / 组件配置一致性（Task 5 锁定）", () => {
+  /**
+   * 复刻 MarkdownEditor.svelte 的 extensions 组合（GFM 语法 + livePreview）。
+   * 若组件误用裸 markdown()（不含 GFM），删除线/表格/任务列表节点不存在，
+   * 对应装饰会静默失效——此测试把「必须用 markdownLanguage」钉死。
+   */
+  it("GFM 语法 + livePreview：删除线/任务复选框装饰真实生效", () => {
+    const doc = "~~gone~~\n\n- [ ] todo\n\ntail";
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc,
+        selection: { anchor: doc.indexOf("tail") },
+        extensions: [
+          markdown({ base: markdownLanguage }),
+          livePreview,
+          livePreviewAtomic,
+        ],
+      }),
+    });
+    try {
+      const plugin = view.plugin(livePreview);
+      expect(plugin).not.toBeNull();
+      const iter = plugin!.decorations.iter();
+      let strike = false;
+      let taskWidget = false;
+      while (iter.value) {
+        const spec = iter.value.spec as { class?: string; widget?: unknown };
+        if (spec.class === "cm-lp-strike") strike = true;
+        if (spec.widget) taskWidget = true;
+        iter.next();
+      }
+      expect(strike).toBe(true);
+      expect(taskWidget).toBe(true);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it("对照：裸 markdown() 下 GFM 节点缺失，装饰不生效（说明为何必须用 GFM 版）", () => {
+    const doc = "~~gone~~\n\n- [ ] todo\n\ntail";
+    const s = EditorState.create({
+      doc,
+      selection: { anchor: doc.indexOf("tail") },
+      extensions: [markdown()],
+    });
+    const { decorations } = buildDecorations(s);
+    const iter = decorations.iter();
+    let strike = false;
+    let taskWidget = false;
+    while (iter.value) {
+      const spec = iter.value.spec as { class?: string; widget?: unknown };
+      if (spec.class === "cm-lp-strike") strike = true;
+      if (spec.widget) taskWidget = true;
+      iter.next();
+    }
+    expect(strike).toBe(false);
+    expect(taskWidget).toBe(false);
+  });
+});
+
 describe("livePreview / widget（图片/任务复选框）", () => {
   /** 收集所有带 widget 的装饰区间及其 spec */
   function widgets(state: EditorState) {
