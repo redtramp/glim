@@ -90,10 +90,11 @@ type MarkdownEditorHandle = {
   getTopVisibleLine(): number;
   scrollToLine(line: number): void;
   getLinePositionSource(): import("./composables/useSectionMarkers.svelte.ts").LinePositionSource | null;
+  getContentElement(): HTMLElement | null;
+  resolveSourceLines(range: Range): [number, number] | null;
 };
 type SearchPanelHandle = { focusInput(): void };
 let viewerElState = $state<HTMLElement | null>(null);
-let markdownState = $state<{ root: HTMLElement | null } | null>(null);
 let editorState = $state<MarkdownEditorHandle | null>(null);
 let searchPanelState = $state<SearchPanelHandle | null>(null);
 /** 按需加载的编辑器组件（CodeMirror 重块）；未加载完成时模板显示占位 */
@@ -107,7 +108,12 @@ const editorLoader = createLazyLoader(
 );
 const ensureEditorModule = editorLoader.ensure;
 const viewerEl = { get value() { return viewerElState; } };
-const bodyRef = { get value() { return markdownState?.root ?? null; } };
+/** 单一视图：批注 / AI 选区作用于 CM6 的 .cm-content，不再有 markdown-it 渲染 DOM */
+const annotationContainer = { get value() { return editorState?.getContentElement() ?? null; } };
+/** 行号由 CM6 posAtDOM / doc.lineAt 精确换算（selectionToSourceLines 的解析器） */
+function resolveAnnotationLines(range: Range): [number, number] | null {
+  return editorState?.resolveSourceLines(range) ?? null;
+}
 
 let isMobileViewport = $state(window.innerWidth < 768);
 function onResize() { isMobileViewport = window.innerWidth < 768; }
@@ -441,7 +447,7 @@ function annotationContext() {
 }
 function onAnnotationApply(type: CriticType, payload?: string) { annotations.applyMarkup(type, payload); }
 async function onAnnotationCopy() {
-  const container = bodyRef.value, range = container && resolveSelectionRange(container, window.getSelection());
+  const container = annotationContainer.value, range = container && resolveSelectionRange(container, window.getSelection());
   const text = range?.toString().trim() ?? ""; if (!text) return;
   try { await copyTextToClipboard(text); showAnnotationToast(t("annotation.copyDone")); } catch { showAnnotationToast(t("annotation.copyFailed")); }
 }
@@ -449,9 +455,9 @@ async function onAnnotationPaste() {
   let text: string; try { text = await navigator.clipboard.readText(); } catch { showAnnotationToast(t("annotation.pasteFailed")); return; }
   if (!text.trim()) return; onAnnotationApply("ins", text);
 }
-function openAiPanel() { annotations.hide(); const container = bodyRef.value, range = container && resolveSelectionRange(container, window.getSelection()); aiPanel.openWithSelection(range ? range.toString().trim() : ""); }
+function openAiPanel() { annotations.hide(); const container = annotationContainer.value, range = container && resolveSelectionRange(container, window.getSelection()); aiPanel.openWithSelection(range ? range.toString().trim() : ""); }
 /** 打开浮层内嵌 AI 面板(🤖):带入当前选区并展示浮层,不弹模态面板 */
-function openInlineAiPanel() { annotations.hide(); aiPanel.close(); const container = bodyRef.value, range = container && resolveSelectionRange(container, window.getSelection()); aiPanel.setSelection(range ? range.toString().trim() : ""); floatLayout.openPanel("ai"); }
+function openInlineAiPanel() { annotations.hide(); aiPanel.close(); const container = annotationContainer.value, range = container && resolveSelectionRange(container, window.getSelection()); aiPanel.setSelection(range ? range.toString().trim() : ""); floatLayout.openPanel("ai"); }
 function onAiApplyResult(text: string) {
   const tab = activeTab; if (!tab) return;
   if (!window.confirm(t("ai.applyConfirm"))) return;
@@ -510,7 +516,7 @@ function handleToggleTheme() { appStore.toggleTheme(); }
 function handleToggleLocale() { const next = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'; locale.value = next; persistLocale(next as AppLocale); }
 /** 单一视图：面板一次性初始化（原在 MarkdownView 的 onRendered 回调里，已无渲染事件）。 */
 function initializePanels(): void {
-  annotations.configure(annotationContext, () => bodyRef.value);
+  annotations.configure(annotationContext, () => annotationContainer.value, resolveAnnotationLines);
   annotations.initSelectionWatch();
   aiPanel.configure(() => ({ getSource: () => activeTab?.draftContent ?? '', applyResult: onAiApplyResult }));
 }

@@ -80,6 +80,29 @@ describe("MarkdownEditor / 最小接入", () => {
     expect(container.querySelector(".cm-editor")).not.toBeNull();
   });
 
+  it("批注选区：getContentElement() 指向 .cm-content，resolveSourceLines 用 CM6 行号", async () => {
+    // 阶段二 Task 6：批注 / AI 选区不再依赖 markdown-it 渲染 DOM 的 data-source-line
+    const { container, component } = await mountEditor({
+      modelValue: "# Title\n\nsecond line\n\nthird line\n",
+      theme: "light",
+    });
+    const content = component.getContentElement();
+    expect(content).not.toBeNull();
+    expect(content?.classList.contains("cm-content")).toBe(true);
+
+    // 选中第 3 行文字，构造 DOM Range 交给 CM6 换算行号
+    const lines = container.querySelectorAll(".cm-line");
+    const targetLine = Array.from(lines).find((el) =>
+      el.textContent?.includes("second line")
+    );
+    expect(targetLine).toBeTruthy();
+    const textNode = targetLine!.firstChild!;
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, 6);
+    expect(component.resolveSourceLines(range)).toEqual([3, 3]);
+  });
+
   it("页内查找统一走 CM6 搜索面板：openSearch() 打开 .cm-search", async () => {
     // 阶段二 Task 3：删除 useFindInPage 的 DOM 高亮后，页内查找由 CM6 接管
     const { container, component } = await mountEditor({

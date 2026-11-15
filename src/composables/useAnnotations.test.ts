@@ -189,6 +189,24 @@ describe("AI 模板持久化", () => {
   });
 });
 
+/** 测试替身：模拟 App 用 CM6 posAtDOM 注入的行号解析器。
+ *  测试容器仍带 data-source-line 锚点，这里据此返回行号；产品代码不再读该属性。 */
+function fakeLineResolver(range: Range): [number, number] | null {
+  const lineOf = (node: Node): number | null => {
+    const el =
+      node.nodeType === Node.ELEMENT_NODE
+        ? (node as Element)
+        : (node as Text).parentElement;
+    const anchor = el?.closest("[data-source-line]");
+    if (!anchor) return null;
+    const n = Number(anchor.getAttribute("data-source-line"));
+    return Number.isFinite(n) ? n : null;
+  };
+  const a = lineOf(range.startContainer);
+  const b = lineOf(range.endContainer);
+  return a == null || b == null ? null : [Math.min(a, b), Math.max(a, b)];
+}
+
 describe("DOM 侧:选区 → 源行范围", () => {
   it("resolveSelectionRange 拒绝空/折叠选区", () => {
     const container = document.createElement("div");
@@ -212,27 +230,27 @@ describe("DOM 侧:选区 → 源行范围", () => {
     document.body.removeChild(container);
   });
 
-  it("selectionToSourceLines 从锚点元素反推行号", () => {
+  it("selectionToSourceLines 委托给外部行号解析器（CM6 位置体系）", () => {
     const container = document.createElement("div");
-    container.innerHTML =
-      '<p data-source-line="3">line3</p><p data-source-line="7">line7</p>';
+    container.innerHTML = "<p>line3</p><p>line7</p>";
     document.body.appendChild(container);
-    const p1 = container.querySelector<HTMLElement>('[data-source-line="3"]')!;
-    const p2 = container.querySelector<HTMLElement>('[data-source-line="7"]')!;
+    const p1 = container.querySelector("p")!;
+    const p2 = container.querySelectorAll("p")[1];
     const range = document.createRange();
     range.setStart(p1.firstChild!, 0);
     range.setEnd(p2.firstChild!, 5);
-    expect(selectionToSourceLines(range)).toEqual([3, 7]);
 
-    // 无锚点的文本节点 → null
-    const orphan = document.createElement("p");
-    orphan.textContent = "x";
-    document.body.appendChild(orphan);
-    const range2 = document.createRange();
-    range2.setStart(orphan.firstChild!, 0);
-    range2.setEnd(orphan.firstChild!, 1);
-    expect(selectionToSourceLines(range2)).toBeNull();
-    document.body.removeChild(orphan);
+    // resolver 由 App 用 CM6 posAtDOM 实现，这里用假实现验证委托契约
+    let seen: Range | null = null;
+    const resolve = (r: Range): [number, number] | null => {
+      seen = r;
+      return [3, 7];
+    };
+    expect(selectionToSourceLines(range, resolve)).toEqual([3, 7]);
+    expect(seen).toBe(range);
+
+    // 解析失败（跨代码块等）→ null
+    expect(selectionToSourceLines(range, () => null)).toBeNull();
     document.body.removeChild(container);
   });
 });
@@ -324,7 +342,7 @@ describe("useAnnotations - applyMarkup 写回链路", () => {
     makeContainer("正文内容");
     selectText("正文内容");
     const { toolbar, configure, applyMarkup } = useAnnotations();
-    configure(() => ctx, () => container);
+    configure(() => ctx, () => container, fakeLineResolver);
     applyMarkup("hl");
     expect(setSource).toHaveBeenCalledWith("{==正文内容==}");
     expect(notices).toEqual([]);
@@ -335,7 +353,7 @@ describe("useAnnotations - applyMarkup 写回链路", () => {
     makeContainer("AB AB");
     selectText("AB");
     const { configure, applyMarkup } = useAnnotations();
-    configure(() => ctx, () => container);
+    configure(() => ctx, () => container, fakeLineResolver);
     applyMarkup("del");
     expect(setSource).toHaveBeenCalledWith("{--AB--} AB");
   });
@@ -350,7 +368,7 @@ describe("useAnnotations - applyMarkup 写回链路", () => {
     sel.removeAllRanges();
     sel.addRange(range);
     const { configure, applyMarkup } = useAnnotations();
-    configure(() => ctx, () => container);
+    configure(() => ctx, () => container, fakeLineResolver);
     applyMarkup("del");
     expect(setSource).toHaveBeenCalledWith("AB {--AB--}");
   });
@@ -359,7 +377,7 @@ describe("useAnnotations - applyMarkup 写回链路", () => {
     makeBoldContainer();
     selectAcrossBold();
     const { configure, applyMarkup } = useAnnotations();
-    configure(() => ctx, () => container);
+    configure(() => ctx, () => container, fakeLineResolver);
     applyMarkup("del");
     expect(notices).toContain("annotation.unsupportedSelection");
     expect(setSource).not.toHaveBeenCalled();
@@ -375,7 +393,7 @@ describe("useAnnotations - applyMarkup 写回链路", () => {
       dispose,
       applyMarkup,
     } = useAnnotations();
-    configure(() => ctx, () => container);
+    configure(() => ctx, () => container, fakeLineResolver);
     initSelectionWatch();
     // selectionchange 缓存有效选区(pendingRange)
     document.dispatchEvent(new Event("selectionchange"));
@@ -392,7 +410,7 @@ describe("useAnnotations - applyMarkup 写回链路", () => {
     makeContainer("旧文本");
     selectText("旧文本");
     const { configure, applyMarkup } = useAnnotations();
-    configure(() => ctx, () => container);
+    configure(() => ctx, () => container, fakeLineResolver);
     applyMarkup("sub", "新");
     expect(setSource).toHaveBeenCalledWith("{~~旧文本~>新~~}");
   });
@@ -401,7 +419,7 @@ describe("useAnnotations - applyMarkup 写回链路", () => {
     makeContainer("hello");
     selectText("hello");
     const { configure, applyMarkup } = useAnnotations();
-    configure(() => null, () => container);
+    configure(() => null, () => container, fakeLineResolver);
     applyMarkup("del");
     expect(setSource).not.toHaveBeenCalled();
   });

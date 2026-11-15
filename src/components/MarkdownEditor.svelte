@@ -402,6 +402,28 @@
     return view.state.doc.lineAt(block.from).number;
   }
 
+  /** CM6 正文 DOM（.cm-content）：批注 / AI 选区判定用，取代已删除的 markdown-it article。 */
+  export function getContentElement(): HTMLElement | null {
+    return view?.contentDOM ?? null;
+  }
+
+  /** 把 DOM 选区 Range 映射为 1-based 源码行范围（CM6 位置体系）。
+   *  posAtDOM 返回的是原始 doc 偏移（不受 livePreview 装饰影响），行号精确。 */
+  export function resolveSourceLines(range: Range): [number, number] | null {
+    if (!view) return null;
+    const v = view;
+    try {
+      const from = v.posAtDOM(range.startContainer, range.startOffset);
+      const to = v.posAtDOM(range.endContainer, range.endOffset);
+      const a = v.state.doc.lineAt(Math.min(from, to)).number;
+      const b = v.state.doc.lineAt(Math.max(from, to)).number;
+      return [Math.min(a, b), Math.max(a, b)];
+    } catch {
+      // DOM 节点不属于当前视图（选区落在别处）→ 无法映射
+      return null;
+    }
+  }
+
   /** 供 TOC / 章节标记换算「源码行号 ↔ 滚动位置」；编辑器未挂载时返回 null。 */
   export function getLinePositionSource(): import("../composables/useSectionMarkers.svelte.ts").LinePositionSource | null {
     if (!view) return null;

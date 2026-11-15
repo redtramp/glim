@@ -23,6 +23,8 @@
   }
   export function scrollToLine(_line: number): void {}
   export function getLinePositionSource(): import("../composables/useSectionMarkers.svelte.ts").LinePositionSource | null { return null; }
+  export function getContentElement(): HTMLElement | null { return null; }
+  export function resolveSourceLines(_range: Range): [number, number] | null { return null; }
 </script>
 
 <div class="markdown-editor-stub" data-len={modelValue.length}></div>

@@ -90,27 +90,23 @@ export function resolveSelectionRange(
   return range;
 }
 
+/** 把 DOM 选区 Range 解析为 1-based 源码行范围；无法定位时返回 null。
+ *  由调用方注入实现：单一视图下用 CM6 的 posAtDOM/doc.lineAt 换算，
+ *  不再依赖 markdown-it 渲染 DOM 的 [data-source-line] 锚点。 */
+export type SourceLineResolver = (range: Range) => [number, number] | null;
+
 /**
- * 由选区 Range 反推源行范围。
- * 锚点容器(或自身)向上找最近的 [data-source-line] 元素,
- * 取 start/end 两侧行号的 min/max;任一侧缺失则返回 null(跨代码块等无锚点场景)。
+ * 由选区 Range 反推源行范围（委托给外部解析器）。
+ * 单一视图的 CM6 位置体系下，行号由 posAtDOM → doc.lineAt 精确给出；
+ * 解析器返回 null（跨代码块等无法映射场景）时本函数如实返回 null。
  */
-export function selectionToSourceLines(range: Range): [number, number] | null {
-  const lineOf = (node: Node): number | null => {
-    const el =
-      node.nodeType === Node.ELEMENT_NODE
-        ? (node as Element)
-        : (node as Text).parentElement;
-    if (!el) return null;
-    const anchor = el.closest("[data-source-line]");
-    if (!anchor) return null;
-    const n = Number(anchor.getAttribute("data-source-line"));
-    return Number.isFinite(n) ? n : null;
-  };
-  const a = lineOf(range.startContainer);
-  const b = lineOf(range.endContainer);
-  if (a == null || b == null) return null;
-  return [Math.min(a, b), Math.max(a, b)];
+export function selectionToSourceLines(
+  range: Range,
+  resolve: SourceLineResolver
+): [number, number] | null {
+  const lines = resolve(range);
+  if (!lines) return null;
+  return [Math.min(lines[0], lines[1]), Math.max(lines[0], lines[1])];
 }
 
 /** 第 line 行(1-based)在源文本中的起始偏移;越界返回文本长度 */
@@ -298,6 +294,8 @@ export function useAnnotations() {
 
   let getCtx: () => AnnotationContext | null = () => null;
   let getContainer: () => HTMLElement | null = () => null;
+  /** 行号解析器（CM6 位置体系）：单一视图下由 App 用 posAtDOM 注入 */
+  let resolveLines: SourceLineResolver = () => null;
   let teardown: (() => void) | null = null;
   /**
    * 缓存的有效选区:输入态下点击输入框聚焦会清空文档选区,
@@ -305,13 +303,15 @@ export function useAnnotations() {
    */
   let pendingRange: Range | null = null;
 
-  /** 由 App.vue 注入上下文与渲染容器获取器(在 onMounted 渲染完成后调用) */
+  /** 由 App 注入上下文、CM6 内容容器与行号解析器（单一视图，onMount 后调用） */
   function configure(
     ctx: () => AnnotationContext | null,
-    container: () => HTMLElement | null
+    container: () => HTMLElement | null,
+    lineResolver: SourceLineResolver
   ): void {
     getCtx = ctx;
     getContainer = container;
+    resolveLines = lineResolver;
   }
 
   function hide(): void {
@@ -367,7 +367,7 @@ export function useAnnotations() {
     const range = resolveSelectionRange(container, selection) ?? pendingRange;
     if (!range) return;
 
-    const lines = selectionToSourceLines(range);
+    const lines = selectionToSourceLines(range, resolveLines);
     const selectedText = range.toString().trim();
     if (!lines || !selectedText) {
       ctx.notify("annotation.locateFailed");
