@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { syntaxTree } from "@codemirror/language";
 import { buildDecorations } from "./livePreview";
 
 /**
@@ -52,6 +53,89 @@ function summary(state: EditorState): DecoRecord[] {
   }
   return out;
 }
+
+/**
+ * grammar 锁定：把 livePreview 依赖的 Lezer 节点名钉死在测试里。
+ * 名称来自 @codemirror/lang-markdown（base: markdownLanguage，含 GFM）实测，
+ * 若日后语法升级改了节点名，这里会先失败，避免装饰悄悄失效。
+ */
+function nodeNames(doc: string): string[] {
+  const s = EditorState.create({
+    doc,
+    extensions: [markdown({ base: markdownLanguage })],
+  });
+  const names: string[] = [];
+  syntaxTree(s).iterate({ enter: (n) => { names.push(n.name); } });
+  return names;
+}
+
+/** 各 construct 依赖的节点名——与 visitor 派发表一一对应 */
+const REQUIRED_NODES = [
+  "ATXHeading1",
+  "HeaderMark",
+  "StrongEmphasis",
+  "Emphasis",
+  "EmphasisMark",
+  "InlineCode",
+  "CodeMark",
+  "Link",
+  "LinkMark",
+  "URL",
+  "Strikethrough",
+  "StrikethroughMark",
+  "BulletList",
+  "OrderedList",
+  "ListItem",
+  "ListMark",
+  "Blockquote",
+  "QuoteMark",
+  "FencedCode",
+  "HorizontalRule",
+  "Table",
+  "Task",
+  "TaskMarker",
+  "Image",
+] as const;
+
+describe("livePreview / grammar 锁定", () => {
+  const sample = [
+    "# Title",
+    "",
+    "**b** *i* `c` [x](u) ~~s~~ ![alt](img.png)",
+    "",
+    "- item",
+    "",
+    "1. first",
+    "",
+    "> quote",
+    "",
+    "```js",
+    "const x = 1;",
+    "```",
+    "",
+    "---",
+    "",
+    "| a | b |",
+    "|---|---|",
+    "| 1 | 2 |",
+    "",
+    "- [ ] task",
+    "- [x] done",
+  ].join("\n");
+
+  it("全部目标 construct 的 Lezer 节点名均存在", () => {
+    const names = nodeNames(sample);
+    const missing = REQUIRED_NODES.filter((n) => !names.includes(n));
+    expect(missing).toEqual([]);
+  });
+
+  it("GFM 专用节点（删除线/表格/任务列表）确由 base: markdownLanguage 提供", () => {
+    const names = nodeNames(sample);
+    expect(names).toContain("Strikethrough");
+    expect(names).toContain("Table");
+    expect(names).toContain("TaskMarker");
+  });
+});
 
 describe("livePreview / ATX 一级标题", () => {
   it("光标不在标题行：隐藏 '# ' 前缀、标题文字加 cm-lp-h1 类", () => {
@@ -139,5 +223,44 @@ describe("livePreview / ATX 一级标题", () => {
     expect(decos.some((d) => d.from === 2 && d.to === 7 && d.cls === "cm-lp-h1")).toBe(true);
     // 尾部 " #"（空格 [7,8) + 闭合 # [8,9)）一并隐藏
     expect(decos.some((d) => d.from === 7 && d.to === 9 && d.replace)).toBe(true);
+  });
+});
+
+describe("livePreview / 行内定界符（粗体/斜体/行内代码/删除线）", () => {
+  // "**b** *i* `c` ~~s~~" 的区间：
+  // [0,2)** [2,3)b [3,5)** | [5,6)空格 [6,7)* [7,8)i [8,9)* | [9,10)空格 [10,11)` [11,12)c [12,13)` | [13,14)空格 [14,16)~~ [16,17)s [17,19)~~
+  const doc = "**b** *i* `c` ~~s~~";
+
+  it("off-cursor：隐藏定界符、内容加对应样式类", () => {
+    // 光标置于文档末尾之外不可能，改用另一行做光标行
+    const s = stateOf(doc + "\n\ntail", doc.length + 3);
+    const decos = summary(s);
+    // 粗体 **
+    expect(decos.some((d) => d.from === 0 && d.to === 2 && d.replace)).toBe(true);
+    expect(decos.some((d) => d.from === 3 && d.to === 5 && d.replace)).toBe(true);
+    expect(decos.some((d) => d.from === 2 && d.to === 3 && d.cls === "cm-lp-strong")).toBe(true);
+    // 斜体 *
+    expect(decos.some((d) => d.from === 6 && d.to === 7 && d.replace)).toBe(true);
+    expect(decos.some((d) => d.from === 7 && d.to === 8 && d.cls === "cm-lp-em")).toBe(true);
+    // 行内代码 `
+    expect(decos.some((d) => d.from === 10 && d.to === 11 && d.replace)).toBe(true);
+    expect(decos.some((d) => d.from === 11 && d.to === 12 && d.cls === "cm-lp-code")).toBe(true);
+    // 删除线 ~~
+    expect(decos.some((d) => d.from === 14 && d.to === 16 && d.replace)).toBe(true);
+    expect(decos.some((d) => d.from === 16 && d.to === 17 && d.cls === "cm-lp-strike")).toBe(true);
+  });
+
+  it("on-cursor：光标落在粗体节点内时整段露源码", () => {
+    const s = stateOf(doc, 2); // 光标在 "b" 上（粗体节点内）
+    const decos = summary(s);
+    expect(decos.some((d) => d.from === 0 && d.to === 2 && d.replace)).toBe(false);
+    expect(decos.some((d) => d.cls === "cm-lp-strong")).toBe(false);
+  });
+
+  it("严格无损：装饰计算不改写含行内标记的原文", () => {
+    const src = "a **b** *i* `c` ~~s~~ z\n";
+    const s = stateOf(src, 0);
+    buildDecorations(s);
+    expect(s.doc.toString()).toBe(src);
   });
 });
