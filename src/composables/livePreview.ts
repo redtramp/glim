@@ -14,7 +14,10 @@ import { EditorState, RangeSet, type Range } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
   Decoration,
+  EditorView,
+  ViewPlugin,
   type DecorationSet,
+  type ViewUpdate,
 } from "@codemirror/view";
 
 /** 装饰 class 名统一命名，避免样式表与逻辑各自硬编码 */
@@ -323,3 +326,40 @@ export function buildDecorations(state: EditorState): LivePreviewDecorations {
     atomicRanges: RangeSet.of<Decoration>(atomic, true),
   };
 }
+
+/* ============ ViewPlugin 接入（供 MarkdownEditor 挂载） ============ */
+
+/**
+ * 实时预览 ViewPlugin：把 buildDecorations 的纯函数结果接到 CM6 视图。
+ * 文档变更 / 光标移动 / 视口变化时重算装饰；其余情况复用上一次结果。
+ */
+class LivePreviewPlugin {
+  decorations: DecorationSet;
+
+  constructor(view: EditorView) {
+    this.decorations = buildDecorations(view.state).decorations;
+  }
+
+  update(update: ViewUpdate): void {
+    if (
+      update.docChanged ||
+      update.selectionSet ||
+      update.viewportChanged
+    ) {
+      this.decorations = buildDecorations(update.state).decorations;
+    }
+  }
+}
+
+/** 供 EditorState.extensions 使用的实时预览扩展 */
+export const livePreview = ViewPlugin.fromClass(LivePreviewPlugin, {
+  decorations: (plugin) => plugin.decorations,
+});
+
+/**
+ * 让方向键把被隐藏 / 替换的语法区间当作一个原子单位跳过。
+ * 与 livePreview 一起挂载；每次从当前 state 重算，保证与装饰同步。
+ */
+export const livePreviewAtomic = EditorView.atomicRanges.of((view) => {
+  return buildDecorations(view.state).atomicRanges;
+});

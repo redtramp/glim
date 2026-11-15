@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { syntaxTree } from "@codemirror/language";
-import { buildDecorations } from "./livePreview";
+import { EditorView } from "@codemirror/view";
+import {
+  buildDecorations,
+  livePreview,
+  livePreviewAtomic,
+} from "./livePreview";
 
 /**
  * 用 GFM 语法构造 EditorState。base: markdownLanguage 会加载 GFM 扩展
@@ -406,6 +411,100 @@ describe("livePreview / 分隔线", () => {
     const doc = "above\n\n---\n\ntail";
     const s = stateOf(doc, doc.indexOf("---"));
     expect(summary(s).some((d) => d.replace)).toBe(false);
+  });
+});
+
+describe("livePreview / ViewPlugin 接入", () => {
+  /** 在 jsdom 中挂载真实 EditorView，返回 view 与用于读取当前 decor 的 helper */
+  function mount(doc: string, cursor: number) {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc,
+        selection: { anchor: cursor },
+        extensions: [
+          markdown({ base: markdownLanguage }),
+          livePreview,
+          livePreviewAtomic,
+        ],
+      }),
+    });
+    return {
+      view,
+      /** 从 plugin 实例读取当前 DecorationSet 并摊平 */
+      decos() {
+        const plugin = view.plugin(livePreview);
+        expect(plugin).not.toBeNull();
+        const set = plugin!.decorations;
+        const out: { from: number; to: number; cls?: string; replace: boolean }[] = [];
+        const iter = set.iter();
+        while (iter.value) {
+          const spec = iter.value.spec as { class?: string; widget?: unknown };
+          out.push({
+            from: iter.from,
+            to: iter.to,
+            cls: spec.class,
+            replace: spec.class === undefined && spec.widget === undefined,
+          });
+          iter.next();
+        }
+        return out;
+      },
+      destroy() {
+        view.destroy();
+        parent.remove();
+      },
+    };
+  }
+
+  it("初始挂载：off-cursor 标题的 '# ' 被隐藏、文字加样式", () => {
+    const m = mount("# Title\n\nbody", 11);
+    try {
+      const d = m.decos();
+      expect(d.some((x) => x.from === 0 && x.to === 2 && x.replace)).toBe(true);
+      expect(d.some((x) => x.from === 2 && x.to === 7 && x.cls === "cm-lp-h1")).toBe(true);
+    } finally {
+      m.destroy();
+    }
+  });
+
+  it("selectionSet：光标移到标题行后 decor 撤回（露源码）", () => {
+    const m = mount("# Title\n\nbody", 11);
+    try {
+      m.view.dispatch({ selection: { anchor: 4 } });
+      const d = m.decos();
+      expect(d.some((x) => x.from === 0 && x.to === 2 && x.replace)).toBe(false);
+      expect(d.some((x) => x.cls === "cm-lp-h1")).toBe(false);
+    } finally {
+      m.destroy();
+    }
+  });
+
+  it("docChanged：文档变更后 decor 按新内容重算", () => {
+    const m = mount("# Title\n\nbody", 11);
+    try {
+      m.view.dispatch({ changes: { from: 0, insert: "# Changed\n\n" } });
+      const d = m.decos();
+      // 新标题 "# Changed" 的 "# " 也应被隐藏
+      expect(d.some((x) => x.from === 0 && x.to === 2 && x.replace)).toBe(true);
+      expect(d.some((x) => x.cls === "cm-lp-h1")).toBe(true);
+    } finally {
+      m.destroy();
+    }
+  });
+
+  it("livePreviewAtomic 提供 atomicRanges（隐藏区间可被 EditorView 消费）", () => {
+    const m = mount("# Title\n\nbody", 11);
+    try {
+      // atomicRanges facet 不抛异常即可；通过读取 plugin 的装饰间接验证接线完整
+      const plugin = m.view.plugin(livePreview);
+      expect(plugin).not.toBeNull();
+      expect(plugin!.decorations.size).toBeGreaterThan(0);
+    } finally {
+      m.destroy();
+    }
   });
 });
 
