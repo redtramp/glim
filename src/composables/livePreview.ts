@@ -11,7 +11,7 @@
  * - visitor 按 Lezer 节点名派发（节点名由 livePreview.test.ts 的 grammar 锁定测试钉死）。
  */
 import { EditorState, RangeSet, type Range } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import {
   Decoration,
   EditorView,
@@ -115,6 +115,21 @@ type Visitor = (node: NodeRef, ctx: BuildContext) => void;
  * 「该行是否应露出源码」：光标所在行（按主选区 head 所在行）始终露源码。
  * 行级构造（标题 / 引用 / 列表 / 围栏等）用此判据。
  */
+/**
+ * Lezer 对长文档采用增量解析：直接 syntaxTree(state) 可能只解析到文档前半段，
+ * 后半段节点（引用 / 表格 / 任务列表等块级构造）尚未生成，装饰会静默缺失。
+ * 这里尽力取「解析到文档末尾」的完整树；超时 / 解析中断时回退到当前树，
+ * 保证至少处理已解析部分、不阻塞主线程、不抛异常。
+ */
+const FULL_PARSE_TIMEOUT_MS = 5000;
+
+function fullSyntaxTree(state: EditorState) {
+  return (
+    ensureSyntaxTree(state, state.doc.length, FULL_PARSE_TIMEOUT_MS) ??
+    syntaxTree(state)
+  );
+}
+
 /** 标记本体之后到正文之间可能有若干空白，动态扫描返回「正文起始位置」——不写死 +1/+2 */
 function skipInlineSpace(state: EditorState, from: number, limit: number): number {
   let pos = from;
@@ -423,7 +438,7 @@ export function buildDecorations(state: EditorState): LivePreviewDecorations {
     },
   };
 
-  syntaxTree(state).iterate({
+  fullSyntaxTree(state).iterate({
     enter(node) {
       const visitor = VISITORS[node.name];
       if (visitor) visitor(node as unknown as NodeRef, ctx);

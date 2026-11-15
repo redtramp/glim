@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
 import {
   buildDecorations,
@@ -69,8 +69,12 @@ function nodeNames(doc: string): string[] {
     doc,
     extensions: [markdown({ base: markdownLanguage })],
   });
+  // 必须取完整语法树：Lezer 对长文档增量解析，直接 syntaxTree(s) 可能只解析到
+  // 前半段，后半段块级节点缺失会让本锁定测试偶发假失败（曾导致 flaky）。
+  const tree = ensureSyntaxTree(s, s.doc.length, 5000);
+  if (!tree) throw new Error("语法树未能在超时内完整解析");
   const names: string[] = [];
-  syntaxTree(s).iterate({ enter: (n) => { names.push(n.name); } });
+  tree.iterate({ enter: (n) => { names.push(n.name); } });
   return names;
 }
 
@@ -139,6 +143,31 @@ describe("livePreview / grammar 锁定", () => {
     expect(names).toContain("Strikethrough");
     expect(names).toContain("Table");
     expect(names).toContain("TaskMarker");
+  });
+
+  it("长文档后半段的块级构造仍被装饰（增量解析回归）", () => {
+    // Lezer 对复杂长文档增量解析：直接 syntaxTree(state) 只解析到约前 1/3，
+    // 末尾的引用 / 任务列表节点尚未生成。用大量带行内标记的列表项触发该阈值
+    // （实测 200 行约 8KB 时 syntaxTree 无 Blockquote、ensureSyntaxTree 有）。
+    // 若 buildDecorations 只取未完成的树，这些装饰会静默缺失。
+    const filler = Array.from(
+      { length: 200 },
+      (_, i) => `- item ${i} **bold** and \`code\` [link](u)`,
+    ).join("\n");
+    const doc = `${filler}\n\n> 末尾引用\n\n- [ ] 末尾任务\n\ntail`;
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const { decorations } = buildDecorations(s);
+    const iter = decorations.iter();
+    let quote = false;
+    let taskWidget = false;
+    while (iter.value) {
+      const spec = iter.value.spec as { class?: string; widget?: unknown };
+      if (spec.class === "cm-lp-quote") quote = true;
+      if (spec.widget) taskWidget = true;
+      iter.next();
+    }
+    expect(quote).toBe(true);
+    expect(taskWidget).toBe(true);
   });
 });
 
