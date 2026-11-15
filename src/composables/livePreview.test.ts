@@ -264,3 +264,66 @@ describe("livePreview / 行内定界符（粗体/斜体/行内代码/删除线�
     expect(s.doc.toString()).toBe(src);
   });
 });
+
+describe("livePreview / 链接", () => {
+  it("off-cursor：隐藏 [ ] ( ) 与 URL，链接文字加 cm-lp-link", () => {
+    const doc = "see [text](https://u) now\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const decos = summary(s);
+    // "[" 隐藏
+    expect(decos.some((d) => d.from === doc.indexOf("[") && d.to === doc.indexOf("[") + 1 && d.replace)).toBe(true);
+    // 链接文字 "text" 加类
+    const labelFrom = doc.indexOf("text");
+    expect(decos.some((d) => d.from === labelFrom && d.to === labelFrom + 4 && d.cls === "cm-lp-link")).toBe(true);
+    // URL 隐藏
+    const urlFrom = doc.indexOf("https://u");
+    expect(decos.some((d) => d.from === urlFrom && d.to === urlFrom + "https://u".length && d.replace)).toBe(true);
+  });
+
+  it("on-cursor：光标在链接内整段露源码", () => {
+    const doc = "see [text](https://u) now\n\ntail";
+    const s = stateOf(doc, doc.indexOf("text"));
+    const decos = summary(s);
+    expect(decos.some((d) => d.cls === "cm-lp-link")).toBe(false);
+    expect(decos.some((d) => d.replace)).toBe(false);
+  });
+
+  it("严格无损：链接原文不变", () => {
+    const src = "a [x](u) b\n";
+    const s = stateOf(src, 0);
+    buildDecorations(s);
+    expect(s.doc.toString()).toBe(src);
+  });
+});
+
+describe("livePreview / 引用与列表", () => {
+  it("引用：光标不在该行时隐藏 > 标记、整行加 cm-lp-quote", () => {
+    const doc = "> quoted text\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const decos = summary(s);
+    expect(decos.some((d) => d.from === 0 && d.to === 2 && d.replace)).toBe(true);
+    expect(decos.some((d) => d.cls === "cm-lp-quote")).toBe(true);
+  });
+
+  it("引用：光标在引用行时露源码", () => {
+    const doc = "> quoted text\n\ntail";
+    const s = stateOf(doc, 4);
+    expect(summary(s).some((d) => d.cls === "cm-lp-quote")).toBe(false);
+  });
+
+  it("列表符号保留可见但加弱化样式（不隐藏，保证大纲可扫）", () => {
+    const doc = "- item one\n- item two\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const decos = summary(s);
+    expect(decos.some((d) => d.from === 0 && d.to === 1 && d.cls === "cm-lp-list-mark")).toBe(true);
+    // 列表符号不应被隐藏
+    expect(decos.some((d) => d.from === 0 && d.to === 1 && d.replace)).toBe(false);
+  });
+
+  it("有序列表符号同样弱化而非隐藏", () => {
+    const doc = "1. first\n2. second\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const decos = summary(s);
+    expect(decos.some((d) => d.from === 0 && d.to === 2 && d.cls === "cm-lp-list-mark")).toBe(true);
+  });
+});

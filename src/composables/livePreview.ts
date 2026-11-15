@@ -200,11 +200,16 @@ function atxHeading(deco: Decoration): Visitor {
   };
 }
 
-/** 引用 > q：隐藏 QuoteMark，整行加引用样式 */
+/** 引用 > q：隐藏 QuoteMark 及其后空白，整行加引用样式 */
 const visitBlockquote: Visitor = (node, ctx) => {
   if (ctx.isCursorLine(node.from)) return;
-  for (const m of childMarks(node, "QuoteMark")) ctx.hide(m.from, m.to);
   const line = ctx.state.doc.lineAt(node.from);
+  const lineEnd = Math.min(line.to, ctx.docEnd);
+  for (const m of childMarks(node, "QuoteMark")) {
+    // 与标题一致：标记后的空白也一并隐藏，避免渲染后正文前残留空格
+    const contentStart = skipInlineSpace(ctx.state, m.to, lineEnd);
+    ctx.hide(m.from, contentStart);
+  }
   ctx.line(LINES.quote, line.from);
 };
 
