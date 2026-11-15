@@ -370,6 +370,38 @@ describe("单一视图挂载契约", () => {
     expect(m.target.querySelector(".viewer article.markdown-body")).toBeNull();
     m.unmount();
   });
+
+  it("切换标签再切回：滚动位置由 tab.scrollTop 恢复，不跳回开头（bug1 单元级根治）", async () => {
+    // 两个标签，验证 switchToTab 保存当前 scrollTop、激活标签变化时按 tab.scrollTop 恢复。
+    // 阶段二删除了 pendingScrollTop=0 归零与行号映射，位置不再被重置。
+    mockStorage["glim-reader-tabs"] = JSON.stringify({
+      paths: ["/docs/a.md", "/docs/b.md"],
+      activePath: "/docs/a.md",
+    });
+    readTextFileMock.mockImplementation(async () => "# 标题\n\n正文内容。");
+    const m = mountApp();
+    await flushPromises();
+    await waitFor(() => Boolean(m.target.querySelector(".markdown-editor-stub")));
+    const viewer = m.target.querySelector<HTMLElement>(".viewer")!;
+
+    // 模拟用户滚到中部（直接写 tab.scrollTop，避开 onViewerScroll 的 400ms debounce）
+    const api = useTabs();
+    expect(api.tabs.length).toBe(2);
+    api.tabs[0].scrollTop = 320;
+    Object.defineProperty(viewer, "scrollTop", { value: 320, writable: true, configurable: true });
+
+    // 切到第二个标签：新文档从顶部开始（模拟真实切换后滚动位置变化）
+    api.activateTab(api.tabs[1].id);
+    await flushPromises();
+    viewer.scrollTop = 0;
+    expect(viewer.scrollTop).toBe(0);
+
+    // 切回第一个标签：应由 tab.scrollTop 恢复到 320，而非停在 0（bug1 根治判据）
+    api.activateTab(api.tabs[0].id);
+    await flushPromises();
+    expect(viewer.scrollTop).toBe(320);
+    m.unmount();
+  });
 });
 
 describe("浮层 AI 面板接线", () => {
