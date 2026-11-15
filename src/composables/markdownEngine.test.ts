@@ -199,8 +199,8 @@ describe("renderMarkdownOnce", () => {
     const { html, headings } = renderMarkdownOnce(inst, "# A\n\n## B\n\n正文");
     expect(html).toContain('<h1 id="a"');
     expect(headings).toEqual([
-      { level: 1, text: "A", id: "a" },
-      { level: 2, text: "B", id: "b" },
+      { level: 1, text: "A", id: "a", line: 1 },
+      { level: 2, text: "B", id: "b", line: 3 },
     ]);
   });
 
@@ -208,7 +208,7 @@ describe("renderMarkdownOnce", () => {
     const inst = md();
     const { html, headings } = renderMarkdownOnce(inst, "---\nt: 1\n---\n# H");
     expect(html).toContain('class="front-matter"');
-    expect(headings).toEqual([{ level: 1, text: "H", id: "h" }]);
+    expect(headings).toEqual([{ level: 1, text: "H", id: "h", line: 4 }]);
   });
 
   it("headings 与 extractHeadingsWith 结果一致", () => {
@@ -223,7 +223,7 @@ describe("extractHeadingsWith", () => {
   it("常规文档提取多级标题", () => {
     const hs = extractHeadingsWith(md(), "# A\n## B\n### C");
     expect(hs.map((h) => h.level)).toEqual([1, 2, 3]);
-    expect(hs[0]).toEqual({ level: 1, text: "A", id: "a" });
+    expect(hs[0]).toEqual({ level: 1, text: "A", id: "a", line: 1 });
   });
 
   it("标题内联内容保留原文", () => {
@@ -233,13 +233,13 @@ describe("extractHeadingsWith", () => {
 
   it("front matter 不影响标题提取", () => {
     const hs = extractHeadingsWith(md(), "---\nt: 1\n---\n# H");
-    expect(hs).toEqual([{ level: 1, text: "H", id: "h" }]);
+    expect(hs).toEqual([{ level: 1, text: "H", id: "h", line: 4 }]);
   });
 
   it(">200k 源走 fallback 提取", () => {
     const big = "# Top\n\n" + "x".repeat(200_001);
     const hs = extractHeadingsWith(md(), big);
-    expect(hs).toEqual([{ level: 1, text: "Top", id: "top" }]);
+    expect(hs).toEqual([{ level: 1, text: "Top", id: "top", line: 1 }]);
   });
 
   it("fallback 仅扫描前 500 行", () => {
@@ -249,6 +249,22 @@ describe("extractHeadingsWith", () => {
     const src = "y".repeat(200_000) + "\n" + lines.join("\n");
     const hs = extractHeadingsWith(md(), src);
     expect(hs.map((h) => h.text)).toEqual(["First"]);
+  });
+
+  it("Heading.line 为 1-based 源码行号（供 CM6 位置体系定位）", () => {
+    const hs = extractHeadingsWith(md(), "# A\ntext\n\n## B\n\n### C");
+    expect(hs.map((h) => h.line)).toEqual([1, 4, 6]);
+  });
+
+  it("front matter 后 Heading.line 计入偏移（与完整文档行号一致）", () => {
+    const hs = extractHeadingsWith(md(), "---\nt: 1\n---\n# H\ntext\n## B");
+    // front matter 占 3 行，# H 在第 4 行，## B 在第 6 行
+    expect(hs.map((h) => h.line)).toEqual([4, 6]);
+  });
+
+  it("renderMarkdownOnce 产出的 headings 同样带 line", () => {
+    const { headings } = renderMarkdownOnce(md(), "# A\n\n## B");
+    expect(headings.map((h) => h.line)).toEqual([1, 3]);
   });
 });
 

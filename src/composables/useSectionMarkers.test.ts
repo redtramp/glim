@@ -1,21 +1,24 @@
 /**
- * useSectionMarkers 测试
+ * useSectionMarkers 测试（阶段二：CM6 行位置体系）
  *
- * 覆盖:
- * - 无 headings 时 activeId 为空
- * - 有 headings 时 activeId 指向视口内最后一个标题
- * - 标题变化时 activeId 跟随更新
- * - jumpTo 滚动到目标标题并更新 activeId
- * - jumpTo 未知 id / 无视图容器时静默忽略
+ * 单一视图下不再有 markdown-it 渲染 DOM 的 [id] 标题元素，改为 Heading.line
+ * + LinePositionSource 换算。用假位置源驱动，可精确验证行号→滚动位置映射，
+ * 不再依赖 jsdom 恒为 0 的 getBoundingClientRect。
+ *
+ * 覆盖：
+ * - 无 headings / 无位置源时 activeId 回退行为
+ * - 滚动到不同行时 activeId 指向视口内最后一个标题
+ * - 标题变化 / 位置源就绪后 activeId 与缓存重建
+ * - jumpTo 滚动到目标行并更新 activeId；未知 id / 无容器静默忽略
  * - 滚动事件驱动 activeId 更新
- *
- * 注意: jsdom 中 getBoundingClientRect 恒为 0，
- * 因此所有标题的缓存位置均为 0；真实布局由浏览器集成测试补充。
  */
 import { describe, it, expect, vi } from "vitest";
 import { flushSync } from "svelte";
 import { createSubscriber } from "svelte/reactivity";
-import { useSectionMarkers } from "./useSectionMarkers.svelte.ts";
+import {
+  useSectionMarkers,
+  type LinePositionSource,
+} from "./useSectionMarkers.svelte.ts";
 import type { Heading } from "./useMarkdown";
 
 /** 测试侧响应式 box（.test.ts 不走 svelte 编译器，不能用 $state rune） */
@@ -30,7 +33,7 @@ function makeBox<T>(initial: T): { value: T } {
   });
   return {
     get value() {
-      subscribe(); // effect 内登记依赖；非 effect 上下文为 no-op
+      subscribe();
       return current;
     },
     set value(v: T) {
@@ -40,115 +43,165 @@ function makeBox<T>(initial: T): { value: T } {
   };
 }
 
-function makeBody(headings: Heading[]): HTMLElement {
-  const body = document.createElement("div");
-  for (const h of headings) {
-    const el = document.createElement("h1");
-    el.id = h.id;
-    body.appendChild(el);
-  }
-  return body;
+/** 每行固定 20px 的假位置源：line1→top0, line2→top20, line5→top80 ... */
+const LINE_HEIGHT = 20;
+function fakeSource(): LinePositionSource {
+  return {
+    lineTop: (line: number) =>
+      line >= 1 && line <= 500 ? (line - 1) * LINE_HEIGHT : null,
+    lineAtTop: (top: number) => Math.floor(Math.max(0, top) / LINE_HEIGHT) + 1,
+  };
 }
 
-function makeViewer(): { el: HTMLElement; scrollTo: ReturnType<typeof vi.fn> } {
+function heading(id: string, line: number): Heading {
+  return { id, text: id, level: 1, line };
+}
+
+function makeViewer(scrollTop = 0): {
+  el: HTMLElement;
+  scrollTo: ReturnType<typeof vi.fn>;
+} {
   const el = document.createElement("div");
-  // jsdom 可能未实现 Element.scrollTo，用自有属性注入 mock
+  Object.defineProperty(el, "scrollTop", { value: scrollTop, writable: true, configurable: true });
   const scrollTo = vi.fn();
   Object.defineProperty(el, "scrollTo", { value: scrollTo, configurable: true });
   return { el, scrollTo };
 }
 
-describe("useSectionMarkers", () => {
+describe("useSectionMarkers（CM6 行位置体系）", () => {
   it("无 headings 时 activeId 为空", () => {
-    const headings = makeBox<Heading[]>([]);
-    const { activeId } = useSectionMarkers(headings, makeBox(null), makeBox(null));
+    const { activeId } = useSectionMarkers(
+      makeBox<Heading[]>([]),
+      makeBox(null),
+      makeBox<LinePositionSource | null>(fakeSource()),
+    );
     expect(activeId.value).toBe("");
   });
 
-  it("有 headings 时 activeId 指向视口内最后一个标题", () => {
-    const headings = makeBox<Heading[]>([
-      { id: "h1", text: "标题1", level: 1 },
-      { id: "h2", text: "标题2", level: 2 },
-      { id: "h3", text: "标题3", level: 1 },
-    ]);
-    const body = makeBody(headings.value);
-    const { el } = makeViewer();
-    const { activeId } = useSectionMarkers(headings, makeBox(el), makeBox(body));
-    // jsdom 布局全为 0: 滚动位置 0 时最后一个标题为当前章节
-    expect(activeId.value).toBe("h3");
-  });
-
-  it("标题元素未就绪（缓存为空）时 activeId 回退到第一个标题", () => {
-    const headings = makeBox<Heading[]>([
-      { id: "h1", text: "一", level: 1 },
-      { id: "h2", text: "二", level: 1 },
-    ]);
-    // body 存在但不含任何标题元素 → 缓存为空
-    const body = document.createElement("div");
-    const { activeId } = useSectionMarkers(headings, makeBox(null), makeBox(body));
+  it("无位置源时回退到第一个标题（视图尚未就绪）", () => {
+    const headings = makeBox<Heading[]>([heading("h1", 1), heading("h2", 5)]);
+    const { activeId } = useSectionMarkers(
+      headings,
+      makeBox(null),
+      makeBox<LinePositionSource | null>(null),
+    );
     expect(activeId.value).toBe("h1");
   });
 
-  it("标题变化后 activeId 跟随更新", () => {
-    const headings = makeBox<Heading[]>([{ id: "a", text: "A", level: 1 }]);
-    const body = makeBox(makeBody(headings.value));
-    const { activeId } = useSectionMarkers(headings, makeBox<HTMLElement | null>(null), body);
-    expect(activeId.value).toBe("a");
-    flushSync(); // 让 $effect 首次运行并完成订阅
-
-    headings.value = [
-      { id: "a", text: "A", level: 1 },
-      { id: "b", text: "B", level: 1 },
-    ];
-    flushSync(); // 触发订阅通知（原 await nextTick）
-    expect(activeId.value).toBe("b");
-  });
-
-  it("jumpTo 滚动到目标标题并更新 activeId", () => {
+  it("滚动位置决定当前章节：top=0 → 行 1 的标题", () => {
     const headings = makeBox<Heading[]>([
-      { id: "h1", text: "一", level: 1 },
-      { id: "h2", text: "二", level: 1 },
+      heading("h1", 1),
+      heading("h2", 5),
+      heading("h3", 10),
     ]);
-    const body = makeBody(headings.value);
-    const { el, scrollTo } = makeViewer();
-    const { activeId, jumpTo } = useSectionMarkers(
+    const { el } = makeViewer(0);
+    const { activeId, dispose } = useSectionMarkers(
       headings,
       makeBox(el),
-      makeBox(body)
+      makeBox<LinePositionSource | null>(fakeSource()),
+    );
+    expect(activeId.value).toBe("h1");
+    dispose();
+  });
+
+  it("滚动位置决定当前章节：top=100 → 行 6，最后一个 ≤6 的标题是 h2", () => {
+    const headings = makeBox<Heading[]>([
+      heading("h1", 1),
+      heading("h2", 5),
+      heading("h3", 10),
+    ]);
+    const { el } = makeViewer(100); // lineAtTop(100)=6
+    const { activeId, dispose } = useSectionMarkers(
+      headings,
+      makeBox(el),
+      makeBox<LinePositionSource | null>(fakeSource()),
+    );
+    expect(activeId.value).toBe("h2");
+    dispose();
+  });
+
+  it("标题变化后 activeId 跟随更新", () => {
+    const headings = makeBox<Heading[]>([heading("a", 1)]);
+    const { el } = makeViewer(0);
+    const { activeId, dispose } = useSectionMarkers(
+      headings,
+      makeBox(el),
+      makeBox<LinePositionSource | null>(fakeSource()),
+    );
+    expect(activeId.value).toBe("a");
+    flushSync();
+
+    headings.value = [heading("a", 1), heading("b", 1)];
+    flushSync();
+    expect(activeId.value).toBe("b");
+    dispose();
+  });
+
+  it("位置源从 null 就绪后重算（编辑器异步加载完成）", () => {
+    const headings = makeBox<Heading[]>([heading("h1", 1), heading("h2", 5)]);
+    const { el } = makeViewer(100);
+    const source = makeBox<LinePositionSource | null>(null);
+    const { activeId, dispose } = useSectionMarkers(headings, makeBox(el), source);
+    expect(activeId.value).toBe("h1"); // 未就绪回退
+    flushSync();
+    source.value = fakeSource();
+    flushSync();
+    expect(activeId.value).toBe("h2"); // 就绪后按真实行号
+    dispose();
+  });
+
+  it("jumpTo 滚动到目标行的绝对 top 并更新 activeId", () => {
+    const headings = makeBox<Heading[]>([heading("h1", 1), heading("h2", 5)]);
+    const { el, scrollTo } = makeViewer(0);
+    const { activeId, jumpTo, dispose } = useSectionMarkers(
+      headings,
+      makeBox(el),
+      makeBox<LinePositionSource | null>(fakeSource()),
     );
     jumpTo("h2");
     expect(activeId.value).toBe("h2");
-    expect(scrollTo).toHaveBeenCalledWith({
-      top: 0, // jsdom 布局为 0
-      behavior: "smooth",
-    });
+    // line5 → top 80，减 SCROLL_OFFSET(16) = 64
+    expect(scrollTo).toHaveBeenCalledWith({ top: 64, behavior: "smooth" });
+    dispose();
   });
 
-  it("jumpTo 未知 id 时静默忽略", () => {
-    const headings = makeBox<Heading[]>([{ id: "h1", text: "一", level: 1 }]);
-    const body = makeBody(headings.value);
-    const { el, scrollTo } = makeViewer();
-    const { jumpTo } = useSectionMarkers(headings, makeBox(el), makeBox(body));
+  it("jumpTo 未知 id 静默忽略", () => {
+    const headings = makeBox<Heading[]>([heading("h1", 1)]);
+    const { el, scrollTo } = makeViewer(0);
+    const { jumpTo, dispose } = useSectionMarkers(
+      headings,
+      makeBox(el),
+      makeBox<LinePositionSource | null>(fakeSource()),
+    );
     jumpTo("missing");
     expect(scrollTo).not.toHaveBeenCalled();
+    dispose();
   });
 
   it("无视图容器时 jumpTo 静默忽略", () => {
-    const headings = makeBox<Heading[]>([{ id: "h1", text: "一", level: 1 }]);
-    const { jumpTo } = useSectionMarkers(headings, makeBox(null), makeBox(null));
+    const headings = makeBox<Heading[]>([heading("h1", 1)]);
+    const { jumpTo, dispose } = useSectionMarkers(
+      headings,
+      makeBox(null),
+      makeBox<LinePositionSource | null>(fakeSource()),
+    );
     expect(() => jumpTo("h1")).not.toThrow();
+    dispose();
   });
 
   it("滚动事件驱动 activeId 更新", async () => {
-    const headings = makeBox<Heading[]>([
-      { id: "h1", text: "一", level: 1 },
-      { id: "h2", text: "二", level: 1 },
-    ]);
-    const body = makeBody(headings.value);
-    const { el } = makeViewer();
-    const { activeId } = useSectionMarkers(headings, makeBox(el), makeBox(body));
+    const headings = makeBox<Heading[]>([heading("h1", 1), heading("h2", 5)]);
+    const { el } = makeViewer(0);
+    const { activeId, dispose } = useSectionMarkers(
+      headings,
+      makeBox(el),
+      makeBox<LinePositionSource | null>(fakeSource()),
+    );
+    expect(activeId.value).toBe("h1");
+    el.scrollTop = 100; // 行 6
     el.dispatchEvent(new Event("scroll"));
     await new Promise((resolve) => requestAnimationFrame(resolve));
     expect(activeId.value).toBe("h2");
+    dispose();
   });
 });

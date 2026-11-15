@@ -27,6 +27,8 @@ export interface Heading {
   level: number;
   text: string;
   id: string;
+  /** 1-based 源码行号（含 front matter 偏移），供 CM6 位置体系定位标题 */
+  line: number;
 }
 
 interface FrontMatterBlock {
@@ -320,11 +322,12 @@ export function renderMarkdownOnce(
   const tokens = md.parse(sanitizeInlineUrlSmartChars(body), env);
   const html =
     rawFrontMatter + md.renderer.render(tokens, md.options, env);
-  return { html, headings: extractHeadingsFromTokens(tokens) };
+  return { html, headings: extractHeadingsFromTokens(tokens, offset) };
 }
 
-/** 从 token 流提取标题大纲(parse 一次后复用,避免二次 tokenize) */
-function extractHeadingsFromTokens(tokens: Token[]): Heading[] {
+/** 从 token 流提取标题大纲(parse 一次后复用,避免二次 tokenize)。
+ *  lineOffset 为 front matter 占的行数，使 line 与完整源文档的 1-based 行号一致。 */
+function extractHeadingsFromTokens(tokens: Token[], lineOffset = 0): Heading[] {
   const headings: Heading[] = [];
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
@@ -333,7 +336,9 @@ function extractHeadingsFromTokens(tokens: Token[]): Heading[] {
       const level = parseInt(t.tag.slice(1), 10);
       const next = tokens[i + 1];
       const text = next && next.type === "inline" ? next.content : "";
-      headings.push({ level, text, id: idAttr });
+      // 与 data-source-line 插件同公式：token.map[0](0-based,相对 body) + 1 + offset
+      const line = (t.map?.[0] ?? 0) + 1 + lineOffset;
+      headings.push({ level, text, id: idAttr, line });
     }
   }
   return headings;
@@ -346,8 +351,9 @@ export function extractHeadingsWith(md: MarkdownIt, source: string): Heading[] {
   }
   const block = splitFrontMatter(source);
   const body = block ? block.body : source;
-  const env = { sourceLineOffset: block ? block.bodyStartLine - 1 : 0 };
-  return extractHeadingsFromTokens(md.parse(body, env));
+  const offset = block ? block.bodyStartLine - 1 : 0;
+  const env = { sourceLineOffset: offset };
+  return extractHeadingsFromTokens(md.parse(body, env), offset);
 }
 
 /** 大文件 fallback:逐行扫描 heading,避免全量 token 化开销 */
@@ -355,13 +361,15 @@ function extractHeadingsFallback(source: string): Heading[] {
   const headings: Heading[] = [];
   const block = splitFrontMatter(source);
   const body = block ? block.body : source;
-  for (const line of body.split(/\r?\n/).slice(0, 500)) {
-    const m = line.match(/^(#{1,6})\s+(.*)$/);
+  const offset = block ? block.bodyStartLine - 1 : 0;
+  const lines = body.split(/\r?\n/).slice(0, 500);
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(#{1,6})\s+(.*)$/);
     if (!m) continue;
     const level = m[1].length;
     const text = m[2].trim();
     const id = encodeURIComponent(text.toLowerCase().replace(/\s+/g, "-"));
-    headings.push({ level, text, id });
+    headings.push({ level, text, id, line: i + 1 + offset });
   }
   return headings;
 }

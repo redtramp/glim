@@ -401,6 +401,22 @@
     return view.state.doc.lineAt(block.from).number;
   }
 
+  /** 供 TOC / 章节标记换算「源码行号 ↔ 滚动位置」；编辑器未挂载时返回 null。 */
+  export function getLinePositionSource(): import("../composables/useSectionMarkers.svelte.ts").LinePositionSource | null {
+    if (!view) return null;
+    const v = view;
+    return {
+      lineTop(line: number): number | null {
+        if (line < 1 || line > v.state.doc.lines) return null;
+        return v.lineBlockAt(v.state.doc.line(line).from).top;
+      },
+      lineAtTop(top: number): number {
+        const block = v.lineBlockAtHeight(Math.max(0, top));
+        return v.state.doc.lineAt(block.from).number;
+      },
+    };
+  }
+
   export function scrollToLine(line: number) {
     if (!view) return;
     const target = Math.min(Math.max(1, line), view.state.doc.lines);

@@ -136,8 +136,8 @@ describe("renderMarkdown", () => {
 describe("extractHeadings", () => {
   it("委托 markdownWorkerClient.extractHeadingsOffThread 提取大纲（Worker 优先）", async () => {
     vi.mocked(extractHeadingsOffThread).mockResolvedValue([
-      { level: 1, text: "一", id: "一" },
-      { level: 2, text: "二", id: "二" },
+      { level: 1, text: "一", id: "一", line: 1 },
+      { level: 2, text: "二", id: "二", line: 1 },
     ]);
     const hs = await extractHeadings("# 一\n\n## 二");
     expect(extractHeadingsOffThread).toHaveBeenCalledWith("# 一\n\n## 二");
@@ -153,7 +153,7 @@ describe("extractHeadings", () => {
   });
 
   it("命中缓存（同源）时不再请求 worker", async () => {
-    vi.mocked(extractHeadingsOffThread).mockResolvedValue([{ level: 1, text: "A", id: "a" }]);
+    vi.mocked(extractHeadingsOffThread).mockResolvedValue([{ level: 1, text: "A", id: "a", line: 1 }]);
     await extractHeadings("# A");
     await extractHeadings("# A");
     expect(extractHeadingsOffThread).toHaveBeenCalledTimes(1);
@@ -164,7 +164,7 @@ describe("extractHeadingsWithRender / 单次渲染复用", () => {
   it("一次完整渲染同时产出并缓存 html 与 headings", async () => {
     vi.mocked(renderMarkdownOffThread).mockResolvedValue({
       html: "<h1>一</h1>",
-      headings: [{ level: 1, text: "一", id: "一" }],
+      headings: [{ level: 1, text: "一", id: "一", line: 1 }],
     });
     const hs = await extractHeadingsWithRender("# 一");
     expect(hs).toHaveLength(1);
@@ -178,7 +178,7 @@ describe("extractHeadingsWithRender / 单次渲染复用", () => {
   it("renderMarkdown 渲染后 extractHeadings 命中缓存，不再走 headings-only 请求", async () => {
     vi.mocked(renderMarkdownOffThread).mockResolvedValue({
       html: "<p>x</p>",
-      headings: [{ level: 1, text: "T", id: "t" }],
+      headings: [{ level: 1, text: "T", id: "t", line: 1 }],
     });
     await renderMarkdown("same-src");
     const hs = await extractHeadings("same-src");

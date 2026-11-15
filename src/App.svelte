@@ -19,7 +19,6 @@ import { t, locale, persistLocale, type AppLocale } from "./i18n/locale.svelte.t
 import { useFileTree } from "./composables/useFileTree.svelte.ts";
 import { useFileWatcher } from "./composables/useFileWatcher.svelte.ts";
 import { extractHeadings, extractHeadingsWithRender } from "./composables/useMarkdown";
-import { useScrollSpy } from "./composables/useScrollSpy.svelte.ts";
 import { useFindInPage } from "./composables/useFindInPage.svelte.ts";
 import { useHistory, type RecentItem } from "./composables/useHistory";
 import { useReadingSettings } from "./composables/useReadingSettings.svelte.ts";
@@ -90,6 +89,7 @@ type MarkdownEditorHandle = {
   goToLine(): void;
   getTopVisibleLine(): number;
   scrollToLine(line: number): void;
+  getLinePositionSource(): import("./composables/useSectionMarkers.svelte.ts").LinePositionSource | null;
 };
 type SearchPanelHandle = { focusInput(): void };
 let viewerElState = $state<HTMLElement | null>(null);
@@ -109,7 +109,6 @@ const ensureEditorModule = editorLoader.ensure;
 const viewerEl = { get value() { return viewerElState; } };
 const bodyRef = { get value() { return markdownState?.root ?? null; } };
 
-const { onScroll } = useScrollSpy(viewerEl, bodyRef);
 const find = useFindInPage(bodyRef);
 let isMobileViewport = $state(window.innerWidth < 768);
 function onResize() { isMobileViewport = window.innerWidth < 768; }
@@ -181,8 +180,11 @@ const draftContent = $derived(activeTab?.draftContent ?? "");
 const isEditing = $derived(activeTab?.isEditing ?? false);
 const headings = $derived(activeTab?.headings ?? []);
 const headingsBox = { get value() { return headings; } };
+// 单一视图：TOC 位置由 CM6 行位置提供者换算，不再查 markdown-it 渲染 DOM
+const positionSource = $derived(editorState?.getLinePositionSource() ?? null);
+const positionSourceBox = { get value() { return positionSource; } };
 // useSectionMarkers 构造时同步读取 headingsBox，必须在 activeTab（useTabs）可用后创建
-const sectionMarkers = useSectionMarkers(headingsBox, viewerEl, bodyRef);
+const sectionMarkers = useSectionMarkers(headingsBox, viewerEl, positionSourceBox);
 const isDirty = $derived(activeTab?.isDirty ?? false);
 const hasActiveFile = $derived(Boolean(activeTab?.path));
 const fileName = $derived(currentFile ? basename(currentFile) : t("app.noFile"));
@@ -282,7 +284,7 @@ function onDraftUpdate(value: string) {
 
 let scrollSaveTimer: ReturnType<typeof setTimeout> | null = null;
 function onViewerScroll() {
-  if (isEditing) return; onScroll();
+  if (isEditing) return;
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
   scrollSaveTimer = setTimeout(() => { const t2 = activeTab; if (t2 && t2.path && !t2.isEditing) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); } }, 400);
 }
@@ -498,16 +500,16 @@ const showSettings = keyboardHandlers.showSettings;
 let showReviewPanel = $state(false);
 
 function handleToggleBookmark() {
-  const tab = activeTab; if (!tab || isEditing) return;
+  const tab = activeTab; if (!tab) return;
   const scrollTop = currentScrollTop();
-  const scrollerTop = viewerEl.value?.getBoundingClientRect().top ?? 0;
-  const h = headings.filter(hh => {
-    // 单一视图无 markdown-it 渲染 DOM；标题定位由阶段二 Task 2 改 CM6 行位置。
-    // 此处保留可选 DOM 查询作为过渡（bodyRef 为 null 时 label 降级为空，不崩）。
-    const el = bodyRef.value?.querySelector(`[id="${hh.id}"]`);
-    if (!el) return false;
-    return el.getBoundingClientRect().top + scrollTop - scrollerTop <= scrollTop + 16;
-  }).pop();
+  const source = positionSource;
+  // 单一视图：用 CM6 行位置判断「视口上方最近标题」，作为书签名
+  const h = source
+    ? headings.filter(hh => {
+        const top = source.lineTop(hh.line);
+        return top !== null && top <= scrollTop + 16;
+      }).pop()
+    : undefined;
   const label = h?.text;
   const r = bookmarks.toggle(tab.path, scrollTop, label, label);
   showAnnotationToast(r ? t('float.bookmarkAdded') : t('float.bookmarkRemoved'));
@@ -747,22 +749,7 @@ $effect(() => {
   if (!v) void refreshRecent();
 });
 
-// 5. 编辑模式切换：进入清选区/模板引用，退出刷新滚动位置
-let prevIsEditing: boolean | null = null;
-$effect(() => {
-  const editing = isEditing;
-  if (prevIsEditing === null) { prevIsEditing = editing; return; }
-  if (editing === prevIsEditing) return;
-  prevIsEditing = editing;
-  if (editing) {
-    markdownState = null;
-    annotations.dispose();
-    return;
-  }
-  void (async () => { await tick(); onScroll(); })();
-});
-
-// 6. 激活标签变化：清错误/补后台标签大纲/清高亮/复位章节标记
+// 5. 激活标签变化：清错误/补后台标签大纲/清高亮/复位章节标记
 let prevActiveTabId: string | null = null;
 $effect(() => {
   const id = activeTabId;
@@ -791,7 +778,7 @@ $effect(() => {
   if (active) void (async () => { await tick(); restoreScrollForTab(active); })();
 });
 
-// 7. 搜索浮层显隐：显示聚焦输入框并重算位置，隐藏清空查询
+// 6. 搜索浮层显隐：显示聚焦输入框并重算位置，隐藏清空查询
 let prevSearchVisible: boolean | null = null;
 $effect(() => {
   const visible = searchVisible;
@@ -813,7 +800,7 @@ $effect(() => {
   }
 });
 
-// 8. 悬浮布局开关 → 重算搜索位置
+// 7. 悬浮布局开关 → 重算搜索位置
 let prevFloatLayout: boolean | null = null;
 $effect(() => {
   const v = enableFloatLayout;
@@ -823,7 +810,7 @@ $effect(() => {
   requestAnimationFrame(recalcSearchPosition);
 });
 
-// 9. 面板开合 → 重算；关闭后 300ms 结算重算（面板仍驻留 DOM 的卸载窗口）。
+// 8. 面板开合 → 重算；关闭后 300ms 结算重算（面板仍驻留 DOM 的卸载窗口）。
 //    每次关闭都重置计时：快速连续关闭以最后一次为起点（防抖式重挂）。
 let prevLeftPanel = floatLayout.state.activeLeftPanel;
 $effect(() => {
@@ -840,7 +827,7 @@ $effect(() => {
   }
 });
 
-// 10. 悬浮 Tab 条显隐 → 重算
+// 9. 悬浮 Tab 条显隐 → 重算
 let prevTopTabBarVisible: boolean | null = null;
 $effect(() => {
   const v = topTabBarVisible;
