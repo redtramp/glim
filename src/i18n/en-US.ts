@@ -173,7 +173,6 @@ const enUS = {
     reloadFromDisk: "Reload",
     keepEditing: "Keep editing",
     autoReloadWhitelist: "Auto-reload whitelist",
-    previewBeforeExport: "Switch to preview mode before exporting or printing",
     newFile: "New Markdown file",
     created: "Created",
     createFailed: "Failed to create",

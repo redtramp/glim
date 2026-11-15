@@ -169,7 +169,6 @@ const zhCN = {
     reloadFromDisk: "重新加载",
     keepEditing: "保留编辑",
     autoReloadWhitelist: "自动重载白名单",
-    previewBeforeExport: "请先切换到预览模式再导出或打印",
     newFile: "新建 Markdown 文件",
     created: "已创建",
     createFailed: "创建失败",

@@ -36,6 +36,7 @@ import {
   printDocument,
   type PandocInfo,
 } from "./composables/useExport";
+import { renderOffscreen } from "./composables/offscreenRender";
 import { useFileManager } from "./composables/useFileManager.svelte.ts";
 import { useKeyboardHandlers } from "./composables/useKeyboardHandlers.svelte.ts";
 import { useUnsavedDialog } from "./composables/useUnsavedDialog.svelte.ts";
@@ -339,25 +340,22 @@ let pdfEnginePath = $state<string | null>(null);
 function toggleExportMenu() { showExportMenu = !showExportMenu; }
 function closeExportMenu() { showExportMenu = false; }
 
-/** 导出/打印前必须处于预览模式且有内容 */
-function ensurePreviewForExport(): boolean {
-  if (isEditing) {
+/** 单一视图：导出/打印不再依赖视图 DOM，按需离屏渲染一份完整 .markdown-body。
+ *  无内容或渲染失败返回 null（渲染异常由各调用方现有 catch 展示）。 */
+async function renderForExport(): Promise<HTMLElement | null> {
+  if (!draftContent) {
     closeExportMenu();
-    appStore.errorMsg = t("editor.previewBeforeExport");
-    return false;
+    return null;
   }
-  if (!bodyRef.value || !draftContent) {
-    closeExportMenu();
-    return false;
-  }
-  return true;
+  return renderOffscreen(draftContent, currentFile || "", rootDir || "");
 }
 
 async function exportHtml() {
-  if (!ensurePreviewForExport()) return;
   try {
+    const body = await renderForExport();
+    if (!body) return;
     const dest = await exportToHtml(
-      bodyRef.value!, fileName || "document.html", currentFile || undefined
+      body, fileName || "document.html", currentFile || undefined
     );
     showExportMenu = false;
     if (dest) appStore.exportToast = dest;
@@ -368,12 +366,13 @@ async function exportHtml() {
 }
 
 async function exportDocx() {
-  if (!ensurePreviewForExport()) return;
   exportBusy = true;
   appStore.exportToast = t("export.generatingDocx");
   try {
+    const body = await renderForExport();
+    if (!body) return;
     const out = await exportToDocx(
-      bodyRef.value!, fileName || "document",
+      body, fileName || "document",
       displayFileName, currentFile || undefined
     );
     appStore.exportToast = out ? `${t("export.exportedDocx")}: ${out}` : "";
@@ -387,12 +386,13 @@ async function exportDocx() {
 }
 
 async function exportPdf() {
-  if (!ensurePreviewForExport()) return;
   exportBusy = true;
   appStore.exportToast = t("export.generatingPdf");
   try {
+    const body = await renderForExport();
+    if (!body) return;
     const result = await exportToPdf(
-      bodyRef.value!, fileName || "document", displayFileName,
+      body, fileName || "document", displayFileName,
       currentFile || undefined,
       async () => {
         const picked = await open({
@@ -423,13 +423,14 @@ async function exportPdf() {
   }
 }
 
-function doPrint() {
-  if (isEditing) {
-    closeExportMenu();
-    appStore.errorMsg = t("editor.previewBeforeExport");
-    return;
+async function doPrint() {
+  try {
+    const body = await renderForExport();
+    if (!body) return;
+    printDocument(body, fileName);
+  } catch (e: any) {
+    appStore.errorMsg = `${t("export.exportFailed")}: ${e?.message ?? e}`;
   }
-  if (bodyRef.value) printDocument(bodyRef.value, fileName);
 }
 
 function annotationContext() {
