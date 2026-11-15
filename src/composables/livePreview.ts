@@ -16,6 +16,7 @@ import {
   Decoration,
   EditorView,
   ViewPlugin,
+  WidgetType,
   type DecorationSet,
   type ViewUpdate,
 } from "@codemirror/view";
@@ -37,6 +38,8 @@ export const LP_CLASS = {
   listMark: "cm-lp-list-mark",
   codeBlock: "cm-lp-codeblock",
   hr: "cm-lp-hr",
+  image: "cm-lp-image",
+  task: "cm-lp-task",
 } as const;
 
 /** 预建装饰实例，避免每次重算都重新分配（cairn 模式） */
@@ -87,6 +90,8 @@ interface BuildContext {
   mark(deco: Decoration, from: number, to: number): void;
   /** 产出 line 装饰（按行锚点，from===to） */
   line(deco: Decoration, at: number): void;
+  /** 产出 widget 替换区间，并登记进 atomicRanges（方向键整块跳过） */
+  widget(deco: Decoration, from: number, to: number): void;
 }
 
 /** Lezer 节点引用（iterate 回调参数的最小结构） */
@@ -258,6 +263,102 @@ const visitHorizontalRule: Visitor = (node, ctx) => {
   ctx.line(LINES.hr, line.from);
 };
 
+/* ============ Widget（图片 / 任务复选框） ============ */
+
+/**
+ * 图片 widget：把整段 ![alt](url) 替换成 <img>。
+ * src 暂用原始值（阶段二接入 noteDirectory facet + convertFileSrc 做本地路径解析）；
+ * 加载失败时回退为 alt 文本，避免空白占位。
+ */
+class ImageWidget extends WidgetType {
+  constructor(
+    readonly src: string,
+    readonly alt: string,
+  ) {
+    super();
+  }
+
+  eq(other: ImageWidget): boolean {
+    return other.src === this.src && other.alt === this.alt;
+  }
+
+  toDOM(): HTMLElement {
+    const img = document.createElement("img");
+    img.className = LP_CLASS.image;
+    img.alt = this.alt;
+    img.src = this.src;
+    // 无 src 或加载失败时显示 alt 文本，避免出现破碎图片图标 / 空白
+    const showFallback = () => {
+      if (!this.alt) return;
+      const span = document.createElement("span");
+      span.className = `${LP_CLASS.image}-fallback`;
+      span.textContent = this.alt;
+      img.replaceWith(span);
+    };
+    if (!this.src) {
+      showFallback();
+    } else {
+      img.addEventListener("error", showFallback, { once: true });
+    }
+    return img;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+/** 任务复选框 widget：把 [ ] / [x] 替换成可点击 checkbox */
+class TaskWidget extends WidgetType {
+  constructor(readonly checked: boolean) {
+    super();
+  }
+
+  eq(other: TaskWidget): boolean {
+    return other.checked === this.checked;
+  }
+
+  toDOM(): HTMLElement {
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = this.checked;
+    box.className = LP_CLASS.task;
+    return box;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+/** 图片：光标在节点内露源码；否则整段替换为图片 widget */
+const visitImage: Visitor = (node, ctx) => {
+  if (ctx.isCursorInside(node.from, node.to)) return;
+  const linkMarks = childMarks(node, "LinkMark");
+  const urls = childMarks(node, "URL");
+  if (urls.length === 0) return;
+  // alt 位于首个 LinkMark 之后、第二个 LinkMark 之前（Lezer 不为 alt 单独建节点）
+  const altFrom = linkMarks.length > 0 ? linkMarks[0].to : node.from;
+  const altTo = linkMarks.length > 1 ? linkMarks[1].from : urls[0].from;
+  const alt = altFrom < altTo
+    ? ctx.state.doc.sliceString(altFrom, altTo)
+    : "";
+  const src = ctx.state.doc.sliceString(urls[0].from, urls[0].to);
+  ctx.widget(Decoration.replace({ widget: new ImageWidget(src, alt) }), node.from, node.to);
+};
+
+/** 任务标记：光标在任务行露源码；否则 [ ] / [x] 替换为 checkbox widget */
+const visitTaskMarker: Visitor = (node, ctx) => {
+  if (ctx.isCursorLine(node.from)) return;
+  const raw = ctx.state.doc.sliceString(node.from, node.to);
+  const checked = /x/i.test(raw);
+  ctx.widget(
+    Decoration.replace({ widget: new TaskWidget(checked) }),
+    node.from,
+    node.to,
+  );
+};
+
 /** visitor 派发表：节点名 → 处理函数 */
 const VISITORS: Record<string, Visitor> = {
   ATXHeading1: atxHeading(MARKS.h1),
@@ -275,6 +376,8 @@ const VISITORS: Record<string, Visitor> = {
   ListMark: visitListMark,
   FencedCode: visitFencedCode,
   HorizontalRule: visitHorizontalRule,
+  Image: visitImage,
+  TaskMarker: visitTaskMarker,
 };
 
 /**
@@ -311,6 +414,12 @@ export function buildDecorations(state: EditorState): LivePreviewDecorations {
     },
     line(deco, at) {
       ranges.push(deco.range(at, at));
+    },
+    widget(deco, from, to) {
+      if (from >= to) return;
+      const r = deco.range(from, to);
+      ranges.push(r);
+      atomic.push(r);
     },
   };
 

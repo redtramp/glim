@@ -414,6 +414,119 @@ describe("livePreview / 分隔线", () => {
   });
 });
 
+describe("livePreview / widget（图片/任务复选框）", () => {
+  /** 收集所有带 widget 的装饰区间及其 spec */
+  function widgets(state: EditorState) {
+    const { decorations } = buildDecorations(state);
+    const out: { from: number; to: number; widget: { toDOM(): HTMLElement; eq(o: unknown): boolean } }[] = [];
+    const iter = decorations.iter();
+    while (iter.value) {
+      const spec = iter.value.spec as { widget?: { toDOM(): HTMLElement; eq(o: unknown): boolean } };
+      if (spec.widget) out.push({ from: iter.from, to: iter.to, widget: spec.widget });
+      iter.next();
+    }
+    return out;
+  }
+
+  it("图片 off-cursor：整段 ![alt](url) 被图片 widget 替换", () => {
+    const doc = "![alt](img.png)\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const ws = widgets(s);
+    expect(ws).toHaveLength(1);
+    expect(ws[0].from).toBe(0);
+    expect(ws[0].to).toBe(doc.indexOf("![alt](img.png)") + "![alt](img.png)".length);
+    const dom = ws[0].widget.toDOM();
+    expect(dom.tagName.toLowerCase()).toBe("img");
+    expect((dom as HTMLImageElement).alt).toBe("alt");
+  });
+
+  it("图片 on-cursor：光标在图片节点内时不产出 widget（露源码）", () => {
+    const doc = "![alt](img.png)\n\ntail";
+    const s = stateOf(doc, 3); // 光标在 "alt" 中
+    expect(widgets(s)).toHaveLength(0);
+  });
+
+  it("任务列表 off-cursor：[ ] / [x] 被 checkbox widget 替换", () => {
+    const doc = "- [ ] task\n- [x] done\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const ws = widgets(s);
+    expect(ws).toHaveLength(2);
+    const boxes = ws.map((w) => w.widget.toDOM() as HTMLInputElement);
+    expect(boxes.every((b) => b.type === "checkbox")).toBe(true);
+    expect(boxes[0].checked).toBe(false);
+    expect(boxes[1].checked).toBe(true);
+  });
+
+  it("任务列表 on-cursor：光标在任务行时不产出 widget", () => {
+    const doc = "- [ ] task\n\ntail";
+    const s = stateOf(doc, 6); // 光标在 "task"
+    expect(widgets(s)).toHaveLength(0);
+  });
+
+  it("widget.eq：相同内容不重建 DOM", () => {
+    const doc = "![alt](img.png)\n\n![alt](img.png)\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const ws = widgets(s);
+    expect(ws).toHaveLength(2);
+    // 两个图片的 alt/src 相同，widget 应判等（CM6 用 eq 决定是否复用 DOM）
+    expect(ws[0].widget.eq(ws[1].widget)).toBe(true);
+  });
+
+  it("严格无损：含图片与任务的文档原文不变", () => {
+    const src = "![a](x.png)\n\n- [ ] todo\n- [x] done\n";
+    const s = stateOf(src, 0);
+    buildDecorations(s);
+    expect(s.doc.toString()).toBe(src);
+  });
+
+  it("空 alt 图片：widget 仍产出，alt 为空字符串", () => {
+    const doc = "![](x.png)\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const ws = widgets(s);
+    expect(ws).toHaveLength(1);
+    expect((ws[0].widget.toDOM() as HTMLImageElement).alt).toBe("");
+  });
+
+  it("无 URL 的图片（![alt]()）：不产出 widget、不崩溃、露源码", () => {
+    const doc = "![alt]()\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    expect(() => buildDecorations(s)).not.toThrow();
+    expect(widgets(s)).toHaveLength(0);
+  });
+
+  it("图片 widget 加载失败时回退为 alt 文本", () => {
+    const doc = "![alt text](bad.png)\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const ws = widgets(s);
+    const img = ws[0].widget.toDOM() as HTMLImageElement;
+    expect(img.tagName.toLowerCase()).toBe("img");
+    // 手动触发 error（jsdom 不自动加载图片），应被父级替换为 alt 文本
+    const parent = document.createElement("div");
+    parent.appendChild(img);
+    img.dispatchEvent(new Event("error"));
+    expect(parent.querySelector("span")?.textContent).toBe("alt text");
+  });
+
+  it("widget.eq：任务复选框按 checked 判等", () => {
+    const doc = "- [ ] a\n- [x] b\n- [ ] c\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const ws = widgets(s);
+    expect(ws).toHaveLength(3);
+    expect(ws[0].widget.eq(ws[2].widget)).toBe(true); // 都未勾选
+    expect(ws[0].widget.eq(ws[1].widget)).toBe(false); // 未勾选 vs 已勾选
+  });
+
+  it("widget.ignoreEvent 返回 false（事件交给编辑器处理）", () => {
+    const doc = "![a](x.png)\n\n- [ ] task\n\ntail";
+    const s = stateOf(doc, doc.indexOf("tail"));
+    const ws = widgets(s);
+    expect(ws).toHaveLength(2);
+    for (const w of ws) {
+      expect((w.widget as unknown as { ignoreEvent(): boolean }).ignoreEvent()).toBe(false);
+    }
+  });
+});
+
 describe("livePreview / ViewPlugin 接入", () => {
   /** 在 jsdom 中挂载真实 EditorView，返回 view 与用于读取当前 decor 的 helper */
   function mount(doc: string, cursor: number) {
