@@ -19,7 +19,6 @@ import { t, locale, persistLocale, type AppLocale } from "./i18n/locale.svelte.t
 import { useFileTree } from "./composables/useFileTree.svelte.ts";
 import { useFileWatcher } from "./composables/useFileWatcher.svelte.ts";
 import { extractHeadings, extractHeadingsWithRender } from "./composables/useMarkdown";
-import { useFindInPage } from "./composables/useFindInPage.svelte.ts";
 import { useHistory, type RecentItem } from "./composables/useHistory";
 import { useReadingSettings } from "./composables/useReadingSettings.svelte.ts";
 import { useAnnotations, resolveSelectionRange } from "./composables/useAnnotations.svelte.ts";
@@ -109,7 +108,6 @@ const ensureEditorModule = editorLoader.ensure;
 const viewerEl = { get value() { return viewerElState; } };
 const bodyRef = { get value() { return markdownState?.root ?? null; } };
 
-const find = useFindInPage(bodyRef);
 let isMobileViewport = $state(window.innerWidth < 768);
 function onResize() { isMobileViewport = window.innerWidth < 768; }
 window.addEventListener("resize", onResize, { passive: true });
@@ -144,16 +142,12 @@ const activeTabId = $derived(tabsApi.activeTabId);
 
 let searchVisible = $state(false);
 let searchFocusSeq = 0;
-let lastSearchQuery = "";
-let prevTabPath = "";
-/** 标记当前是否正在从搜索结果切换到新文件，用于保护 handleOnRendered 中的高亮恢复 */
-let pendingRestoreQuery = false;
 /** 搜索浮层内联样式，由 recalcSearchPosition 动态更新 */
 let searchOverlayStyle = $state<Record<string, string>>({});
 
 /** 根据当前悬浮布局状态计算搜索面板位置，并更新内联样式 */
 function recalcSearchPosition(): void {
-  if (!enableFloatLayout || isEditing) {
+  if (!enableFloatLayout) {
     searchOverlayStyle = {};
     return;
   }
@@ -215,8 +209,7 @@ function applyScrollTop(top: number): void {
 const PANEL_UNMOUNT_SETTLE_MS = 300;
 let searchPosSettleTimer: ReturnType<typeof setTimeout> | null = null;
 
-function closeSearchPanel() { searchVisible = false; lastSearchQuery = ""; find.query.value = ""; find.clearHighlights(); }
-function onSearchQueryChange(q: string) { const q2 = q.trim(); lastSearchQuery = q2; find.query.value = q2; }
+function closeSearchPanel() { searchVisible = false; }
 
 async function readFileIntoTab(tab: Tab, path: string, hash = "", sourceLine = 0) {
   fileManager.addSuppress(path);
@@ -238,7 +231,6 @@ async function loadFile(path: string, hash = "", sourceLine = 0) {
     if (t2 && t2.path && !t2.isEditing) { const top = currentScrollTop(); t2.scrollTop = top; saveScroll(t2.path, top); }
     existing.pendingHash = hash; existing.pendingScrollTop = 0; existing.pendingSourceLine = 0;
     activateTab(existing.id); await syncRootDir(path);
-    if (lastSearchQuery) { find.highlightSearch(lastSearchQuery); lastSearchQuery = ""; }
     // 单一视图：全局搜索带源码行跳转，直接让 CM6 滚到该行（编辑器常驻）
     if (sourceLine > 0) {
       await ensureEditorModule();
@@ -259,7 +251,7 @@ async function forceReloadTab(tab: Tab) {
   try {
     const text = await fsAuthorize.readTextFileAuthorized(tab.path);
     tab.content = text; tab.draftContent = text; tab.isDirty = false; tab.headings = await extractHeadingsWithRender(text);
-    if (tab.id === activeTabId) { tab.pendingHash = ""; tab.pendingScrollTop = tab.scrollTop; tab.pendingSourceLine = 0; find.clearHighlights(); }
+    if (tab.id === activeTabId) { tab.pendingHash = ""; tab.pendingScrollTop = tab.scrollTop; tab.pendingSourceLine = 0; }
     fileManager.scheduleSuppressClear(tab.path);
   } catch (e: any) { fileManager.clearSuppress(tab.path); appStore.errorMsg = `${t("errors.readFailed")}: ${e?.message || e}`; }
 }
@@ -556,19 +548,16 @@ function onFloatPanelAction(id: string) {
 }
 function onFloatPanelOpenFile(path: string) { floatLayout.closePanel(); void loadFile(path); }
 function toggleSearchPanel() { searchVisible = !searchVisible; }
-function onFind() { if (isEditing) editorRef.value?.openSearch(); else searchVisible = true; }
+/** 页内查找统一走 CM6 的 @codemirror/search 面板（单一视图无独立查找实现） */
+function onFind() { editorRef.value?.openSearch(); }
 async function onPickFolder() { const d = await openFolder(); if (d) await startWatching(d); }
+/** 全局搜索结果：同文件用 CM6 跳行，跨文件交给 loadFile 的源码行跳转 */
 function onFloatPanelOpenSearch(path: string, line: number) {
   const currentPath = activeTab?.path;
-  if (currentPath && samePath(path, currentPath) && !activeTab?.isEditing) {
-    const q = find.query.value || lastSearchQuery;
-    if (q) { find.query.value = q; lastSearchQuery = q; }
-    void (async () => { await tick(); find.scrollToLine(line); })();
+  if (currentPath && samePath(path, currentPath)) {
+    void (async () => { await tick(); editorRef.value?.scrollToLine(line); })();
     return;
   }
-  const q = find.query.value || lastSearchQuery;
-  if (q) lastSearchQuery = q;
-  pendingRestoreQuery = true;
   void loadFile(path, "", line);
 }
 
@@ -749,7 +738,7 @@ $effect(() => {
   if (!v) void refreshRecent();
 });
 
-// 5. 激活标签变化：清错误/补后台标签大纲/清高亮/复位章节标记
+// 5. 激活标签变化：清错误/补后台标签大纲/复位章节标记/恢复滚动位置
 let prevActiveTabId: string | null = null;
 $effect(() => {
   const id = activeTabId;
@@ -757,7 +746,6 @@ $effect(() => {
   if (id === prevActiveTabId) return;
   prevActiveTabId = id;
   appStore.errorMsg = "";
-  const newPath = activeTab?.path ?? "";
   // 后台标签在恢复时未提取大纲，激活时补一次（TOC / 章节标记依赖）。
   // 延迟到下一帧并校验仍为当前标签：快速连续切换标签时避免主线程同步 tokenize 卡顿
   const switchedTab = activeTab;
@@ -769,16 +757,13 @@ $effect(() => {
       void extractHeadingsWithRender(cur.draftContent).then((hs) => { cur.headings = hs; });
     });
   }
-  if (!searchVisible || newPath !== prevTabPath) {
-    if (lastSearchQuery && !pendingRestoreQuery) find.clearHighlights();
-  }
-  prevTabPath = newPath; annotations.dispose();
+  annotations.dispose();
   // 单一视图：切换标签后按 tab.scrollTop 恢复滚动位置（无组件重挂、无行号映射）
   const active = activeTab;
   if (active) void (async () => { await tick(); restoreScrollForTab(active); })();
 });
 
-// 6. 搜索浮层显隐：显示聚焦输入框并重算位置，隐藏清空查询
+// 6. 搜索浮层显隐：显示时聚焦输入框并重算位置（查询由 SearchPanel 自行管理）
 let prevSearchVisible: boolean | null = null;
 $effect(() => {
   const visible = searchVisible;
@@ -794,9 +779,6 @@ $effect(() => {
       }
       recalcSearchPosition();
     })();
-  } else {
-    lastSearchQuery = "";
-    find.query.value = "";
   }
 });
 
@@ -964,8 +946,8 @@ window.addEventListener("resize", recalcSearchPosition, { passive: true });
         onSetMaxWidth={setMaxWidth} onSetLineHeight={setLineHeight} onToggleFloatLayout={toggleFloatLayout}
         onOpenSettings={() => (showSettings.value = true)}
       />
-      <div class="search-overlay" class:is-visible={searchVisible && enableFloatLayout && !isEditing} style={searchOverlayStyleStr}>
-        <SearchPanel bind:this={searchPanelState} visible={searchVisible} {rootDir} onClose={closeSearchPanel} onOpen={onFloatPanelOpenSearch} onQueryChange={onSearchQueryChange} />
+      <div class="search-overlay" class:is-visible={searchVisible && enableFloatLayout} style={searchOverlayStyleStr}>
+        <SearchPanel bind:this={searchPanelState} visible={searchVisible} {rootDir} onClose={closeSearchPanel} onOpen={onFloatPanelOpenSearch} />
       </div>
       <TocCapsule {headings} activeId={sectionMarkers.activeId.value} onJump={(id) => sectionMarkers.jumpTo(id)} />
     {/if}

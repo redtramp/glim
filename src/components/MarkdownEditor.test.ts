@@ -25,18 +25,18 @@ interface MountProps {
   onReady?: () => void;
 }
 
-/** 渲染组件并返回容器；Svelte 5 组件需动态 import 以匹配项目现有惯例 */
+/** 渲染组件并返回容器 + 实例；Svelte 5 组件需动态 import 以匹配项目现有惯例 */
 async function mountEditor(props: MountProps) {
   const { default: MarkdownEditor } = await import("./MarkdownEditor.svelte");
-  const { container } = render(MarkdownEditor, { props });
+  const { container, component } = render(MarkdownEditor, { props });
   await tick();
-  return container;
+  return { container, component };
 }
 
 describe("MarkdownEditor / 最小接入", () => {
   it("挂载成功：创建 .cm-editor、触发 onReady、无异常", async () => {
     const onReady = vi.fn();
-    const container = await mountEditor({
+    const { container } = await mountEditor({
       modelValue: "# Title\n\nbody\n",
       theme: "light",
       onReady,
@@ -48,7 +48,7 @@ describe("MarkdownEditor / 最小接入", () => {
 
   it("livePreview 生效：off-cursor 的 ~~ 标记被隐藏、文字带 cm-lp-strike", async () => {
     // 光标默认在文档开头（第 1 行标题）→ 第 3 行删除线 off-cursor，应就地渲染
-    const container = await mountEditor({
+    const { container } = await mountEditor({
       modelValue: "# Title\n\n~~gone~~\n",
       theme: "light",
     });
@@ -64,7 +64,7 @@ describe("MarkdownEditor / 最小接入", () => {
   });
 
   it("GFM 语法已接入：任务复选框 widget 在组件中生成", async () => {
-    const container = await mountEditor({
+    const { container } = await mountEditor({
       modelValue: "# Title\n\n- [ ] todo\n",
       theme: "light",
     });
@@ -73,10 +73,22 @@ describe("MarkdownEditor / 最小接入", () => {
   });
 
   it("dark 主题挂载不报错", async () => {
-    const container = await mountEditor({
+    const { container } = await mountEditor({
       modelValue: "# Dark\n",
       theme: "dark",
     });
     expect(container.querySelector(".cm-editor")).not.toBeNull();
+  });
+
+  it("页内查找统一走 CM6 搜索面板：openSearch() 打开 .cm-search", async () => {
+    // 阶段二 Task 3：删除 useFindInPage 的 DOM 高亮后，页内查找由 CM6 接管
+    const { container, component } = await mountEditor({
+      modelValue: "# Title\n\nfind me\n",
+      theme: "light",
+    });
+    expect(container.querySelector(".cm-search")).toBeNull();
+    component.openSearch();
+    await tick();
+    expect(container.querySelector(".cm-search")).not.toBeNull();
   });
 });
